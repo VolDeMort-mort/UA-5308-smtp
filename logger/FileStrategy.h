@@ -1,0 +1,44 @@
+#pragma once
+
+#include <fstream>
+#include <string>
+#include <shared_mutex>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <atomic>
+#include <condition_variable>
+#include <chrono>
+
+#include "ILoggerStrategy.h"
+
+class FileStrategy : public ILoggerStrategy 
+{
+public:
+	FileStrategy(const std::string& path, LogLevel defaultLevel);
+
+	~FileStrategy() override;
+	
+	void SpecificLog(LogLevel lvl, const std::string& msg) override;
+
+private:
+	std::ofstream m_file;
+	std::string m_current_path;
+	LogLevel m_default_log_level;
+
+	mutable std::shared_mutex m_shared_mutex;
+	std::mutex m_queue_mtx;
+	std::queue<std::string> m_queue;
+	std::condition_variable m_cv;
+	std::thread m_work_thread;
+	std::atomic<bool> m_running_flag = true;
+
+	bool OpenFile();
+	bool OpenFileCheck();
+
+	void PushToQueue(const std::string& message);
+	void WorkQueue();
+	void Write(const std::string& message) override;
+	std::vector<std::string> Read(size_t limit);
+	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
+};
