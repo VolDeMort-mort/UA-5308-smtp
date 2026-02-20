@@ -6,15 +6,14 @@
 class SocketConnection
 {
 public:
-    explicit SocketConnection(boost::asio::ip::tcp::socket socket);
+	explicit SocketConnection(boost::asio::ip::tcp::socket socket);
 
-    bool send(const std::string& data);
-    bool receive(std::string& outData);
-    bool close();
-    bool isConnected() const noexcept;
+	bool send(const std::string& data);
+	bool receive(std::string& outData);
+	bool close();
+	bool isConnected() const noexcept;
 
 private:
-    boost::asio::ip::tcp::socket m_socket;
-    bool m_connected{false};
+	boost::asio::ip::tcp::socket m_socket;
+	bool m_connected{false};
 };
-
