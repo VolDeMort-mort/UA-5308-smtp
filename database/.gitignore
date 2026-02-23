@@ -1,0 +1,50 @@
+# =========================
+# Compiled files
+# =========================
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+
+# =========================
+# Object files
+# =========================
+*.obj
+*.o
+*.a
+*.lib
+*.ilk
+*.pdb
+
+# =========================
+# Build folders
+# =========================
+build/
+bin/
+Debug/
+Release/
+
+# =========================
+# VS Code settings
+# =========================
+.vscode/
+*.code-workspace
+
+# =========================
+# Temporary / backup files
+# =========================
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# =========================
+# CMake files (optional if using CMake)
+# =========================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
