@@ -12,11 +12,6 @@ FileStrategy::FileStrategy(const std::string& path, LogLevel defaultLevel)
 
 void FileStrategy::Write(const std::string& message)
 {
-    if (!OpenFileCheck())
-    {
-        throw std::runtime_error("Could not open file: " + m_current_path);
-    }
-
     m_file << message;
 }
 
@@ -34,44 +29,42 @@ bool FileStrategy::OpenFileCheck()
 void FileStrategy::PushToQueue(const std::string& message)
 {
     {
-        std::lock_guard<std::mutex> lock(m_queue_mtx);
+        std::lock_guard<std::mutex>lock(m_queue_mtx);
         m_queue.push(message);
     }
-
-    if (m_queue.size() >= 50)
-        m_cv.notify_one();
-}
+    if(m_queue.size() >= 50)
+      m_cv.notify_one();
+};
 
 void FileStrategy::WorkQueue()
 {
-    std::queue<std::string> local_queue;
-
+    std::queue<std::string>local_queue;
     while (m_running_flag)
     {
         {
-            std::unique_lock<std::mutex> lock(m_queue_mtx);
-            m_cv.wait_for(lock, std::chrono::seconds(2), [this] { return m_queue.size() >= 50 || !m_running_flag; });
-
+            std::unique_lock<std::mutex>lock(m_queue_mtx);
+            m_cv.wait_for(lock,std::chrono::seconds(2), [this] {return m_queue.size() >= 50; }); //wait 2 seconds to log data if size<50
             if (m_queue.empty() && m_running_flag)
                 continue;
-
             if (m_queue.empty() && !m_running_flag)
                 break;
 
-            std::swap(local_queue, m_queue);
+           std::swap(local_queue, m_queue);
+         
         }
-
-        if (!local_queue.empty())
-        {
-            while (!local_queue.empty())
+        if (!local_queue.empty()) {
+            if(!OpenFileCheck())
             {
+                //error
+            }
+            while (!local_queue.empty()) {
                 Write(local_queue.front());
                 local_queue.pop();
             }
-            m_file.flush();
         }
+        m_file.flush();
     }
-}
+};
 
 FileStrategy::~FileStrategy()
 {
