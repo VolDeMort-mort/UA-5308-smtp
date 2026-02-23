@@ -20,6 +20,8 @@ public:
 	~FileStrategy() override;
 	
 	void SpecificLog(LogLevel lvl, const std::string& msg) override;
+	std::vector<std::string> Read(size_t limit);
+	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
 
 private:
 	std::ofstream m_file;
@@ -39,6 +41,4 @@ private:
 	void PushToQueue(const std::string& message);
 	void WorkQueue();
 	void Write(const std::string& message) override;
-	std::vector<std::string> Read(size_t limit);
-	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
 };
