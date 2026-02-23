@@ -1,8 +1,6 @@
 #pragma once
 #include <boost/asio.hpp>
 
-#include "Logger.h"
-
 #define IMAP_PORT 2553
 
 class IMAP

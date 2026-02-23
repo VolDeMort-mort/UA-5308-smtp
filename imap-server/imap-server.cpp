@@ -16,6 +16,13 @@ void IMAP::start()
 
 void IMAP::acceptConnection()
 {
-	acceptor_.async_accept([this](std::error_code ec, boost::asio::ip::tcp::socket socket)
-						   { std::make_shared<IMAP_Session>(std::move(socket))->start(); });
+	acceptor_.async_accept(
+		[this](std::error_code ec, boost::asio::ip::tcp::socket socket)
+		{
+			if (!ec)
+			{
+				std::make_shared<IMAP_Session>(std::move(socket))->start();
+			}
+			acceptConnection();
+		});
 }
