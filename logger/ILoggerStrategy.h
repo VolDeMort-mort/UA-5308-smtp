@@ -1,7 +1,5 @@
 #pragma once
-
 #include <string>
-#include <vector>
 
 enum LogLevel
 {
@@ -11,11 +9,12 @@ enum LogLevel
 	TRACE
 };
 
-class ILoggerStrategy 
+class ILoggerStrategy
 {
 public:
 	virtual ~ILoggerStrategy() = default;
-	virtual void SpecificLog(LogLevel lvl, const std::string& msg) = 0;
-private:
+	virtual std::string SpecificLog(LogLevel lvl, const std::string& msg) = 0;
+	virtual bool IsValid() = 0;
 	virtual void Write(const std::string& message) = 0;
+	virtual void Flush() = 0;
 };
