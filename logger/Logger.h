@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ILoggerStrategy.h"
+#include "IReadable.h"
 
 class Logger
 {
@@ -17,7 +18,7 @@ public:
 
     void Log(LogLevel level, const std::string& message);
     std::vector<std::string> Read(size_t limit);
-    std::vector<std::string> Search(LogLevel lvl, size_t limit, int readN);
+    std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
 
 private:
     std::unique_ptr<ILoggerStrategy> m_strategy;

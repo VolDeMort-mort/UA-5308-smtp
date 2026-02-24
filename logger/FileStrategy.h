@@ -11,8 +11,9 @@
 #include <chrono>
 
 #include "ILoggerStrategy.h"
+#include "IReadable.h"
 
-class FileStrategy : public ILoggerStrategy 
+class FileStrategy : public ILoggerStrategy, public IReadable
 {
 public:
 	FileStrategy(const std::string& path, LogLevel defaultLevel);
@@ -20,8 +21,8 @@ public:
 	~FileStrategy() override;
 	
 	void SpecificLog(LogLevel lvl, const std::string& msg) override;
-	std::vector<std::string> Read(size_t limit);
-	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
+	std::vector<std::string> Read(size_t limit) override;
+	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n) override;
 
 private:
 	std::ofstream m_file;

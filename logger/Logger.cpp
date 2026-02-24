@@ -19,12 +19,18 @@ void Logger::Log(LogLevel lvl, const std::string& msg)
 
 std::vector<std::string> Logger::Read(size_t limit)
 {
-    if (!m_strategy) return {};
-    return m_strategy->Read(limit);
+    auto* readable = dynamic_cast<IReadable*>(m_strategy.get());
+
+    if(!readable) return {};
+
+    return readable->Read(limit);
 }
 
-std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int readN)
+std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)
 {
-    if (!m_strategy) return {};
-    return m_strategy->Search(lvl, limit, readN);
+    auto* searchable = dynamic_cast<IReadable*>(m_strategy.get());
+
+    if(!searchable) return {};
+
+    return searchable->Search(lvl, limit, read_n);
 }
