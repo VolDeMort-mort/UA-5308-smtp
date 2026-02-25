@@ -35,22 +35,5 @@ namespace Base64
 
         return table;
     }
-
-    inline const std::unordered_map<std::string, std::string> mime_map = {
-    {".pdf",  "application/pdf"},
-    {".jpg",  "image/jpeg"},
-    {".jpeg", "image/jpeg"},
-    {".png",  "image/png"},
-    {".txt",  "text/plain"},
-    {".doc",  "application/msword"},
-    {".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
-    {".bmp",  "image/bmp"},
-    {".ppt",  "application/vnd.ms-powerpoint"},
-    {".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"},
-    {".xls",  "application/vnd.ms-excel"},
-    {".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
-    {".zip",  "application/x-zip-compressed"}
-    };
-
 }
 

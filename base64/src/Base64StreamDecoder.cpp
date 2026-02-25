@@ -53,8 +53,12 @@ void Base64StreamDecoder::Finalize(std::ostream& out)
     if (m_buffer_size != 0)
     {
         if (m_buffer_size == 4)
-            DecodePart(m_buffer, out);
-        else
-            throw std::runtime_error("Invalid Base64 stream");
+        {
+			DecodePart(m_buffer, out);
+        }
+		else
+		{
+			throw std::runtime_error("Invalid Base64 stream");
+        }
     }
 }

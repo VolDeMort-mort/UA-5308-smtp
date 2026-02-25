@@ -38,9 +38,8 @@ void Base64Encoder::ChunkBytes(const std::vector<uint8_t>& data, std::string& ou
 std::string Base64Encoder:: EncodeBase64(const std::vector< uint8_t>& data)
 {
 	std::string encoded_output;
-	uint32_t maxfileSize = 15 * 1024 * 1024;
 
-	if (data.size() > maxfileSize)
+	if (data.size() > AConfig::MAX_FILE_SIZE)
 	{
 		throw std::runtime_error("File too large");
 	}

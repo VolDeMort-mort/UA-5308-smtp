@@ -186,42 +186,60 @@ TEST(StreamDecoder, NotFullBuffer)
 
 TEST(AttachmentHandler, EncodeFile)
 {
-	std::string boundary = "TEST_BOUNDARY";
-	std::string mime = AttachmentHandler::EncodeFile("C:\\Users\\annat\\Desktop\\Pr.pdf", boundary);
+	std::string testFileName = "test_file.pptx";
+	std::ofstream testFile(testFileName, std::ios::binary);
 
-	EXPECT_NE(mime.find("--" + boundary), std::string::npos);
-	EXPECT_NE(mime.find("Content-Type: application/pdf"), std::string::npos);
-	EXPECT_NE(mime.find("filename=\"Pr.pdf\""), std::string::npos);
-	EXPECT_NE(mime.find("Content-Transfer-Encoding: base64"), std::string::npos);
+	std::vector<uint8_t> testContent(1024);
+	for (size_t i = 0; i < testContent.size(); ++i)
+	{
+		testContent[i] = static_cast<uint8_t>(i % 256);
+	}
+	testFile.write(reinterpret_cast<const char*>(testContent.data()), testContent.size());
+	testFile.close();
 
-	std::size_t header_end = mime.find("\r\n\r\n");
-	ASSERT_NE(header_end, std::string::npos);
-	std::string base64_data = mime.substr(header_end + 4);
-	EXPECT_FALSE(base64_data.empty());
-	
+	std::string base64 = AttachmentHandler::EncodeFile(testFileName);
+
+	EXPECT_FALSE(base64.empty());
+
+	for (char c : base64)
+	{
+		if (c == '\r' || c == '\n') continue;
+		EXPECT_TRUE((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' ||c == '/' || c == '=');
+	}
+
+	std::remove(testFileName.c_str());
 }
 
 TEST(AttachmentHandler, EncodeDecodeFile)
 {
-	std::string boundary = "TEST_BOUNDARY";
-	std::string mime = AttachmentHandler::EncodeFile("C:\\Users\\annat\\Desktop\\Pr.pdf", boundary);
+	std::string testFileName = "test_file.pptx";
+	std::ofstream testFile(testFileName, std::ios::binary);
 
-	std::ifstream file("C:\\Users\\annat\\Desktop\\Pr.pdf", std::ios::binary);
-	std::vector<uint8_t> original_bytes((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
-	file.close();
+	std::vector<uint8_t> testContent(1024);
+	for (size_t i = 0; i < testContent.size(); ++i)
+	{
+		testContent[i] = static_cast<uint8_t>(i % 256);
+	}
+	testFile.write(reinterpret_cast<const char*>(testContent.data()), testContent.size());
+	testFile.close();
 
-	bool ok = AttachmentHandler::DecodeFile(mime, boundary);
-	ASSERT_TRUE(ok);
+	std::string base64 = AttachmentHandler::EncodeFile(testFileName);
 
-	std::string decoded_filename = "Pr.pdf";
-	std::ifstream decoded_file(decoded_filename, std::ios::binary);
-	ASSERT_TRUE(decoded_file.is_open()) << "Cannot open decoded file";
+	std::string outputPath = "decoded.pptx";
+	std::ofstream out(outputPath, std::ios::binary);
+	Base64StreamDecoder decoder;
+	decoder.DecodeStream(base64.c_str(), base64.size(), out);
+	decoder.Finalize(out);
+	out.close();
 
-	std::vector<uint8_t> decoded_bytes((std::istreambuf_iterator<char>(decoded_file)),std::istreambuf_iterator<char>());
+	std::ifstream decoded_file(outputPath, std::ios::binary);
+	std::vector<uint8_t> decoded_bytes((std::istreambuf_iterator<char>(decoded_file)), std::istreambuf_iterator<char>());
 	decoded_file.close();
 
-	EXPECT_EQ(original_bytes, decoded_bytes);
-	std::remove(decoded_filename.c_str());
+	EXPECT_EQ(testContent, decoded_bytes);
+
+	std::remove(testFileName.c_str());
+	std::remove(outputPath.c_str());
 }
 
 TEST(AttachmentHandler, DecodeAllAttachments)
@@ -271,5 +289,4 @@ TEST(AttachmentHandler, DecodeWithoutBase64Header)
 
 	std::ifstream f("file.txt");
 	EXPECT_FALSE(f.is_open());
-
 }

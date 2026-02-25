@@ -3,6 +3,7 @@
 #include <string>
 #include <stdexcept>
 #include "Base64Common.hpp"
+#include "AttachmentConfig.hpp"
 
 class Base64Encoder
 {

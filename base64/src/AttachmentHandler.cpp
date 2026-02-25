@@ -1,56 +1,23 @@
 #include "AttachmentHandler.hpp"
 
-std::string AttachmentHandler::get_extension(const std::string& path)
+std::string AttachmentHandler::EncodeFile(const std::string& path)
 {
-	std::size_t position = path.find_last_of('.');
-
-	if (position == std::string::npos)
-		return "";
-
-	return path.substr(position);
-}
-
-std::string AttachmentHandler::get_mimeType(const std::string& path)
-{
-	std::string extension = get_extension(path);
-
-	auto iterator = Base64::mime_map.find(extension);
-	if (iterator != Base64::mime_map.end())
-	{
-		return iterator->second;
-	}	
-	return "application/octet-stream";
-}
-
-
-std::string AttachmentHandler::EncodeFile(const std::string& path, const std::string& boundary)
-{
-	std::string mime;
-	std::string content_type = get_mimeType(path);
-	std::string file_name = std::filesystem::path(path).filename().string();
-
-	mime += "--" + boundary + "\r\n";
-	mime += "Content-Type: " + content_type + "; name=\"" + file_name + "\"\r\n";
-	mime += "Content-Transfer-Encoding: base64\r\n";
-	mime += "Content-Disposition: attachment; filename=\"" + file_name + "\"\r\n\r\n";
-
 	std::ifstream file(path, std::ios::binary);
 	if (!file)
 		throw std::runtime_error("Cannot open file");
 
 	Base64StreamEncoder encoder;
 	std::ostringstream encoded_stream;
+
 	char buffer[3 * 1024];
 	while (file.read(buffer, sizeof(buffer)) || file.gcount() > 0)
 	{
 		encoder.EncodeStream(reinterpret_cast<const uint8_t*>(buffer), file.gcount(), encoded_stream);
 	}
+
 	encoder.Finalize(encoded_stream);
 
-	mime += encoded_stream.str();
-
-	return mime;
-
+	return encoded_stream.str();
 }
 
 bool AttachmentHandler::DecodeFile(const std::string& mime, const std::string& boundary)

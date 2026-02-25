@@ -10,11 +10,7 @@
 class AttachmentHandler
 {
 public:
-	static std::string EncodeFile(const std::string& path, const std::string& boundary);
+	static std::string EncodeFile(const std::string& path);
 	static bool DecodeFile(const std::string& mime, const std::string& boundary);
 	static std::vector<std::string> DecodeAllAttachments(const std::string& mime, const std::string& boundary);
-
-private:
-	static std::string get_extension(const std::string& path);
-	static std::string get_mimeType(const std::string& path);
 };
