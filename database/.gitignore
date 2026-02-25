@@ -25,6 +25,7 @@ build/
 bin/
 Debug/
 Release/
+sqlite3/
 
 # =========================
 # VS Code settings
