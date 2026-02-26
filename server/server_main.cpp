@@ -1,65 +1,34 @@
 #include <boost/asio.hpp>
 #include <iostream>
-#include <memory>
 
-#include "SmtpSession.hpp"
-#include "SocketAcceptor.hpp"
-#include "SocketConnection.hpp"
+#include "SMTPServer.h"
 
-int main()
-{
-	try
-	{
-		constexpr uint16_t port = 25000;
-		const std::string domain = "localhost";
+int main() {
+    try {
+        boost::asio::io_context ioc;
 
-		boost::asio::io_context ioContext;
+        SMTPServer server(ioc, 25000);
+        server.run(std::thread::hardware_concurrency());
 
-		SocketAcceptor acceptor;
+        std::cout << "SMTP server started on port 25000\n";
+        std::cout << "Type 'stop' and press Enter to shutdown\n";
 
-		if (!acceptor.initialize(ioContext, port))
-		{
-			std::cerr << "Failed to initialize acceptor\n";
-			return 1;
-		}
+        std::string input;
+        while (std::getline(std::cin, input)) {
+            if (input == "stop") {
+                std::cout << "Stopping server...\n";
+                server.soft_stop();
+                break;
+            }
+            else {
+                std::cout << "Unknown command. Type 'stop' to shutdown\n";
+            }
+        }
+    }
+    catch (const std::exception& ex) {
+        std::cerr << "Fatal error: " << ex.what() << std::endl;
+    }
 
-		std::cout << "SMTP Server running on port " << port << std::endl;
-
-		while (true)
-		{
-			std::unique_ptr<SocketConnection> connection;
-
-			if (!acceptor.accept(connection)) continue;
-
-			SmtpSession session(domain);
-
-			if (!connection->send(session.greeting()))
-			{
-				connection->close();
-				continue;
-			}
-
-			std::string input;
-
-			while (connection->receive(input))
-			{
-				std::string response = session.processLine(input);
-
-				if (!response.empty())
-				{
-					if (!connection->send(response)) break;
-				}
-
-				if (session.isClosed()) break;
-			}
-
-			connection->close();
-		}
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "Server error: " << e.what() << std::endl;
-	}
-
-	return 0;
+    return 0;
 }
+
