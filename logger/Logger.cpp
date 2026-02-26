@@ -7,8 +7,8 @@
 
 Logger::Logger(std::unique_ptr<ILoggerStrategy> strategy)
 {
-	m_running_flag = true;
 	set_strategy(std::move(strategy));
+	m_running_flag = true;
 	m_work_thread = std::thread(&Logger::WorkQueue, this);
 }
 
@@ -55,7 +55,12 @@ void Logger::WorkQueue()
 			}
 			while (!local_queue.empty())
 			{
-				m_strategy->Write(local_queue.front());
+				if (!m_strategy->Write(local_queue.front()))
+				{
+					std::cerr << "Can`t open log file: " << FILE_PATH << "\n";
+					m_strategy = std::make_unique<ConsoleStrategy>();
+					continue;
+				}
 				local_queue.pop();
 			}
 		}

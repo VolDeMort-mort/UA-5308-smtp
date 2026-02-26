@@ -1,21 +1,54 @@
 #include "FileStrategy.h"
 
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
 
-FileStrategy::FileStrategy(const std::string& path, LogLevel defaultLevel)
-	: m_current_path(path), m_default_log_level(defaultLevel)
+FileStrategy::FileStrategy(LogLevel defaultLevel)
+	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
 {
+	if (std::filesystem::exists(m_current_path))
+		m_current_file_size = std::filesystem::file_size(m_current_path);
+	else
+		m_current_file_size = 0;
 	if (!OpenFile()) std::cerr << "Can`t open log file: " << m_current_path << "\n";
 }
 
-void FileStrategy::Write(const std::string& message)
+bool FileStrategy::Write(const std::string& message)
 {
+	// std::unique_lock<std::shared_mutex> lock(shared_mutex);
+	if (!IsValid()) return false;
+
+	if (!CanWrite(message.size()))
+	{
+		Rotate();
+		if (!IsValid()) return false;
+	}
+
 	m_file << message;
+
+	m_current_file_size += message.size();
+	return true;
+}
+void FileStrategy::Rotate()
+{
+	if (m_file.is_open()) m_file.close();
+	if (std::filesystem::exists(m_old_path)) // when both files are filled,delete older one
+		std::filesystem::remove(m_old_path);
+
+	if (std::filesystem::exists(m_current_path)) 
+		std::filesystem::rename(m_current_path, m_old_path);
+
+	if (!OpenFile()) std::cerr << "Can`t open log file: " << m_current_path << "\n";
+	m_current_file_size = 0;
+}
+bool FileStrategy::CanWrite(int message_size)
+{
+	return (m_current_file_size + message_size) <= MAX_FILE_SIZE;
 }
 bool FileStrategy::OpenFile()
 {
