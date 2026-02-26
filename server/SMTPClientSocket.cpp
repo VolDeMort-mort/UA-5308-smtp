@@ -257,7 +257,23 @@ void SMTPClientSocket::readResponse(std::chrono::milliseconds timeout, ReadHandl
 		});
 }
 
-void SMTPClientSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler)
-{
-	// to do
+void SMTPClientSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler){
+	if (m_is_tls) {
+		handler(std::error_code);
+		return;
+	}
+	tcp::socket raw_socket = m_socket->release_tcp_socket{};
+	
+	auto ssl = std::make_unique<boost::asio::ssl::stream<tcp::socket>>(std::move(raw_socket), ctx);
+	auto self = shared_from_this();
+	ssl->async_handshake(boost::asio::ssl::stream_base::client, 
+		boost::asio::bind_executor(m_strand, [self, ssl = std::move(ssl), handler = std::move(handler)](const boost::system::error_code& ec) mutable{
+			if(ec){
+				handler(ec);
+				return;
+			}
+			self->m_socket = std::make_unique<SslStream>(std::move(ssl));
+			self->m_is_tls = true;
+			handler(ec);
+		}));
 }
