@@ -4,20 +4,22 @@
 using boost::asio::ip::tcp;
 
 SMTPServerSocket::SMTPServerSocket(tcp::socket socket)
-	: m_socket(std::move(socket)),
-	m_strand(m_socket.get_executor()),
-	m_timer(m_socket.get_executor()),
+	: m_socket(std::make_unique<PlainStream>(std::move(socket))),
+	m_strand(m_socket->get_executor()),
+	m_timer(m_socket->get_executor()),
 	m_buf(),
 	m_last_error(),
 	m_closing(false)
-{}
+{
+}
 
-SMTPServerSocket::~SMTPServerSocket() {
+SMTPServerSocket::~SMTPServerSocket()
+{
 	boost::system::error_code ignored;
 	m_timer.cancel();
-	if (m_socket.is_open()) {
-		m_socket.shutdown(tcp::socket::shutdown_both, ignored);
-		m_socket.close(ignored);
+	if (m_socket)
+	{
+		m_socket->shutdown();
 	}
 }
 
@@ -30,13 +32,9 @@ void SMTPServerSocket::close() {
 	boost::asio::post(m_strand, [self]() {
 		if (self->m_closing) return;
 		self->m_closing = true;
-		boost::system::error_code ignored;
 		self->m_timer.cancel();
-		self->m_socket.cancel(ignored);
-		if (self->m_socket.is_open()) {
-			self->m_socket.shutdown(tcp::socket::shutdown_both, ignored);
-			self->m_socket.close(ignored);
-		}
+		self->m_socket->cancel();
+		self->m_socket->shutdown();
 		});
 }
 
@@ -115,8 +113,7 @@ void SMTPServerSocket::readCommand(std::chrono::milliseconds timeout, ReadHandle
 			self->m_timer.expires_after(timeout);
 			self->m_timer.async_wait(boost::asio::bind_executor(self->m_strand, [self, completed](const boost::system::error_code& ec) {
 				if (!ec && !*completed) {
-					boost::system::error_code ignored;
-					self->m_socket.cancel(ignored);
+					self->m_socket->cancel();
 				}
 				}));
 		}
@@ -216,8 +213,7 @@ void SMTPServerSocket::readDataBlock(std::chrono::milliseconds timeout, ReadHand
 			self->m_timer.expires_after(timeout);
 			self->m_timer.async_wait(boost::asio::bind_executor(self->m_strand, [self, completed](const boost::system::error_code& ec) {
 				if (!ec && !*completed) {
-					boost::system::error_code ignored;
-					self->m_socket.cancel(ignored);
+					self->m_socket->cancel();
 				}
 				}));
 		}
@@ -251,3 +247,6 @@ void SMTPServerSocket::readDataBlock(std::chrono::milliseconds timeout, ReadHand
 		});
 }
 
+void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler) {
+    // to do
+}

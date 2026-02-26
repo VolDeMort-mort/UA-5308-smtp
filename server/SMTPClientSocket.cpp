@@ -4,35 +4,31 @@
 using boost::asio::ip::tcp;
 
 SMTPClientSocket::SMTPClientSocket(boost::asio::io_context& ioc)
-	: m_socket(ioc),
-	m_timer(ioc),
-	m_strand(ioc.get_executor()),
-	m_buf(),
-	m_last_error(),
+	: m_socket(std::make_unique<PlainStream>(std::move(socket))), 
+	m_strand(m_socket->get_executor()),
+	m_timer(m_socket->get_executor()),
+	m_buf(), 
+	m_last_error(), 
 	m_closing(false)
 {}
 
 SMTPClientSocket::~SMTPClientSocket() {
 	boost::system::error_code ignored;
 	m_timer.cancel();
-	if (m_socket.is_open()) {
-		m_socket.shutdown(tcp::socket::shutdown_both, ignored);
-		m_socket.close(ignored);
+	if (m_socket)
+	{
+		m_socket->shutdown();
 	}
 }
 
 void SMTPClientSocket::close() {
 	auto self = shared_from_this();
-	boost::asio::post(m_strand, [self]() {
+	boost::asio::post(m_strand,[self](){
 		if (self->m_closing) return;
 		self->m_closing = true;
-		boost::system::error_code ignored;
 		self->m_timer.cancel();
-		self->m_socket.cancel(ignored);
-		if (self->m_socket.is_open()) {
-			self->m_socket.shutdown(tcp::socket::shutdown_both, ignored);
-			self->m_socket.close(ignored);
-		}
+		self->m_socket->cancel();
+		self->m_socket->shutdown();
 		});
 }
 
@@ -42,7 +38,9 @@ std::error_code SMTPClientSocket::last_error() const {
 
 void SMTPClientSocket::connect(const tcp::endpoint& ep, std::function<void(const boost::system::error_code&)> handler) {
 	auto self = shared_from_this();
-	m_socket.async_connect(ep, boost::asio::bind_executor(m_strand,
+	tcp::socket socket = m_socket->release_tcp_socket();
+
+	socket.async_connect(ep, boost::asio::bind_executor(m_strand,
 		[self, handler = std::move(handler)](const boost::system::error_code& ec) mutable {
 			if (ec) self->m_last_error = ec;
 			if (handler) handler(ec);
@@ -173,8 +171,7 @@ void SMTPClientSocket::readResponse(std::chrono::milliseconds timeout, ReadHandl
 			self->m_timer.async_wait(boost::asio::bind_executor(self->m_strand,
 				[self, completed](const boost::system::error_code& ec) {
 					if (!ec && !*completed) {
-						boost::system::error_code ignored;
-						self->m_socket.cancel(ignored);
+						self->m_socket->cancel();
 					}
 				}));
 		}
@@ -260,3 +257,7 @@ void SMTPClientSocket::readResponse(std::chrono::milliseconds timeout, ReadHandl
 		});
 }
 
+void SMTPClientSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler)
+{
+	// to do
+}

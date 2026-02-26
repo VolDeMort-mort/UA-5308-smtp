@@ -1,9 +1,12 @@
 #pragma once
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 #include "SMTP_Types.h"
 #include "SMTPCommandParser.h"
 #include <functional>
-#include <deque>
+
+#include "../proto/PlainStream.h"
+#include "../proto/SslStream.h"
 
 class SMTPServerSocket : public std::enable_shared_from_this<SMTPServerSocket>
 {
@@ -20,16 +23,20 @@ public:
 
 	void sendResponse(const ServerResponse& resp, WriteHandler handler);
 
+	void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx,
+									 std::function<void(const boost::system::error_code&)> handler);
+
 	std::error_code last_error() const;
 
 	void close();
 
 private:
-	boost::asio::ip::tcp::socket m_socket;
+	std::unique_ptr<IStream> m_socket;
 	boost::asio::steady_timer m_timer;
 	boost::asio::strand<boost::asio::any_io_executor> m_strand;
 	boost::asio::streambuf m_buf;
 
 	std::error_code m_last_error;
 	bool m_closing = false;
+	bool m_is_tls = false;
 };
