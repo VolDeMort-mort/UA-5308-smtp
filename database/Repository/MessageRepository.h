@@ -71,10 +71,10 @@ public:
     const std::string& getLastError() const;
 
 private:
-    MessageDAL          m_message_dal;
-    FolderDAL           m_folder_dal;
-    AttachmentDAL       m_attachment_dal;
-    RecipientDAL        m_recipient_dal;
+    MessageDAL m_message_dal;
+    FolderDAL m_folder_dal;
+    AttachmentDAL m_attachment_dal;
+    RecipientDAL m_recipient_dal;
     mutable std::string m_last_error;
 
     bool setError(const std::string& msg) const;
