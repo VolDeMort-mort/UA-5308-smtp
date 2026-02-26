@@ -1,14 +1,18 @@
 #pragma once
 #include "ILoggerStrategy.h"
 
-class ConsoleStrategy : public ILoggerStrategy {
+class ConsoleStrategy : public ILoggerStrategy
+{
 public:
-	ConsoleStrategy() {};
-	void SpecificLog(LogLevel lvl, const std::string& msg) override;
-
+	ConsoleStrategy();
 	~ConsoleStrategy() {};
-
-private:
-	void Write(const std::string& message) override;
+	std::string SpecificLog(LogLevel lvl, const std::string& msg) override;
+	bool IsValid() override;
+	bool Write(const std::string& message) override;
+	void Flush() override;
 };
+
+
+
+
 

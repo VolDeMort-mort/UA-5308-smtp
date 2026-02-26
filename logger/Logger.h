@@ -1,32 +1,38 @@
 #pragma once
-
-#include <string>
+#include <atomic>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
+#include <queue>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "ILoggerStrategy.h"
-
-enum StrategyType
-{
-	File,
-	Console
-};
+#include "IReadable.h"
 
 class Logger
 {
 public:
-	Logger(StrategyType type, LogLevel level, const std::string& path);
+	Logger(std::unique_ptr<ILoggerStrategy> strategy);
+	~Logger();
 
-	~Logger() = default;
-
-	void set_strategy(StrategyType type);
-	void set_default_level(LogLevel lvl);
-
+	void set_strategy(std::unique_ptr<ILoggerStrategy> strategy);
 	void Log(LogLevel level, const std::string& message);
-	void Read();
-	void Search();
+	std::vector<std::string> Read(size_t limit);
+	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
 
 private:
 	std::unique_ptr<ILoggerStrategy> m_strategy;
-	LogLevel m_default_level = LogLevel::PROD;
-	std::string m_path;
+	LogLevel m_defaultLevel = LogLevel::PROD;
+
+	std::mutex m_queue_mtx;
+	std::mutex m_strategy_mtx;
+	std::queue<std::string> m_queue;
+	std::condition_variable m_cv;
+	std::thread m_work_thread;
+	std::atomic<bool> m_running_flag;
+
+	void PushToQueue(const std::string& message);
+	void WorkQueue();
 };
