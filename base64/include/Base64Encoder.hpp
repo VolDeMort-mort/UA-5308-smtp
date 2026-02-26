@@ -2,6 +2,7 @@
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <cstdint>
 #include "Base64Common.hpp"
 #include "AttachmentConfig.hpp"
 

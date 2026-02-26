@@ -30,14 +30,12 @@ void Base64StreamEncoder::EncodePart(const uint8_t* data, std::size_t size, std:
 
 void Base64StreamEncoder::EncodeStream(const uint8_t* data, std::size_t size, std::ostream& out)
 {
-	static std::size_t total_encoded = 0;
-
-	if (total_encoded + size > AConfig::MAX_FILE_SIZE)
+	if (m_total_encoded + size > AConfig::MAX_FILE_SIZE)
 	{
 		throw std::runtime_error("File too large for Base64 encoding");
 	}
 
-	total_encoded += size;
+	m_total_encoded += size;
 	std::size_t i = 0;
 
 	if (m_left_size > 0)
