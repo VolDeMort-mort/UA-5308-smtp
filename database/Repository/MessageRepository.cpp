@@ -1,6 +1,11 @@
 #include "MessageRepository.h"
 
-MessageRepository::MessageRepository(DataBaseManager& db) : m_message_dal(db.getDB()) {};
+MessageRepository::MessageRepository(DataBaseManager& db)
+    : m_message_dal(db.getDB())
+    , m_folder_dal(db.getDB())
+    , m_attachment_dal(db.getDB())
+    , m_recipient_dal(db.getDB()) 
+{}
 
 bool MessageRepository::setError(const std::string& msg) const
 {
@@ -94,7 +99,6 @@ bool MessageRepository::send(Message& msg)
         return m_message_dal.update(msg);
     }
 
-    // No id — insert directly as Sent
     msg.status  = MessageStatus::Sent;
     msg.is_seen = true;
     return m_message_dal.insert(msg);
@@ -174,4 +178,135 @@ bool MessageRepository::hardDelete(int64_t id)
         return setError("HardDelete: message must be Deleted before it can be HardDeleted");
 
     return m_message_dal.hardDelete(id);
+}
+
+std::optional<Folder> MessageRepository::findFolderByID(int64_t id) const
+{
+    return m_folder_dal.findByID(id);
+}
+
+std::vector<Folder> MessageRepository::findFoldersByUser(int64_t user_id) const
+{
+    return m_folder_dal.findByUser(user_id);
+}
+
+std::optional<Folder> MessageRepository::findFolderByName(int64_t user_id,
+                                                           const std::string& name) const
+{
+    return m_folder_dal.findByName(user_id, name);
+}
+
+bool MessageRepository::createFolder(Folder& folder)
+{
+    if (folder.name.empty())
+        return setError("createFolder: folder name cannot be empty");
+
+    auto existing = m_folder_dal.findByName(folder.user_id, folder.name);
+    if (existing.has_value())
+        return setError("createFolder: folder '" + folder.name + "' already exists");
+
+    return m_folder_dal.insert(folder);
+}
+
+bool MessageRepository::renameFolder(int64_t id, const std::string& new_name)
+{
+    if (new_name.empty())
+        return setError("renameFolder: new name cannot be empty");
+
+    auto folder = m_folder_dal.findByID(id);
+    if (!folder.has_value())
+        return setError("renameFolder: folder not found");
+
+    auto existing = m_folder_dal.findByName(folder->user_id, new_name);
+    if (existing.has_value() && existing->id != folder->id)
+        return setError("renameFolder: folder '" + new_name + "' already exists");
+
+    folder->name = new_name;
+    return m_folder_dal.update(folder.value());
+}
+
+bool MessageRepository::deleteFolder(int64_t id)
+{
+    auto folder = m_folder_dal.findByID(id);
+    if (!folder.has_value())
+        return setError("deleteFolder: folder not found");
+
+    return m_folder_dal.hardDelete(id);
+}
+
+std::optional<Attachment> MessageRepository::findAttachmentByID(int64_t id) const
+{
+    return m_attachment_dal.findByID(id);
+}
+
+std::vector<Attachment> MessageRepository::findAttachmentsByMessage(int64_t message_id) const
+{
+    return m_attachment_dal.findByMessage(message_id);
+}
+
+bool MessageRepository::addAttachment(Attachment& attachment)
+{
+    auto msg = m_message_dal.findByID(attachment.message_id);
+    if (!msg.has_value())
+        return setError("addAttachment: message not found");
+
+    if (attachment.file_name.empty())
+        return setError("addAttachment: file_name cannot be empty");
+
+    if (attachment.storage_path.empty())
+        return setError("addAttachment: storage_path cannot be empty");
+
+    return m_attachment_dal.insert(attachment);
+}
+
+bool MessageRepository::updateAttachment(const Attachment& attachment)
+{
+    if (!attachment.id.has_value())
+        return setError("updateAttachment: attachment has no id");
+
+    auto existing = m_attachment_dal.findByID(attachment.id.value());
+    if (!existing.has_value())
+        return setError("updateAttachment: attachment not found");
+
+    return m_attachment_dal.update(attachment);
+}
+
+bool MessageRepository::removeAttachment(int64_t id)
+{
+    auto existing = m_attachment_dal.findByID(id);
+    if (!existing.has_value())
+        return setError("removeAttachment: attachment not found");
+
+    return m_attachment_dal.hardDelete(id);
+}
+
+std::optional<Recipient> MessageRepository::findRecipientByID(int64_t id) const
+{
+    return m_recipient_dal.findByID(id);
+}
+
+std::vector<Recipient> MessageRepository::findRecipientsByMessage(int64_t message_id) const
+{
+    return m_recipient_dal.findByMessage(message_id);
+}
+
+bool MessageRepository::addRecipient(Recipient& recipient)
+{
+    auto msg = m_message_dal.findByID(recipient.message_id);
+    if (!msg.has_value())
+        return setError("addRecipient: message not found");
+
+    if (recipient.address.empty())
+        return setError("addRecipient: address cannot be empty");
+
+    return m_recipient_dal.insert(recipient);
+}
+
+bool MessageRepository::removeRecipient(int64_t id)
+{
+    auto existing = m_recipient_dal.findByID(id);
+    if (!existing.has_value())
+        return setError("removeRecipient: recipient not found");
+
+    return m_recipient_dal.hardDelete(id);
 }
