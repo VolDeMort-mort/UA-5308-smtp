@@ -8,13 +8,13 @@
 namespace
 {
 
-std::string toUpper(std::string str)
+std::string ToUpper(std::string str)
 {
 	std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) { return std::toupper(c); });
 	return str;
 }
 
-std::vector<std::string> splitArgs(const std::string& str)
+std::vector<std::string> SplitArgs(const std::string& str)
 {
 	std::vector<std::string> args;
 	std::istringstream iss(str);
@@ -26,26 +26,26 @@ std::vector<std::string> splitArgs(const std::string& str)
 	return args;
 }
 
-ImapCommandType stringToCommandType(const std::string& cmd)
+ImapCommandType StringToCommandType(const std::string& cmd)
 {
 	static const std::unordered_map<std::string, ImapCommandType> commandMap = {
-		{"LOGIN", ImapCommandType::LOGIN},
-		{"LOGOUT", ImapCommandType::LOGOUT},
-		{"CAPABILITY", ImapCommandType::CAPABILITY},
-		{"NOOP", ImapCommandType::NOOP},
-		{"SELECT", ImapCommandType::SELECT},
-		{"LIST", ImapCommandType::LIST},
-		{"LSUB", ImapCommandType::LSUB},
-		{"STATUS", ImapCommandType::STATUS},
-		{"FETCH", ImapCommandType::FETCH},
-		{"STORE", ImapCommandType::STORE},
-		{"CREATE", ImapCommandType::CREATE},
-		{"DELETE", ImapCommandType::DELETE},
-		{"RENAME", ImapCommandType::RENAME},
-		{"IDLE", ImapCommandType::IDLE},
-		{"COPY", ImapCommandType::COPY},
-		{"MOVE", ImapCommandType::MOVE},
-		{"EXPUNGE", ImapCommandType::EXPUNGE},
+		{"LOGIN", ImapCommandType::Login},
+		{"LOGOUT", ImapCommandType::Logout},
+		{"CAPABILITY", ImapCommandType::Capability},
+		{"NOOP", ImapCommandType::Noop},
+		{"SELECT", ImapCommandType::Select},
+		{"LIST", ImapCommandType::List},
+		{"LSUB", ImapCommandType::Lsub},
+		{"STATUS", ImapCommandType::Status},
+		{"FETCH", ImapCommandType::Fetch},
+		{"STORE", ImapCommandType::Store},
+		{"CREATE", ImapCommandType::Create},
+		{"DELETE", ImapCommandType::Delete},
+		{"RENAME", ImapCommandType::Rename},
+		{"IDLE", ImapCommandType::Idle},
+		{"COPY", ImapCommandType::Copy},
+		{"MOVE", ImapCommandType::Move},
+		{"EXPUNGE", ImapCommandType::Expunge},
 	};
 
 	auto it = commandMap.find(cmd);
@@ -53,12 +53,12 @@ ImapCommandType stringToCommandType(const std::string& cmd)
 	{
 		return it->second;
 	}
-	return ImapCommandType::UNKNOWN;
+	return ImapCommandType::Unknown;
 }
 
 } // namespace
 
-ImapCommand ImapParser::parse(const std::string& line)
+ImapCommand ImapParser::Parse(const std::string& line)
 {
 	ImapCommand cmd;
 
@@ -70,12 +70,12 @@ ImapCommand ImapParser::parse(const std::string& line)
 	size_t spacePos = line.find(' ');
 	if (spacePos == std::string::npos)
 	{
-		cmd.tag = "";
-		cmd.type = ImapCommandType::UNKNOWN;
+		cmd.m_tag = "";
+		cmd.m_type = ImapCommandType::Unknown;
 		return cmd;
 	}
 
-	cmd.tag = line.substr(0, spacePos);
+	cmd.m_tag = line.substr(0, spacePos);
 	std::string rest = line.substr(spacePos + 1);
 
 	size_t argStart = rest.find(' ');
@@ -93,8 +93,8 @@ ImapCommand ImapParser::parse(const std::string& line)
 		argsStr = rest.substr(argStart + 1);
 	}
 
-	cmd.args = splitArgs(argsStr);
-	cmd.type = stringToCommandType(toUpper(commandStr));
+	cmd.m_args = SplitArgs(argsStr);
+	cmd.m_type = StringToCommandType(ToUpper(commandStr));
 
 	return cmd;
 }

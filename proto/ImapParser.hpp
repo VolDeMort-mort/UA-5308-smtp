@@ -1,9 +1,11 @@
 #pragma once
-#include "ImapCommand.hpp"
+
 #include <string>
+
+#include "ImapCommand.hpp"
 
 class ImapParser
 {
 public:
-	static ImapCommand parse(const std::string& line);
+	static ImapCommand Parse(const std::string& line);
 };

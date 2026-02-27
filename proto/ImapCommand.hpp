@@ -1,32 +1,33 @@
 #pragma once
+
 #include <string>
 #include <vector>
 
 enum class ImapCommandType
 {
-	LOGIN,
-	LOGOUT,
-	CAPABILITY,
-	NOOP,
-	SELECT,
-	LIST,
-	LSUB,
-	STATUS,
-	FETCH,
-	STORE,
-	CREATE,
-	DELETE,
-	RENAME,
-	IDLE,
-	COPY,
-	MOVE,
-	EXPUNGE,
-	UNKNOWN
+	Login,
+	Logout,
+	Capability,
+	Noop,
+	Select,
+	List,
+	Lsub,
+	Status,
+	Fetch,
+	Store,
+	Create,
+	Delete,
+	Rename,
+	Idle,
+	Copy,
+	Move,
+	Expunge,
+	Unknown
 };
 
 struct ImapCommand
 {
-	std::string tag;
-	ImapCommandType type{ImapCommandType::UNKNOWN};
-	std::vector<std::string> args;
+	std::string m_tag;
+	ImapCommandType m_type = ImapCommandType::Unknown;
+	std::vector<std::string> m_args;
 };

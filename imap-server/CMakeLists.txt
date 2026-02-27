@@ -1,9 +1,9 @@
 find_package(Threads REQUIRED)
 
 add_executable(imap_server
-    imap-main.cpp
-    imap-server.cpp
-    imap-session.cpp
+    ImapMain.cpp
+    ImapServer.cpp
+    ImapSession.cpp
     ImapParser.cpp
 )
 
