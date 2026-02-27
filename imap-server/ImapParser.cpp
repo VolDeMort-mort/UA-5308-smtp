@@ -5,58 +5,7 @@
 #include <sstream>
 #include <unordered_map>
 
-namespace
-{
-
-std::string ToUpper(std::string str)
-{
-	std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) { return std::toupper(c); });
-	return str;
-}
-
-std::vector<std::string> SplitArgs(const std::string& str)
-{
-	std::vector<std::string> args;
-	std::istringstream iss(str);
-	std::string arg;
-	while (iss >> arg)
-	{
-		args.push_back(arg);
-	}
-	return args;
-}
-
-ImapCommandType StringToCommandType(const std::string& cmd)
-{
-	static const std::unordered_map<std::string, ImapCommandType> commandMap = {
-		{"LOGIN", ImapCommandType::Login},
-		{"LOGOUT", ImapCommandType::Logout},
-		{"CAPABILITY", ImapCommandType::Capability},
-		{"NOOP", ImapCommandType::Noop},
-		{"SELECT", ImapCommandType::Select},
-		{"LIST", ImapCommandType::List},
-		{"LSUB", ImapCommandType::Lsub},
-		{"STATUS", ImapCommandType::Status},
-		{"FETCH", ImapCommandType::Fetch},
-		{"STORE", ImapCommandType::Store},
-		{"CREATE", ImapCommandType::Create},
-		{"DELETE", ImapCommandType::Delete},
-		{"RENAME", ImapCommandType::Rename},
-		{"IDLE", ImapCommandType::Idle},
-		{"COPY", ImapCommandType::Copy},
-		{"MOVE", ImapCommandType::Move},
-		{"EXPUNGE", ImapCommandType::Expunge},
-	};
-
-	auto it = commandMap.find(cmd);
-	if (it != commandMap.end())
-	{
-		return it->second;
-	}
-	return ImapCommandType::Unknown;
-}
-
-} // namespace
+#include "ImapUtils.hpp"
 
 ImapCommand ImapParser::Parse(const std::string& line)
 {
@@ -93,8 +42,8 @@ ImapCommand ImapParser::Parse(const std::string& line)
 		argsStr = rest.substr(argStart + 1);
 	}
 
-	cmd.m_args = SplitArgs(argsStr);
-	cmd.m_type = StringToCommandType(ToUpper(commandStr));
+	cmd.m_args = IMAP_UTILS::SplitArgs(argsStr);
+	cmd.m_type = IMAP_UTILS::StringToCommandType(IMAP_UTILS::ToUpper(commandStr));
 
 	return cmd;
 }

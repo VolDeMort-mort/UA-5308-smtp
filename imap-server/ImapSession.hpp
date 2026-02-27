@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "../logger/Logger.h"
 #include "ImapCommand.hpp"
 
 struct MailboxState
@@ -29,7 +30,7 @@ enum class SessionState
 class ImapSession : public std::enable_shared_from_this<ImapSession>
 {
 public:
-	ImapSession(boost::asio::ip::tcp::socket socket);
+	ImapSession(boost::asio::ip::tcp::socket socket, Logger& logger);
 	void Start();
 
 private:
@@ -59,6 +60,7 @@ private:
 
 	boost::asio::ip::tcp::socket m_socket;
 	boost::asio::streambuf m_buffer;
+	Logger& m_logger;
 
 	SessionState m_state = SessionState::NonAuthenticated;
 	std::string m_authenticatedUser;
