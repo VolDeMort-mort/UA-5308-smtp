@@ -1,72 +1,65 @@
+#include <boost/asio.hpp>
 #include <iostream>
 #include <memory>
-#include <boost/asio.hpp>
 
+#include "SmtpSession.hpp"
 #include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
-#include "SmtpSession.hpp"
 
 int main()
 {
-    try
-    {
-        constexpr uint16_t PORT = 25000;
-        const std::string DOMAIN = "localhost";
+	try
+	{
+		constexpr uint16_t port = 25000;
+		const std::string domain = "localhost";
 
-        boost::asio::io_context ioContext;
+		boost::asio::io_context ioContext;
 
-        SocketAcceptor acceptor;
+		SocketAcceptor acceptor;
 
-        if (!acceptor.initialize(ioContext, PORT))
-        {
-            std::cerr << "Failed to initialize acceptor\n";
-            return 1;
-        }
+		if (!acceptor.initialize(ioContext, port))
+		{
+			std::cerr << "Failed to initialize acceptor\n";
+			return 1;
+		}
 
-        std::cout << "SMTP Server running on port "
-                  << PORT << std::endl;
+		std::cout << "SMTP Server running on port " << port << std::endl;
 
-        while (true)
-        {
-            std::unique_ptr<SocketConnection> connection;
+		while (true)
+		{
+			std::unique_ptr<SocketConnection> connection;
 
-            if (!acceptor.accept(connection))
-                continue;
+			if (!acceptor.accept(connection)) continue;
 
-            SmtpSession session(DOMAIN);
+			SmtpSession session(domain);
 
-            if (!connection->send(session.greeting()))
-            {
-                connection->close();
-                continue;
-            }
+			if (!connection->send(session.greeting()))
+			{
+				connection->close();
+				continue;
+			}
 
-            std::string input;
+			std::string input;
 
-            while (connection->receive(input))
-            {
-                std::string response =
-                    session.processLine(input);
+			while (connection->receive(input))
+			{
+				std::string response = session.processLine(input);
 
-                if (!response.empty())
-                {
-                    if (!connection->send(response))
-                        break;
-                }
+				if (!response.empty())
+				{
+					if (!connection->send(response)) break;
+				}
 
-                if (session.isClosed())
-                    break;
-            }
+				if (session.isClosed()) break;
+			}
 
-            connection->close();
-        }
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Server error: "
-                  << e.what() << std::endl;
-    }
+			connection->close();
+		}
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "Server error: " << e.what() << std::endl;
+	}
 
-    return 0;
+	return 0;
 }
-

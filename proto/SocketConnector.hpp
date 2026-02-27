@@ -2,6 +2,7 @@
 
 #include <boost/asio.hpp>
 #include <memory>
+
 #include "SocketConnection.hpp"
 
 class SocketConnector
@@ -11,11 +12,8 @@ public:
 
 	bool initialize(boost::asio::io_context& ioContext);
 
-	bool connect(const std::string& host,
-				 uint16_t port,
-				 std::unique_ptr<SocketConnection>& outConnection);
+	bool connect(const std::string& host, uint16_t port, std::unique_ptr<SocketConnection>& outConnection);
 
 private:
 	boost::asio::io_context* m_ioContext{nullptr};
 };
-

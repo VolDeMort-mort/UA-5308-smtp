@@ -1,0 +1,49 @@
+---
+Language: Cpp
+Standard: c++17
+
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+
+ColumnLimit: 120
+
+BreakBeforeBraces: Allman
+
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInAngles: Never
+SpaceInEmptyParentheses: false
+SpaceBeforeRangeBasedForLoopColon: true
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+NamespaceIndentation: None
+
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerIndentWidth: 4
+
+BreakInheritanceList: BeforeColon
+
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+
+IndentPPDirectives: None
+
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<.*>'
+    Priority: 1
+  - Regex: '^".*"'
+    Priority: 2
+
+MaxEmptyLinesToKeep: 1

@@ -1,0 +1,85 @@
+---
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-using,
+  modernize-use-noexcept,
+  performance-*,
+  readability-identifier-naming,
+  readability-const-return-type,
+  readability-redundant-member-init,
+  cppcoreguidelines-prefer-member-initializer,
+  cppcoreguidelines-pro-type-member-init
+
+HeaderFilterRegex: '\.(h|hpp)$'
+
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.AbstractClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.AbstractClassPrefix
+    value: I
+
+  - key: readability-identifier-naming.FunctionCase
+    value: CamelCase
+  - key: readability-identifier-naming.MethodCase
+    value: CamelCase
+
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.LocalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.PrivateMemberPrefix
+    value: m_
+  - key: readability-identifier-naming.ProtectedMemberCase
+    value: lower_case
+  - key: readability-identifier-naming.ProtectedMemberPrefix
+    value: m_
+
+  - key: readability-identifier-naming.ClassStaticVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.ClassStaticVariablePrefix
+    value: s_
+
+  - key: readability-identifier-naming.GlobalVariableCase
+    value: lower_case
+  - key: readability-identifier-naming.GlobalVariablePrefix
+    value: g_
+
+  - key: readability-identifier-naming.LocalConstantCase
+    value: lower_case
+  - key: readability-identifier-naming.ClassConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.StaticConstantCase
+    value: UPPER_CASE
+
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ScopedEnumConstantCase
+    value: UPPER_CASE
+
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+
+  - key: readability-identifier-naming.NamespaceCase
+    value: CamelCase
