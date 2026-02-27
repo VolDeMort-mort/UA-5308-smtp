@@ -4,7 +4,7 @@
 class SslStream : public IStream
 {
 public:
-	explicit SslStream(boost::asio::ssl::stream<boost::asio::ip::tcp::socket> s) : m_ssl_stream(std::move(s)) {}
+	explicit SslStream(boost::asio::ssl::stream<boost::asio::ip::tcp::socket>&& s) : m_ssl_stream(std::move(s)) {}
 
 	boost::asio::any_io_executor get_executor() override { return m_ssl_stream.get_executor(); }
 

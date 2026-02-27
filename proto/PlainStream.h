@@ -4,7 +4,7 @@
 class PlainStream : public IStream, public std::enable_shared_from_this<PlainStream>
 {
 public:
-	explicit PlainStream(boost::asio::ip::tcp::socket sock) : m_socket(std::move(sock)) {}
+	explicit PlainStream(boost::asio::ip::tcp::socket&& socket) : m_socket(std::move(socket)) {}
 
 	boost::asio::any_io_executor get_executor() override { return m_socket.get_executor(); }
 

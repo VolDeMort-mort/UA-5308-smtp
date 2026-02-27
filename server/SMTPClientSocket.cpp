@@ -4,7 +4,7 @@
 using boost::asio::ip::tcp;
 
 SMTPClientSocket::SMTPClientSocket(boost::asio::io_context& ioc)
-	: m_socket(std::make_unique<PlainStream>(std::move(socket))), 
+	: m_socket(std::make_unique<PlainStream>(boost::asio::ip::tcp::socket(ioc))), 
 	m_strand(m_socket->get_executor()),
 	m_timer(m_socket->get_executor()),
 	m_buf(), 
@@ -39,10 +39,12 @@ std::error_code SMTPClientSocket::last_error() const {
 void SMTPClientSocket::connect(const tcp::endpoint& ep, std::function<void(const boost::system::error_code&)> handler) {
 	auto self = shared_from_this();
 	tcp::socket socket = m_socket->release_tcp_socket();
+	auto socket_ptr = std::make_shared<tcp::socket>(std::move(socket));
 
-	socket.async_connect(ep, boost::asio::bind_executor(m_strand,
-		[self, handler = std::move(handler)](const boost::system::error_code& ec) mutable {
+	socket_ptr->async_connect(ep, boost::asio::bind_executor(m_strand,
+		[self, socket_ptr, handler = std::move(handler)](const boost::system::error_code& ec) mutable {
 			if (ec) self->m_last_error = ec;
+			self->m_socket = std::make_unique<PlainStream>(std::move(*socket_ptr));
 			if (handler) handler(ec);
 		}));
 }
@@ -135,7 +137,7 @@ void SMTPClientSocket::sendCommand(const ClientCommand& cmd, WriteHandler handle
 			return;
 		}
 
-		boost::asio::async_write(self->m_socket, boost::asio::buffer(*buf),
+		self->m_socket->async_write(boost::asio::buffer(*buf),
 			boost::asio::bind_executor(self->m_strand,
 				[self, buf, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t) mutable {
 					if (ec) self->m_last_error = ec;
@@ -178,7 +180,7 @@ void SMTPClientSocket::readResponse(std::chrono::milliseconds timeout, ReadHandl
 
 		auto read_one = std::make_shared<std::function<void()>>();
 		*read_one = [self, lines, expected_code, completed, handler, read_one, timeout]() mutable {
-			boost::asio::async_read_until(self->m_socket, self->m_buf, "\r\n",
+			self->m_socket->async_read_until(self->m_buf, "\r\n",
 				boost::asio::bind_executor(self->m_strand,
 					[self, lines, expected_code, completed, handler, read_one, timeout]
 					(const boost::system::error_code& ec, std::size_t bytes_transferred) mutable {
@@ -259,12 +261,21 @@ void SMTPClientSocket::readResponse(std::chrono::milliseconds timeout, ReadHandl
 
 void SMTPClientSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler){
 	if (m_is_tls) {
-		handler(std::error_code);
+		boost::asio::post(m_strand, [handler = std::move(handler)]{ 
+			handler(make_error_code(boost::system::errc::already_connected)); 
+			});
 		return;
 	}
-	tcp::socket raw_socket = m_socket->release_tcp_socket{};
+
+	if (m_buf.size() > 0){
+		m_buf.consume(m_buf.size());
+	}
+
+	tcp::socket raw_socket = m_socket->release_tcp_socket();
 	
 	auto ssl = std::make_unique<boost::asio::ssl::stream<tcp::socket>>(std::move(raw_socket), ctx);
+	ssl->set_verify_mode(boost::asio::ssl::verify_peer);
+
 	auto self = shared_from_this();
 	ssl->async_handshake(boost::asio::ssl::stream_base::client, 
 		boost::asio::bind_executor(m_strand, [self, ssl = std::move(ssl), handler = std::move(handler)](const boost::system::error_code& ec) mutable{
@@ -272,7 +283,7 @@ void SMTPClientSocket::start_tls(boost::asio::ssl::context& ctx, std::function<v
 				handler(ec);
 				return;
 			}
-			self->m_socket = std::make_unique<SslStream>(std::move(ssl));
+			self->m_socket = std::make_unique<SslStream>(std::move(*ssl));
 			self->m_is_tls = true;
 			handler(ec);
 		}));

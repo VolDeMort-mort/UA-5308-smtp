@@ -72,7 +72,7 @@ void SMTPServerSocket::sendResponse(const ServerResponse& resp, WriteHandler han
 			return;
 		}
 
-		boost::asio::async_write(self->m_socket, boost::asio::buffer(*buf),
+		self->m_socket->async_write(boost::asio::buffer(*buf),
 			boost::asio::bind_executor(self->m_strand,
 				[self, buf, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t) mutable {
 					if (ec) self->m_last_error = ec;
@@ -118,7 +118,7 @@ void SMTPServerSocket::readCommand(std::chrono::milliseconds timeout, ReadHandle
 				}));
 		}
 
-		boost::asio::async_read_until(self->m_socket, self->m_buf, "\r\n",
+		self->m_socket->async_read_until(self->m_buf, "\r\n",
 			boost::asio::bind_executor(self->m_strand,
 				[self, completed, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t bytes_transferred) mutable {
 					*completed = true;
@@ -218,7 +218,7 @@ void SMTPServerSocket::readDataBlock(std::chrono::milliseconds timeout, ReadHand
 				}));
 		}
 
-		boost::asio::async_read_until(self->m_socket, self->m_buf, "\r\n.\r\n",
+		self->m_socket->async_read_until(self->m_buf, "\r\n.\r\n",
 			boost::asio::bind_executor(self->m_strand,
 				[self, completed, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t bytes_transferred) mutable {
 					*completed = true;
@@ -249,10 +249,18 @@ void SMTPServerSocket::readDataBlock(std::chrono::milliseconds timeout, ReadHand
 
 void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler){
 	if (m_is_tls) {
-		handler(std::error_code);
+		boost::asio::post(m_strand, [handler = std::move(handler)]{ 
+			handler(make_error_code(boost::system::errc::already_connected)); 
+			});
 		return;
 	}
-	tcp::socket raw_socket = m_socket->release_tcp_socket{};
+
+	if (m_buf.size() > 0)
+	{
+		m_buf.consume(m_buf.size());
+	}
+
+	tcp::socket raw_socket = m_socket->release_tcp_socket();
 	
 	auto ssl = std::make_unique<boost::asio::ssl::stream<tcp::socket>>(std::move(raw_socket), ctx);
 	auto self = shared_from_this();
@@ -262,7 +270,7 @@ void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx, std::function<v
 				handler(ec);
 				return;
 			}
-			self->m_socket = std::make_unique<SslStream>(std::move(ssl));
+			self->m_socket = std::make_unique<SslStream>(std::move(*ssl));
 			self->m_is_tls = true;
 			handler(ec);
 		}));
