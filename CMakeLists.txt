@@ -10,6 +10,7 @@ option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
 
 add_subdirectory(proto)
+add_subdirectory(base64)
 
 if(BUILD_SERVER)
     add_subdirectory(server)
