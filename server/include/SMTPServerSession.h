@@ -6,8 +6,8 @@
 #include <functional>
 #include <chrono>
 
-#include "../proto/SMTP_Types.h"
-#include "../proto/SMTPServerSocket.h"
+#include "SMTP_Types.h"
+#include "SMTPServerSocket.h"
 
 class SMTPServerSession : public std::enable_shared_from_this<SMTPServerSession> {
 public:

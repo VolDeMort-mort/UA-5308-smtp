@@ -6,7 +6,7 @@
 #include <vector>
 #include <optional>
 
-#include "../proto/SMTPServerSocket.h"
+#include "SMTPServerSocket.h"
 #include "SMTPServerSession.h"
 
 class SMTPServer {

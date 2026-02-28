@@ -7,8 +7,8 @@
 #include <string>
 
 #include "SMTP_Types.h"
-#include "../proto/PlainStream.h"
-#include "../proto/SslStream.h"
+#include "PlainStream.h"
+#include "SslStream.h"
 
 class SMTPClientSocket : public std::enable_shared_from_this<SMTPClientSocket> {
 public:

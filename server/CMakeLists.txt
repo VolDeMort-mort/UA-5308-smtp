@@ -1,13 +1,15 @@
-find_package(Threads REQUIRED)
-
 add_executable(smtp_server
-    server_main.cpp
-    SMTPServer.cpp
-    SMTPServerSession.cpp
-    SMTPClientSocket.cpp
-    SMTPCommandParser.cpp
-    SMTPResponseParser.cpp
-    SMTPServerSocket.cpp
+    src/SMTPServer.cpp
+    src/SMTPServerSession.cpp
+    src/server_main.cpp
 )
 
-target_link_libraries(smtp_server PRIVATE smtp_proto Threads::Threads)
+target_include_directories(smtp_server
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(smtp_server
+    PRIVATE
+        smtp_proto
+)

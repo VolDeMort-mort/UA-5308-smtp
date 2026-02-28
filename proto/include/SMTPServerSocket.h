@@ -5,8 +5,8 @@
 #include "SMTPCommandParser.h"
 #include <functional>
 
-#include "../proto/PlainStream.h"
-#include "../proto/SslStream.h"
+#include "PlainStream.h"
+#include "SslStream.h"
 
 class SMTPServerSocket : public std::enable_shared_from_this<SMTPServerSocket>
 {

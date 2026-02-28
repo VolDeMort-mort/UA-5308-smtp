@@ -180,7 +180,7 @@ void SMTPServerSession::start_read_data() {
 		self->m_mail_from.clear();
 		self->m_recipients.clear();
 		self->m_data_buffer.clear();
-		self->m_state = State::IDLE;
+		self->m_state = State::READY;
 		self->send_response(resp);
 		});
 }
