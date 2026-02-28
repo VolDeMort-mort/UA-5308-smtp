@@ -2,62 +2,64 @@
 
 using boost::asio::ip::tcp;
 
-SocketConnection::SocketConnection(tcp::socket socket) : m_socket(std::move(socket)), m_connected(m_socket.is_open()) {}
-
-bool SocketConnection::send(const std::string& data)
+SocketConnection::SocketConnection(tcp::socket socket)
+    : m_socket(std::move(socket))
 {
-	if (!m_connected) return false;
-
-	boost::system::error_code ec;
-
-	boost::asio::write(m_socket, boost::asio::buffer(data), ec);
-
-	if (ec)
-	{
-		m_connected = false;
-		return false;
-	}
-
-	return true;
 }
 
-bool SocketConnection::receive(std::string& outData)
+bool SocketConnection::Send(const std::string& data)
 {
-	if (!m_connected) return false;
+    if (!m_socket.is_open())
+        return false;
 
-	boost::asio::streambuf buffer;
-	boost::system::error_code ec;
+    boost::system::error_code error;
 
-	boost::asio::read_until(m_socket, buffer, "\r\n", ec);
+    boost::asio::write(m_socket,
+                       boost::asio::buffer(data),
+                       error);
 
-	if (ec)
-	{
-		m_connected = false;
-		return false;
-	}
-
-	std::istream input(&buffer);
-	std::getline(input, outData);
-
-	if (!outData.empty() && outData.back() == '\r') outData.pop_back();
-
-	return true;
+    return !error;
 }
 
-bool SocketConnection::close()
+bool SocketConnection::Receive(std::string& out_data)
 {
-	if (!m_connected) return false;
+    if (!m_socket.is_open())
+        return false;
 
-	boost::system::error_code ec;
+    boost::asio::streambuf buffer;
+    boost::system::error_code error;
 
-	m_socket.shutdown(tcp::socket::shutdown_both, ec);
-	m_socket.close(ec);
+    boost::asio::read_until(m_socket,
+                            buffer,
+                            "\r\n",
+                            error);
 
-	m_connected = false;
-	return true;
+    if (error)
+        return false;
+
+    std::istream stream(&buffer);
+    std::getline(stream, out_data);
+
+    if (!out_data.empty() && out_data.back() == '\r')
+        out_data.pop_back();
+
+    return true;
 }
 
-bool SocketConnection::isConnected() const noexcept
+bool SocketConnection::Close()
 {
-	return m_connected;
+    if (!m_socket.is_open())
+        return false;
+
+    boost::system::error_code error;
+
+    m_socket.shutdown(tcp::socket::shutdown_both, error);
+    m_socket.close(error);
+
+    return true;
+}
+
+bool SocketConnection::IsOpen() const noexcept
+{
+    return m_socket.is_open();
 }

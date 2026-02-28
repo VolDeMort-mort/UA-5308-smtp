@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <vector>
 
@@ -6,32 +7,31 @@
 
 enum class SmtpState
 {
-	WAIT_HELO,
-	WAIT_MAIL,
-	WAIT_RCPT,
-	WAIT_DATA,
-	RECEIVING_DATA,
-	CLOSED
+    WAIT_HELO,
+    WAIT_MAIL,
+    WAIT_RCPT,
+    WAIT_DATA,
+    RECEIVING_DATA,
+    CLOSED
 };
 
 class SmtpSession
 {
 public:
-	explicit SmtpSession(std::string domain);
+    explicit SmtpSession(const std::string& domain);
 
-	std::string greeting() const;
-
-	std::string processLine(const std::string& line);
-
-	bool isClosed() const noexcept;
+    std::string Greeting() const;
+    std::string ProcessLine(const std::string& line);
+    bool IsClosed() const noexcept;
 
 private:
-	void resetMessage();
+    void ResetMessage();
 
-	SmtpState m_state{SmtpState::WAIT_HELO};
-	std::string m_domain;
+private:
+    std::string m_domain;
+    SmtpState m_state{SmtpState::WAIT_HELO};
 
-	std::string m_sender;
-	std::vector<std::string> m_recipients;
-	std::string m_body;
+    std::string m_sender;
+    std::vector<std::string> m_recipients;
+    std::string m_body;
 };

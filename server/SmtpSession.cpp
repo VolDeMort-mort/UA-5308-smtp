@@ -1,88 +1,92 @@
+#include "SmtpParser.hpp"
 #include "SmtpSession.hpp"
 
-#include "SmtpParser.hpp"
-#include "SmtpResponse.hpp"
-
-SmtpSession::SmtpSession(std::string domain) : m_domain(std::move(domain)) {}
-
-std::string SmtpSession::greeting() const
+SmtpSession::SmtpSession(const std::string& domain)
+    : m_domain(domain)
 {
-	return SmtpResponse::serviceReady(m_domain);
 }
 
-bool SmtpSession::isClosed() const noexcept
+std::string SmtpSession::Greeting() const
 {
-	return m_state == SmtpState::CLOSED;
+    return "220 " + m_domain + " Service ready\r\n";
 }
 
-void SmtpSession::resetMessage()
+bool SmtpSession::IsClosed() const noexcept
 {
-	m_sender.clear();
-	m_recipients.clear();
-	m_body.clear();
+    return m_state == SmtpState::CLOSED;
 }
 
-std::string SmtpSession::processLine(const std::string& line)
+void SmtpSession::ResetMessage()
 {
-	// DATA mode
-	if (m_state == SmtpState::RECEIVING_DATA)
-	{
-		if (line == ".")
-		{
-			m_state = SmtpState::WAIT_MAIL;
-			resetMessage();
-			return SmtpResponse::ok();
-		}
+    m_sender.clear();
+    m_recipients.clear();
+    m_body.clear();
+}
 
-		m_body += line + "\n";
-		return {};
-	}
+std::string SmtpSession::ProcessLine(const std::string& line)
+{
+    if (m_state == SmtpState::RECEIVING_DATA)
+    {
+        if (line == ".")
+        {
+            m_state = SmtpState::WAIT_MAIL;
+            ResetMessage();
+            return "250 OK\r\n";
+        }
 
-	auto cmd = SmtpParser::parse(line);
+        m_body += line + "\n";
+        return {};
+    }
 
-	switch (cmd.type)
-	{
-	case SmtpCommandType::HELO:
-	case SmtpCommandType::EHLO:
-		if (m_state != SmtpState::WAIT_HELO) return SmtpResponse::badSequence();
+    SmtpCommand command = SmtpParser::Parse(line);
 
-		m_state = SmtpState::WAIT_MAIL;
-		return SmtpResponse::hello(m_domain);
+    switch (command.type)
+    {
+        case SmtpCommandType::HELO:
+        case SmtpCommandType::EHLO:
+            if (m_state != SmtpState::WAIT_HELO)
+                return "503 Bad sequence of commands\r\n";
 
-	case SmtpCommandType::MAIL:
-		if (m_state != SmtpState::WAIT_MAIL) return SmtpResponse::badSequence();
+            m_state = SmtpState::WAIT_MAIL;
+            return "250 " + m_domain + " greets you\r\n";
 
-		m_sender = cmd.argument;
-		m_state = SmtpState::WAIT_RCPT;
-		return SmtpResponse::ok();
+        case SmtpCommandType::MAIL:
+            if (m_state != SmtpState::WAIT_MAIL)
+                return "503 Bad sequence of commands\r\n";
 
-	case SmtpCommandType::RCPT:
-		if (m_state != SmtpState::WAIT_RCPT) return SmtpResponse::badSequence();
+            m_sender = command.argument;
+            m_state = SmtpState::WAIT_RCPT;
+            return "250 OK\r\n";
 
-		m_recipients.push_back(cmd.argument);
-		return SmtpResponse::ok();
+        case SmtpCommandType::RCPT:
+            if (m_state != SmtpState::WAIT_RCPT)
+                return "503 Bad sequence of commands\r\n";
 
-	case SmtpCommandType::DATA:
-		if (m_state != SmtpState::WAIT_RCPT || m_recipients.empty()) return SmtpResponse::badSequence();
+            m_recipients.push_back(command.argument);
+            return "250 OK\r\n";
 
-		m_state = SmtpState::RECEIVING_DATA;
-		return SmtpResponse::startMailInput();
+        case SmtpCommandType::DATA:
+            if (m_state != SmtpState::WAIT_RCPT || m_recipients.empty())
+                return "503 Bad sequence of commands\r\n";
 
-	case SmtpCommandType::RSET:
-		resetMessage();
-		m_state = SmtpState::WAIT_MAIL;
-		return SmtpResponse::ok();
+            m_state = SmtpState::RECEIVING_DATA;
+            return "354 End data with <CR><LF>.<CR><LF>\r\n";
 
-	case SmtpCommandType::NOOP:
-		return SmtpResponse::ok();
+        case SmtpCommandType::RSET:
+            ResetMessage();
+            m_state = SmtpState::WAIT_MAIL;
+            return "250 OK\r\n";
 
-	case SmtpCommandType::QUIT:
-		m_state = SmtpState::CLOSED;
-		return SmtpResponse::closing();
+        case SmtpCommandType::NOOP:
+            return "250 OK\r\n";
 
-	case SmtpCommandType::UNKNOWN:
-		return SmtpResponse::commandNotImplemented();
-	}
+        case SmtpCommandType::QUIT:
+            m_state = SmtpState::CLOSED;
+            return "221 Bye\r\n";
 
-	return SmtpResponse::syntaxError();
+        case SmtpCommandType::UNKNOWN:
+            return "502 Command not implemented\r\n";
+    }
+
+    return "500 Syntax error\r\n";
 }
