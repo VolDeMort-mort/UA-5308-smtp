@@ -3,11 +3,32 @@
 
 using boost::asio::ip::tcp;
 
-SMTPServer::SMTPServer(boost::asio::io_context& ioc, unsigned short port)
+SMTPServer::SMTPServer(boost::asio::io_context& ioc, unsigned short port, 
+	const std::string& cert_file, const std::string& key_file)
 	: m_ioc(ioc),
 	m_acceptor(ioc, tcp::endpoint(tcp::v4(), port)),
 	m_work_guard(boost::asio::make_work_guard(m_ioc))
 {
+	if (!cert_file.empty() && !key_file.empty()){
+		try{
+			m_ssl_ctx = std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tls_server);
+
+			m_ssl_ctx->set_options(boost::asio::ssl::context::default_workarounds |
+								   boost::asio::ssl::context::no_sslv2 | 
+								   boost::asio::ssl::context::no_sslv3);
+
+			m_ssl_ctx->use_private_key_file(key_file, boost::asio::ssl::context::pem);
+			m_ssl_ctx->use_certificate_chain_file(cert_file);
+
+			m_has_tls = true;
+		}
+		catch (const std::exception& ex)
+		{
+			// log
+			m_ssl_ctx.reset();
+			m_has_tls = false;
+		}
+	}
 }
 
 SMTPServer::~SMTPServer() {
@@ -68,7 +89,7 @@ void SMTPServer::do_accept() {
 		if (!ec) {
 			try {
 				auto serverSocket = std::make_shared<SMTPServerSocket>(std::move(socket));
-				auto session = std::make_shared<SMTPServerSession>(serverSocket);
+				auto session = std::make_shared<SMTPServerSession>(serverSocket, m_has_tls ? m_ssl_ctx : nullptr);
 
 				session->run();
 			}

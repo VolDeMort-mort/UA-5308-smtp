@@ -28,6 +28,8 @@ public:
 
 	std::error_code last_error() const;
 
+	bool is_tls() { return m_is_tls; }
+
 	void close();
 
 private:

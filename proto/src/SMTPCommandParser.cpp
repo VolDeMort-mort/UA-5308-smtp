@@ -57,6 +57,10 @@ void SMTPCommandParser::parseLine(std::string& line, ClientCommand& cmd)
 	{
 		cmd.command = CommandType::DATA;
 	}
+	else if (verb == "STARTTLS")
+	{
+		cmd.command = CommandType::STARTTLS;
+	}
 	else if (verb == "QUIT")
 	{
 		cmd.command = CommandType::QUIT;

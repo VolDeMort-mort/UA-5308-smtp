@@ -11,6 +11,7 @@ enum CommandType {
 	DATA,
 	QUIT,
 	SEND_DATA,
+	STARTTLS,
 	UNKNOWN
 };
 

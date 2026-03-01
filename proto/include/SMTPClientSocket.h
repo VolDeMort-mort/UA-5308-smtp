@@ -29,6 +29,7 @@ public:
 
 	void start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler);
 
+	bool is_tls() { return m_is_tls; }
 	std::error_code last_error() const;
 
 private:

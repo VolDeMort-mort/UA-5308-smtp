@@ -7,14 +7,12 @@
 
 using boost::system::error_code;
 
-SMTPServerSession::SMTPServerSession(SMTPServerSocket::Ptr socket)
-	: m_socket(std::move(socket)), m_state(State::NEW)
+SMTPServerSession::SMTPServerSession(SMTPServerSocket::Ptr socket, std::shared_ptr<boost::asio::ssl::context> ssl_ctx)
+	: m_socket(std::move(socket)), m_ssl_ctx(std::move(ssl_ctx)), m_state(State::NEW)
 {}
 
 void SMTPServerSession::run() {
-	ServerResponse greeting;
-	greeting.code = 220;
-	greeting.lines = { "SMTP Server ready" };
+	ServerResponse greeting{220, {"SMTP Server ready"}};
 
 	auto self = shared_from_this();
 	m_socket->sendResponse(greeting, [self](const error_code& ec) {
@@ -22,7 +20,7 @@ void SMTPServerSession::run() {
 			self->m_state = State::CLOSED;
 			return;
 		}
-		self->m_state = State::IDLE;
+		self->m_state = State::NEW;
 		self->do_read_command();
 		});
 }
@@ -83,6 +81,9 @@ void SMTPServerSession::handle_command(ClientCommand cmd, const error_code& ec) 
 		ServerResponse resp;
 		resp.code = 250;
 		resp.lines = { "Hello"};
+
+		if (m_ssl_ctx && !m_socket->is_tls()) resp.lines.push_back("STARTTLS");
+
 		m_state = State::READY;
 		send_response(resp);
 		break;
@@ -137,13 +138,54 @@ void SMTPServerSession::handle_command(ClientCommand cmd, const error_code& ec) 
 			auto self = shared_from_this();
 			m_socket->sendResponse(resp, [self](const error_code& ec) {
 				if (ec) {
-					self->m_state = State::READY;
+					self->m_state = State::CLOSED;
 					self->m_socket->close();
 					return;
 				}
 				self->start_read_data();
 				});
 		}
+		break;
+	}
+	case CommandType::STARTTLS:
+	{
+
+		if (!m_ssl_ctx){
+			send_response({454, {"TLS not available"}});
+			break;
+		}
+
+		if (m_socket->is_tls()){
+			send_response({503, {"Already using TLS"}});
+			break;
+		}
+
+		auto self = shared_from_this();
+
+		m_socket->sendResponse({220, {"Ready to start TLS"}},
+			[self](const error_code& ec){
+				if (ec){
+					self->m_state = State::CLOSED;
+					self->m_socket->close();
+					return;
+				}
+				
+				self->m_socket->start_tls(*self->m_ssl_ctx,
+					[self](const error_code& ec2){
+						if (ec2){
+							self->m_state = State::CLOSED;
+							self->m_socket->close();
+							return;
+						}
+						self->m_mail_from.clear();
+						self->m_recipients.clear();
+						self->m_data_buffer.clear();
+						self->m_state = State::NEW;
+
+						self->do_read_command();
+					});
+			});
+
 		break;
 	}
 	default: {

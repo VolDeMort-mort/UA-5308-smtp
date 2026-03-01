@@ -13,23 +13,20 @@ class SMTPServerSession : public std::enable_shared_from_this<SMTPServerSession>
 public:
 	using Ptr = std::shared_ptr<SMTPServerSession>;
 
-	SMTPServerSession(SMTPServerSocket::Ptr socket);
+	SMTPServerSession(SMTPServerSocket::Ptr socket, std::shared_ptr<boost::asio::ssl::context> ssl_ctx);
 
 	void run();
-
-	void set_command_timeout(std::chrono::milliseconds t) { m_cmd_timeout = t; }
-	void set_data_timeout(std::chrono::milliseconds t) { m_data_timeout = t; }
 
 private:
 	enum class State {
 		NEW,
 		READY,
-		IDLE,
 		READING_DATA,
 		CLOSED
 	};
 
 	SMTPServerSocket::Ptr m_socket;
+	std::shared_ptr<boost::asio::ssl::context> m_ssl_ctx;
 	State m_state;
 
 	std::string m_mail_from;
