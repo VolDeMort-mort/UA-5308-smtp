@@ -79,11 +79,16 @@ void Logger::Log(LogLevel lvl, const std::string& msg)
 
 std::vector<std::string> Logger::Read(size_t limit)
 {
-	auto* readable = dynamic_cast<IReadable*>(m_strategy.get());
+    {
+        std::unique_lock<std::mutex> lock(m_queue_mtx);
+        m_cv.notify_one();
+        m_cv.wait(lock, [this] { return m_queue.empty(); });
+    }
+    m_strategy->Flush();
 
-	if (!readable) return {};
-
-	return readable->Read(limit);
+    auto* readable = dynamic_cast<IReadable*>(m_strategy.get());
+    if (!readable) return {};
+    return readable->Read(limit);
 }
 
 std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)

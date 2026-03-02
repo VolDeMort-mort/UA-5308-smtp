@@ -127,40 +127,44 @@ std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 
 std::vector<std::string> FileStrategy::Read(size_t limit)
 {
-	std::vector<std::string> result;
-	std::ifstream file(m_current_path, std::ios::binary);
+    std::vector<std::string> result;
+    std::ifstream file(m_current_path, std::ios::binary);
+    if (!file) return result;
 
-	if (!file) return result;
+    file.seekg(0, std::ios::end);
+    std::streamoff pos = file.tellg();
+    if (pos == 0) return result;
 
-	file.seekg(0, std::ios::end);
-	std::streamoff pos = file.tellg();
+    file.seekg(pos - 1);
+    char last;
+    file.get(last);
+    if (last == '\n') pos--;
 
-	std::string buffer;
-	size_t linesFound = 0;
+    std::string buffer;
+    size_t linesFound = 0;
 
-	while (pos > 0 && linesFound < limit)
-	{
-		pos--;
-		file.seekg(pos);
-		char c;
-		file.get(c);
+    while (pos > 0 && linesFound < limit)
+    {
+        pos--;
+        file.seekg(pos);
+        char c;
+        file.get(c);
+        if (c == '\n') linesFound++;
+        buffer.push_back(c);
+    }
 
-		if (c == '\n') linesFound++;
+    if (!buffer.empty() && buffer.back() == '\n')
+        buffer.pop_back();
 
-		buffer.push_back(c);
-	}
+    std::reverse(buffer.begin(), buffer.end());
 
-	std::reverse(buffer.begin(), buffer.end());
+    std::stringstream ss(buffer);
+    std::string line;
+    while (std::getline(ss, line))
+        if (!line.empty())
+            result.push_back(line);
 
-	std::stringstream ss(buffer);
-	std::string line;
-
-	while (std::getline(ss, line))
-		result.push_back(line);
-
-	if (result.size() > limit) result.erase(result.begin(), result.begin() + result.size() - limit);
-
-	return result;
+    return result;
 }
 
 std::vector<std::string> FileStrategy::Search(LogLevel lvl, size_t limit, int readN)
