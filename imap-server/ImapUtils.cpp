@@ -59,7 +59,7 @@ ImapCommandType StringToCommandType(const std::string& cmd)
 		{"EXPUNGE", ImapCommandType::Expunge},
 	};
 
-	auto it = commandMap.find(cmd);
+	auto it = commandMap.find(IMAP_UTILS::ToUpper(cmd));
 	if (it != commandMap.end())
 	{
 		return it->second;
