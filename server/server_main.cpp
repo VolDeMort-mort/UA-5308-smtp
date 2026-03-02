@@ -31,7 +31,7 @@ int main()
         {
             std::unique_ptr<SocketConnection> connection;
 
-            if (!acceptor.Accept(connection))
+            if (!acceptor.Accept(connection) || !connection)
                 continue;
 
             SmtpSession session(DOMAIN);
@@ -46,7 +46,8 @@ int main()
 
             while (connection->Receive(input))
             {
-                std::string response = session.ProcessLine(input);
+                std::string response =
+                    session.ProcessLine(input);
 
                 if (!response.empty())
                 {

@@ -12,13 +12,22 @@ bool SocketConnection::Send(const std::string& data)
     if (!m_socket.is_open())
         return false;
 
+    if (data.empty())
+        return false;
+
     boost::system::error_code error;
 
     boost::asio::write(m_socket,
                        boost::asio::buffer(data),
                        error);
 
-    return !error;
+    if (error)
+    {
+        Close();
+        return false;
+    }
+
+    return true;
 }
 
 bool SocketConnection::Receive(std::string& out_data)
@@ -26,18 +35,32 @@ bool SocketConnection::Receive(std::string& out_data)
     if (!m_socket.is_open())
         return false;
 
-    boost::asio::streambuf buffer;
     boost::system::error_code error;
 
     boost::asio::read_until(m_socket,
-                            buffer,
+                            m_buffer,
                             "\r\n",
                             error);
 
-    if (error)
+    if (error == boost::asio::error::eof)
+    {
+        Close();
         return false;
+    }
 
-    std::istream stream(&buffer);
+    if (error)
+    {
+        Close();
+        return false;
+    }
+
+    if (m_buffer.size() > MAX_LINE_SIZE)
+    {
+        Close();
+        return false;
+    }
+
+    std::istream stream(&m_buffer);
     std::getline(stream, out_data);
 
     if (!out_data.empty() && out_data.back() == '\r')

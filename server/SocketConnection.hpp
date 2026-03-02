@@ -14,5 +14,8 @@ public:
     bool IsOpen() const noexcept;
 
 private:
+    static constexpr size_t MAX_LINE_SIZE = 1000;
+
     boost::asio::ip::tcp::socket m_socket;
+    boost::asio::streambuf m_buffer;
 };
