@@ -1,5 +1,8 @@
 #include "SocketConnection.hpp"
 
+#include <sys/select.h>
+#include <unistd.h>
+
 using boost::asio::ip::tcp;
 
 SocketConnection::SocketConnection(tcp::socket socket)
@@ -7,21 +10,41 @@ SocketConnection::SocketConnection(tcp::socket socket)
 {
 }
 
-bool SocketConnection::Send(const std::string& data)
+void SocketConnection::SetTimeout(int seconds)
+{
+    if (seconds > 0)
+        m_timeout_seconds = seconds;
+}
+
+bool SocketConnection::WaitForEvent(bool wait_for_read)
 {
     if (!m_socket.is_open())
         return false;
 
-    if (data.empty())
-        return false;
+    int fd = m_socket.native_handle();
 
-    boost::system::error_code error;
+    fd_set read_set;
+    fd_set write_set;
 
-    boost::asio::write(m_socket,
-                       boost::asio::buffer(data),
-                       error);
+    FD_ZERO(&read_set);
+    FD_ZERO(&write_set);
 
-    if (error)
+    if (wait_for_read)
+        FD_SET(fd, &read_set);
+    else
+        FD_SET(fd, &write_set);
+
+    timeval timeout;
+    timeout.tv_sec = m_timeout_seconds;
+    timeout.tv_usec = 0;
+
+    int result = select(fd + 1,
+                        wait_for_read ? &read_set : nullptr,
+                        wait_for_read ? nullptr   : &write_set,
+                        nullptr,
+                        &timeout);
+
+    if (result <= 0)
     {
         Close();
         return false;
@@ -35,18 +58,15 @@ bool SocketConnection::Receive(std::string& out_data)
     if (!m_socket.is_open())
         return false;
 
+    if (!WaitForEvent(true))
+        return false;
+
     boost::system::error_code error;
 
     boost::asio::read_until(m_socket,
                             m_buffer,
                             "\r\n",
                             error);
-
-    if (error == boost::asio::error::eof)
-    {
-        Close();
-        return false;
-    }
 
     if (error)
     {
@@ -65,6 +85,32 @@ bool SocketConnection::Receive(std::string& out_data)
 
     if (!out_data.empty() && out_data.back() == '\r')
         out_data.pop_back();
+
+    return true;
+}
+
+bool SocketConnection::Send(const std::string& data)
+{
+    if (!m_socket.is_open())
+        return false;
+
+    if (data.empty())
+        return false;
+
+    if (!WaitForEvent(false))
+        return false;
+
+    boost::system::error_code error;
+
+    boost::asio::write(m_socket,
+                       boost::asio::buffer(data),
+                       error);
+
+    if (error)
+    {
+        Close();
+        return false;
+    }
 
     return true;
 }

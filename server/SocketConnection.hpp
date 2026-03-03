@@ -13,9 +13,14 @@ public:
     bool Close();
     bool IsOpen() const noexcept;
 
+    void SetTimeout(int seconds);
+
 private:
-    static constexpr size_t MAX_LINE_SIZE = 1000;
+    static constexpr std::size_t MAX_LINE_SIZE = 8192;
 
     boost::asio::ip::tcp::socket m_socket;
     boost::asio::streambuf m_buffer;
+
+    int m_timeout_seconds{30};
+	bool WaitForEvent(bool wait_for_read);
 };
