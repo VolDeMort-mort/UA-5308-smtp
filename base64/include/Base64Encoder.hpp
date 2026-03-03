@@ -1,10 +1,13 @@
 #pragma once
+
+#include "Base64Common.hpp"
+#include "AttachmentConfig.hpp"
+
 #include <vector>
 #include <string>
 #include <stdexcept>
 #include <cstdint>
-#include "Base64Common.hpp"
-#include "AttachmentConfig.hpp"
+
 
 class Base64Encoder
 {

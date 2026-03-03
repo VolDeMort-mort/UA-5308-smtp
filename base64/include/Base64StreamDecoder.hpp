@@ -1,6 +1,8 @@
 #pragma once
-#include <ostream>
+
 #include "Base64Common.hpp"
+
+#include <ostream>
 
 class Base64StreamDecoder
 {

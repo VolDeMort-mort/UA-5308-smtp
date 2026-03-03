@@ -7,7 +7,13 @@ std::vector<uint8_t> Base64Decoder::DecodeBase64(const std::string& encoded_data
 
 	for (char c : encoded_data)
 	{
-		if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=')
+		const bool is_upper = c >= 'A' && c <= 'Z';
+		const bool is_lower = c >= 'a' && c <= 'z';
+		const bool is_digit = c >= '0' && c <= '9';
+		const bool is_special = c == '+' || c == '/' || c == '=';
+		const bool is_valid_base64 = is_upper || is_lower || is_digit || is_special;
+
+		if (is_valid_base64)
 		{
 			clean_str += c;
 		}
@@ -41,7 +47,7 @@ std::vector<uint8_t> Base64Decoder::DecodeBase64(const std::string& encoded_data
 			throw std::runtime_error("Invalid Base64 character");
 		}
 
-		uint32_t block = (value0 << 18) | (value1 << 12) | (value2 << 6) | value3;
+		std::uint32_t block = (value0 << 18) | (value1 << 12) | (value2 << 6) | value3;
 
 		decoded_data.push_back((block >> 16) & 0xFF);
 
