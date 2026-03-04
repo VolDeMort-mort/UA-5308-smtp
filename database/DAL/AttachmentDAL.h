@@ -4,9 +4,9 @@
 #include <optional>
 #include <string>
 #include <cstdint>
+#include <sqlite3.h>
 
 #include "../Entity/Attachment.h"
-#include "../sqlite3/sqlite3.h"
 
 class AttachmentDAL
 {

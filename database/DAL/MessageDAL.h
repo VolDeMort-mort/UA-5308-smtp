@@ -1,9 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <sqlite3.h>
 
 #include "../Entity/Message.h"
-#include "../sqlite3/sqlite3.h"
 
 class MessageDAL
 {

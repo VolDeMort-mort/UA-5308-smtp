@@ -3,9 +3,9 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
+#include <sqlite3.h>
 
 #include "../Entity/User.h"
-#include "../sqlite3/sqlite3.h"
 
 class UserDAL
 {

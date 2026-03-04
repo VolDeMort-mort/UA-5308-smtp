@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
     receiver     TEXT NOT NULL,
 
-    status       TEXT NOT NULL CHECK(status IN ('draft', 'sent', 'received', 'deleted')),
+    status       TEXT NOT NULL CHECK(status IN ('draft', 'sent', 'received', 'deleted', 'failed')),
     is_seen      INTEGER NOT NULL DEFAULT 0,  -- 0 = false, 1 = true
     is_starred   INTEGER NOT NULL DEFAULT 0,
     is_important INTEGER NOT NULL DEFAULT 0,
