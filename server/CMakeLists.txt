@@ -4,6 +4,7 @@ add_executable(smtp_server
     server_main.cpp
     SmtpParser.cpp
     SmtpSession.cpp
+    SecureConnection.cpp
     SocketAcceptor.cpp
     SocketConnection.cpp
     SocketConnector.cpp

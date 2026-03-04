@@ -61,3 +61,9 @@ bool SocketConnection::isConnected() const noexcept
 {
 	return m_connected;
 }
+
+boost::asio::ip::tcp::socket SocketConnection::releaseSocket()
+{
+	m_connected = false;
+	return std::move(m_socket);
+}
