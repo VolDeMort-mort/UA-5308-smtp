@@ -187,3 +187,42 @@ TEST(SMTP_Socket_Tests, ServerToClient_AllResponsesParsed) {
 		}
 	}
 }
+
+TEST(SMTP_Socket_Tests, TLS_Handshake) {
+  SmtpTestSockets sockets;
+
+  boost::asio::ssl::context server_ctx(boost::asio::ssl::context::tls_server);
+  server_ctx.use_certificate_chain_file("certs/server.crt");
+  server_ctx.use_private_key_file("certs/server.key", boost::asio::ssl::context::pem);
+
+  boost::asio::ssl::context client_ctx(boost::asio::ssl::context::tls_client);
+  client_ctx.set_verify_mode(boost::asio::ssl::verify_none);
+
+  sockets.start_tls_on_both(server_ctx, client_ctx);
+
+   ClientCommand cmd{CommandType::HELO, "tls-test"};
+
+    auto parsed_p = std::make_shared<std::promise<ClientCommand>>();
+    auto parsed_f = parsed_p->get_future();
+
+    sockets.serverSocket->readCommand(2000ms,
+        [parsed_p](ClientCommand parsed, const boost::system::error_code& ec) {
+            if (ec) parsed_p->set_exception(std::make_exception_ptr(std::runtime_error(ec.message())));
+            else parsed_p->set_value(parsed);
+        });
+
+    auto write_p = std::make_shared<std::promise<void>>();
+    auto write_f = write_p->get_future();
+
+    sockets.clientSocket->sendCommand(cmd,
+        [write_p](const boost::system::error_code& ec) {
+            if (ec) write_p->set_exception(std::make_exception_ptr(std::runtime_error(ec.message())));
+            else write_p->set_value();
+        });
+
+    wait_future(write_f);
+    auto parsed = wait_future(parsed_f);
+
+    EXPECT_EQ(parsed.command, cmd.command);
+    EXPECT_EQ(parsed.commandText, cmd.commandText);
+}
