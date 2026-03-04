@@ -3,6 +3,7 @@
 #include <fstream>
 #include <shared_mutex>
 #include <string>
+#include <thread>
 
 #include "ILoggerStrategy.h"
 #include "IReadable.h"

@@ -60,6 +60,10 @@ SmtpCommand SmtpParser::parse(const std::string& line)
 	{
 		cmd.type = SmtpCommandType::QUIT;
 	}
+	else if (upper == "STARTTLS")
+	{
+		cmd.type = SmtpCommandType::STARTTLS;
+	}
 
 	return cmd;
 }

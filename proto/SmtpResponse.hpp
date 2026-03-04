@@ -44,4 +44,15 @@ inline std::string closing()
 	return "221 Bye\r\n";
 }
 
+inline std::string startTls()
+{
+	return "220 Ready to start TLS\r\n";
+}
+
+inline std::string readyToStartTLS(const std::string& domain)
+{
+	return "250 " + domain + " STARTTLS\r\n";
+}
+
+
 } // namespace SmtpResponse

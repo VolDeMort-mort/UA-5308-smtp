@@ -11,7 +11,8 @@ enum class SmtpCommandType
 	RSET,
 	NOOP,
 	QUIT,
-	UNKNOWN
+	UNKNOWN,
+	STARTTLS
 };
 
 struct SmtpCommand

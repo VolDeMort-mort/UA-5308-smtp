@@ -11,7 +11,8 @@ enum class SmtpState
 	WAIT_RCPT,
 	WAIT_DATA,
 	RECEIVING_DATA,
-	CLOSED
+	CLOSED,
+	STARTTLS
 };
 
 class SmtpSession
@@ -24,6 +25,10 @@ public:
 	std::string processLine(const std::string& line);
 
 	bool isClosed() const noexcept;
+
+	SmtpState getState() const noexcept { return m_state; }
+
+	void resetToHelo();
 
 private:
 	void resetMessage();
