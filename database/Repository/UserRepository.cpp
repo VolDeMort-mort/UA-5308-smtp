@@ -74,16 +74,17 @@ bool UserRepository::authorize(const std::string& username, const std::string& p
 
 bool UserRepository::changePassword(int64_t id, const std::string& new_password_hash)
 {
-    if (!m_user_dal.updatePassword(id, new_password_hash)){
-        return setError(m_user_dal.getLastError());
+    if (!m_user_dal.findByID(id).has_value()){
+        return setError("changePassword: user not found");
     }
 
-    return true;
+    return m_user_dal.updatePassword(id, new_password_hash);
 }
 
 bool UserRepository::update(const User& user)
 {
-    if (!m_user_dal.update(user)){
+    if (!m_user_dal.update(user))
+    {
         return setError(m_user_dal.getLastError());
     }
 
@@ -92,9 +93,10 @@ bool UserRepository::update(const User& user)
 
 bool UserRepository::hardDelete(int64_t id)
 {
-    if (!m_user_dal.hardDelete(id)){
-        return setError(m_user_dal.getLastError());
+    if (!m_user_dal.findByID(id).has_value())
+    {
+        return setError("hardDelete: user not found");
     }
 
-    return true;
+    return m_user_dal.hardDelete(id);
 }

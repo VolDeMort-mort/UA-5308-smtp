@@ -1,5 +1,3 @@
-#pragma once
-
 #include "RecipientDAL.h"
 
 #define RECIPIENT_SELECT \
