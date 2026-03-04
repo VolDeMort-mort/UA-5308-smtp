@@ -32,6 +32,7 @@ private:
 	std::condition_variable m_cv;
 	std::thread m_work_thread;
 	std::atomic<bool> m_running_flag;
+	std::atomic<bool> m_flush;
 
 	void PushToQueue(const std::string& message);
 	void WorkQueue();

@@ -1,6 +1,7 @@
 #include "Logger.h"
 
 #include <iostream>
+#include <thread>
 
 #include "ConsoleStrategy.h"
 #include "FileStrategy.h"
@@ -9,6 +10,7 @@ Logger::Logger(std::unique_ptr<ILoggerStrategy> strategy)
 {
 	set_strategy(std::move(strategy));
 	m_running_flag = true;
+	m_flush = false;
 	m_work_thread = std::thread(&Logger::WorkQueue, this);
 }
 
@@ -35,13 +37,25 @@ void Logger::PushToQueue(const std::string& message)
 void Logger::WorkQueue()
 {
 	std::queue<std::string> local_queue;
-	while (m_running_flag)
+	while (true)
 	{
 		{
 			std::unique_lock<std::mutex> lock(m_queue_mtx);
-			m_cv.wait_for(lock, std::chrono::seconds(2), [this] { return m_queue.size() >= 50; });
-			if (m_queue.empty() && m_running_flag) continue;
-			if (m_queue.empty() && !m_running_flag) break;
+			// wait for batch size, flush request from Read(), or timeout
+			m_cv.wait_for(lock, std::chrono::seconds(2), [this] { return m_queue.size() >= 50 || m_flush; });
+
+			// trigger on Read(), when logs are flushed
+			if (m_flush && m_queue.empty())
+			{
+				m_cv.notify_all(); // notify Read() that logs are pushed
+
+				// wait for !m_flush from Read(), logs in queue or shutdown, also prevent loop
+				m_cv.wait(lock, [this] { return !m_flush || !m_queue.empty() || !m_running_flag.load(); });
+			}
+			if (m_queue.empty() && m_running_flag) 
+				continue;
+			if (m_queue.empty() && !m_running_flag) // leave cycle from logger destructor
+				break;
 
 			std::swap(local_queue, m_queue);
 		}
@@ -51,7 +65,7 @@ void Logger::WorkQueue()
 			if (!m_strategy->IsValid()) // if path is invalid,logs can`t be pushed into file
 			{
 				std::cerr << "Can`t open log file: " << FILE_PATH << "\n";
-				m_strategy = std::make_unique<ConsoleStrategy>();
+				m_strategy = std::make_unique<ConsoleStrategy>(); // set console output to prevent logs leaks
 			}
 			while (!local_queue.empty())
 			{
@@ -79,16 +93,24 @@ void Logger::Log(LogLevel lvl, const std::string& msg)
 
 std::vector<std::string> Logger::Read(size_t limit)
 {
-    {
-        std::unique_lock<std::mutex> lock(m_queue_mtx);
-        m_cv.notify_one();
-        m_cv.wait(lock, [this] { return m_queue.empty(); });
-    }
-    m_strategy->Flush();
+	{
+		std::unique_lock<std::mutex> lock(m_queue_mtx);
+		m_flush = true;
+		m_cv.notify_all(); // notify thread for flush
 
-    auto* readable = dynamic_cast<IReadable*>(m_strategy.get());
-    if (!readable) return {};
-    return readable->Read(limit);
+		// wait empty queue or shutdown to avoid crash
+		m_cv.wait(lock, [this] { return m_queue.empty() || !m_running_flag.load(); });
+		m_flush = false;
+		m_cv.notify_all(); // notify thread for !flush
+	}
+
+	m_strategy->Flush();
+
+	auto* readable = dynamic_cast<IReadable*>(m_strategy.get());
+
+	if (!readable) return {};
+
+	return readable->Read(limit);
 }
 
 std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)
