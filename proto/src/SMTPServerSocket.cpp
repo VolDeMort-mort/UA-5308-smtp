@@ -13,9 +13,7 @@ SMTPServerSocket::SMTPServerSocket(tcp::socket socket)
 {
 }
 
-SMTPServerSocket::~SMTPServerSocket()
-{
-	boost::system::error_code ignored;
+SMTPServerSocket::~SMTPServerSocket(){
 	m_timer.cancel();
 	if (m_socket)
 	{
@@ -33,7 +31,6 @@ void SMTPServerSocket::close() {
 		if (self->m_closing) return;
 		self->m_closing = true;
 		self->m_timer.cancel();
-		self->m_socket->cancel();
 		self->m_socket->shutdown();
 		});
 }
@@ -255,14 +252,14 @@ void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx, std::function<v
 		return;
 	}
 
-	if (m_buf.size() > 0)
-	{
+	if (m_buf.size() > 0){
 		m_buf.consume(m_buf.size());
 	}
 
 	tcp::socket raw_socket = m_socket->release_tcp_socket();
 	
 	auto ssl = std::make_unique<boost::asio::ssl::stream<tcp::socket>>(std::move(raw_socket), ctx);
+
 	auto self = shared_from_this();
 	ssl->async_handshake(boost::asio::ssl::stream_base::server, 
 		boost::asio::bind_executor(m_strand, [self, ssl = std::move(ssl), handler = std::move(handler)](const boost::system::error_code& ec) mutable{

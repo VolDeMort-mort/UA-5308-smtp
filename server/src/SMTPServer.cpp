@@ -32,20 +32,7 @@ SMTPServer::SMTPServer(boost::asio::io_context& ioc, unsigned short port,
 }
 
 SMTPServer::~SMTPServer() {
-	if (!m_running) return;
-	m_running = false;
-
-	boost::system::error_code ec;
-	m_acceptor.cancel(ec);
-	m_acceptor.close(ec);
-
-	m_work_guard.reset();
-	m_ioc.stop();
-
-	for (auto& t : m_threads) {
-		if (t.joinable()) t.join();
-	}
-	m_threads.clear();
+	soft_stop();
 }
 
 void SMTPServer::run(std::size_t threads) {
@@ -77,6 +64,7 @@ void SMTPServer::soft_stop() {
 	m_acceptor.close(ec);
 
 	m_work_guard.reset();
+	m_ioc.stop();
 
 	for (auto& t : m_threads) {
 		if (t.joinable()) t.join();

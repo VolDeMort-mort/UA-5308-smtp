@@ -9,6 +9,12 @@ find_package(OpenSSL REQUIRED)
 
 option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
+option(ENABLE_TESTS "Build tests" OFF)
+
+if(ENABLE_TESTS)
+    enable_testing()
+    find_package(GTest REQUIRED)
+endif()
 
 add_subdirectory(proto)
 

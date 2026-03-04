@@ -22,7 +22,11 @@ public:
 
 	void shutdown() override
 	{ 
-		m_ssl_stream.shutdown();
+		boost::system::error_code ec;
+
+		m_ssl_stream.lowest_layer().cancel(ec);
+		m_ssl_stream.lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+		m_ssl_stream.lowest_layer().close(ec);
 	}
 
 	boost::asio::ip::tcp::socket release_tcp_socket() override { 
@@ -31,8 +35,8 @@ public:
 
 	void cancel() override
 	{
-		boost::system::error_code ignored;
-		m_ssl_stream.lowest_layer().cancel(ignored);
+		boost::system::error_code ec;
+		m_ssl_stream.lowest_layer().cancel(ec);
 	}
 
 private:

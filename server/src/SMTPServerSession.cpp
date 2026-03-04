@@ -63,6 +63,7 @@ void SMTPServerSession::handle_command(ClientCommand cmd, const error_code& ec) 
 			self->m_socket->close();
 			return;
 			});
+		return;
 	}
 
 	if (m_state == State::READING_DATA) {
@@ -82,7 +83,9 @@ void SMTPServerSession::handle_command(ClientCommand cmd, const error_code& ec) 
 		resp.code = 250;
 		resp.lines = { "Hello"};
 
-		if (m_ssl_ctx && !m_socket->is_tls()) resp.lines.push_back("STARTTLS");
+		if (cmd.command == CommandType::EHLO){
+			if (m_ssl_ctx && !m_socket->is_tls()) resp.lines.push_back("STARTTLS");
+		}
 
 		m_state = State::READY;
 		send_response(resp);

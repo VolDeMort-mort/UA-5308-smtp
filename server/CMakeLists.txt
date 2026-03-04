@@ -1,17 +1,25 @@
-add_executable(smtp_server
+add_library(server_lib
     src/SMTPServer.cpp
     src/SMTPServerSession.cpp
-    src/server_main.cpp
 )
 
-target_include_directories(smtp_server
-    PRIVATE
+target_include_directories(server_lib
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(server_lib
+    PUBLIC
+        smtp_proto
+)
+
+add_executable(smtp_server
+    src/server_main.cpp
 )
 
 target_link_libraries(smtp_server
     PRIVATE
-        smtp_proto
+        server_lib
 )
 
 add_custom_command(TARGET smtp_server POST_BUILD
@@ -22,3 +30,6 @@ add_custom_command(TARGET smtp_server POST_BUILD
         $<TARGET_FILE_DIR:smtp_server>/certs
 )
 
+if(ENABLE_TESTS)
+    add_subdirectory(tests)
+endif()

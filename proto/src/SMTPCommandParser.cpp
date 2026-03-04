@@ -4,6 +4,17 @@
 #include <sstream>
 #include <algorithm>
 
+static void trim(std::string& s)
+{
+	size_t start = 0;
+	while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
+		++start;
+	size_t end = s.size();
+	while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
+		--end;
+	s = s.substr(start, end - start);
+}
+
 void SMTPCommandParser::parseLine(std::string& line, ClientCommand& cmd)
 {
 	cmd.command = CommandType::UNKNOWN;
@@ -19,39 +30,45 @@ void SMTPCommandParser::parseLine(std::string& line, ClientCommand& cmd)
 	std::transform(verb.begin(), verb.end(), verb.begin(),
 				   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
-	if (verb == "HELO")
-	{
-		cmd.command = CommandType::HELO;
-		std::getline(iss, cmd.commandText);
-	}
-	else if (verb == "EHLO")
-	{
-		cmd.command = CommandType::EHLO;
-		std::getline(iss, cmd.commandText);
-	}
-	else if (verb == "MAIL" || verb == "RCPT")
+	if (verb == "MAIL" || verb == "RCPT")
 	{
 		std::string keyword;
 		if (!(iss >> keyword)) return;
 
-		std::transform(keyword.begin(), keyword.end(), keyword.begin(),
+		auto pos_colon = keyword.find(':');
+		std::string key_upper = keyword.substr(0, pos_colon);
+		std::transform(key_upper.begin(), key_upper.end(), key_upper.begin(),
 					   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
 
-		std::string prefix = (verb == "MAIL") ? "FROM:" : "TO:";
-		if (keyword.rfind(prefix, 0) != 0) return;
+		std::string expected = (verb == "MAIL") ? "FROM" : "TO";
+		if (key_upper != expected) return;
 
-		std::string address = keyword.substr(prefix.size());
+		std::string address;
+		if (pos_colon != std::string::npos) address = keyword.substr(pos_colon + 1);
 
 		std::string rest;
 		std::getline(iss, rest);
-		
 		address += rest;
+		trim(address);
 
-		if (!address.empty() && address.front() != '<') address = "<" + address;
-		if (!address.empty() && address.back() != '>') address += ">";
+		if (!address.empty() && address.front() == '<' && address.back() == '>')
+			address = address.substr(1, address.size() - 2);
 
-		cmd.command = (verb == "MAIL") ? CommandType::MAIL : CommandType::RCPT;
-		cmd.commandText = address;
+		if (!address.empty())
+		{
+			cmd.command = (verb == "MAIL") ? CommandType::MAIL : CommandType::RCPT;
+			cmd.commandText = address;
+		}
+		return;
+	}
+
+	if (verb == "HELO")
+	{
+		cmd.command = CommandType::HELO;
+	}
+	else if (verb == "EHLO")
+	{
+		cmd.command = CommandType::EHLO;
 	}
 	else if (verb == "DATA")
 	{
@@ -65,4 +82,9 @@ void SMTPCommandParser::parseLine(std::string& line, ClientCommand& cmd)
 	{
 		cmd.command = CommandType::QUIT;
 	}
+
+	std::string text;
+	std::getline(iss, text);
+	trim(text);
+	cmd.commandText = text;
 }

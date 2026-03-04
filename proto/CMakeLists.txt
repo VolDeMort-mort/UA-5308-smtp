@@ -18,3 +18,7 @@ target_link_libraries(smtp_proto
 )
 
 target_compile_features(smtp_proto PUBLIC cxx_std_17)
+
+if(ENABLE_TESTS)
+    add_subdirectory(tests)
+endif()

@@ -23,6 +23,8 @@ public:
 	void shutdown() override
 	{
 		boost::system::error_code ec;
+
+		m_socket.cancel(ec);
 		m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 		m_socket.close(ec);
 	}
@@ -32,8 +34,8 @@ public:
 	}
 
 	void cancel() override {
-		boost::system::error_code ignored;
-		m_socket.cancel(ignored);
+		boost::system::error_code ec;
+		m_socket.cancel(ec);
 	}
 
 
