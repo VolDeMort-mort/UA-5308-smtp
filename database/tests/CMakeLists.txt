@@ -26,4 +26,9 @@ add_executable(smtp_tests ${TEST_SOURCES})
 target_link_libraries(smtp_tests PRIVATE db_lib GTest::gtest_main)
 gtest_discover_tests(smtp_tests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    DISCOVERY_MODE PRE_TEST
+)
+
+target_compile_definitions(smtp_tests PRIVATE
+    SCHEMA_PATH="${CMAKE_BINARY_DIR}/scheme/001_init_scheme.sql"
 )

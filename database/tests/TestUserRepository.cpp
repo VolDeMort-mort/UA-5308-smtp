@@ -9,7 +9,7 @@ class UserRepositoryTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_db = new DataBaseManager(":memory:", "scheme/001_init_scheme.sql");
+        m_db = new DataBaseManager(":memory:", SCHEMA_PATH);
         m_dal = new UserDAL(m_db->getDB());
         m_repo = new UserRepository(*m_dal);
     }

@@ -14,7 +14,7 @@ protected:
     {
         sqlite3_open(":memory:", &m_db);
 
-        std::ifstream file("scheme/001_init_scheme.sql");
+        std::ifstream file(SCHEMA_PATH);
         std::stringstream ss;
         ss << file.rdbuf();
         sqlite3_exec(m_db, ss.str().c_str(), nullptr, nullptr, nullptr);

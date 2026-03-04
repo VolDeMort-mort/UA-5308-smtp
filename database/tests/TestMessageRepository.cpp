@@ -10,7 +10,7 @@ class MessageRepositoryTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_db = new DataBaseManager(":memory:", "scheme/001_init_scheme.sql");
+        m_db = new DataBaseManager(":memory:", SCHEMA_PATH);
         m_repo = new MessageRepository(*m_db);
 
         sqlite3_exec(m_db->getDB(),
