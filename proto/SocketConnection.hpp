@@ -16,11 +16,11 @@ public:
     void SetTimeout(int seconds);
 
 private:
-    static constexpr std::size_t MAX_LINE_SIZE = 8192;
+    static constexpr size_t MAX_LINE_SIZE = 8192;
 
     boost::asio::ip::tcp::socket m_socket;
     boost::asio::streambuf m_buffer;
 
     int m_timeout_seconds{30};
-	bool WaitForEvent(bool wait_for_read);
+	bool WaitForEvent(bool for_read);
 };

@@ -16,7 +16,7 @@ void SocketConnection::SetTimeout(int seconds)
         m_timeout_seconds = seconds;
 }
 
-bool SocketConnection::WaitForEvent(bool wait_for_read)
+bool SocketConnection::WaitForEvent(bool for_read)
 {
     if (!m_socket.is_open())
         return false;
@@ -29,7 +29,7 @@ bool SocketConnection::WaitForEvent(bool wait_for_read)
     FD_ZERO(&read_set);
     FD_ZERO(&write_set);
 
-    if (wait_for_read)
+    if (for_read)
         FD_SET(fd, &read_set);
     else
         FD_SET(fd, &write_set);
@@ -39,8 +39,8 @@ bool SocketConnection::WaitForEvent(bool wait_for_read)
     timeout.tv_usec = 0;
 
     int result = select(fd + 1,
-                        wait_for_read ? &read_set : nullptr,
-                        wait_for_read ? nullptr   : &write_set,
+                        for_read ? &read_set : nullptr,
+                        for_read ? nullptr   : &write_set,
                         nullptr,
                         &timeout);
 
