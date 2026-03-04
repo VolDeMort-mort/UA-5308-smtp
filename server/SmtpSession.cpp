@@ -22,6 +22,12 @@ void SmtpSession::resetMessage()
 	m_body.clear();
 }
 
+void SmtpSession::resetToHelo()
+{
+	m_state = SmtpState::WAIT_HELO;
+	resetMessage();
+}
+
 std::string SmtpSession::processLine(const std::string& line)
 {
 	// DATA mode
@@ -82,7 +88,12 @@ std::string SmtpSession::processLine(const std::string& line)
 
 	case SmtpCommandType::UNKNOWN:
 		return SmtpResponse::commandNotImplemented();
-	}
 
+	case SmtpCommandType::STARTTLS:
+		if (m_state != SmtpState::WAIT_MAIL) return SmtpResponse::badSequence();
+		m_state = SmtpState::STARTTLS;
+		return SmtpResponse::startTls();
+	}
+	
 	return SmtpResponse::syntaxError();
 }

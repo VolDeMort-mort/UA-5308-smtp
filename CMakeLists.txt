@@ -5,9 +5,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 
 option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
+option(BUILD_LOGGER "Build Logger" ON)
+
+if(BUILD_LOGGER)
+     add_subdirectory(logger)
+endif()
 
 add_subdirectory(proto)
 
@@ -18,3 +24,4 @@ endif()
 if(BUILD_MUA)
     add_subdirectory(mua)
 endif()
+

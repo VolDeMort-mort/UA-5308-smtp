@@ -21,6 +21,23 @@ bool SocketConnection::send(const std::string& data)
 	return true;
 }
 
+bool SocketConnection::sendRaw(const unsigned char* buffer, std::size_t size)
+{
+	if (!m_connected) return false;
+
+	boost::system::error_code ec;
+
+	boost::asio::write(m_socket, boost::asio::buffer(buffer, size), ec);
+
+	if (ec)
+	{
+		m_connected = false;
+		return false;
+	}
+
+	return true;
+}
+
 bool SocketConnection::receive(std::string& outData)
 {
 	if (!m_connected) return false;
@@ -40,6 +57,22 @@ bool SocketConnection::receive(std::string& outData)
 	std::getline(input, outData);
 
 	if (!outData.empty() && outData.back() == '\r') outData.pop_back();
+
+	return true;
+}
+
+bool SocketConnection::receiveRaw(unsigned char* buffer, std::size_t size)
+{
+	if (!m_connected) return false;
+	boost::system::error_code ec;
+
+	std::size_t bytesRead = boost::asio::read(m_socket, boost::asio::buffer(buffer, size), ec);
+
+	if (ec || bytesRead != size)
+	{
+		m_connected = false;
+		return false;
+	}
 
 	return true;
 }
