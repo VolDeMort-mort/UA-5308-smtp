@@ -104,7 +104,7 @@ bool MessageRepository::send(Message& msg)
     return m_message_dal.insert(msg);
 }
 
-bool MessageRepository::deliver(Message& msg)
+bool MessageRepository::setDelivered(Message& msg)
 {
     msg.status  = MessageStatus::Received;
     msg.is_seen = false;

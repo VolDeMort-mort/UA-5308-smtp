@@ -38,7 +38,7 @@ public:
     bool saveDraft(Message& msg);
     bool editDraft(const Message& msg);
     bool send(Message& msg);
-    bool deliver(Message& msg);
+    bool setDelivered(Message& msg);
     bool markSeen(int64_t id, bool seen);
     bool markStarred(int64_t id, bool starred);
     bool markImportant(int64_t id, bool important);
@@ -63,10 +63,7 @@ public:
     std::optional<Recipient> findRecipientByID(int64_t id) const;
     std::vector<Recipient>   findRecipientsByMessage(int64_t message_id) const;
     bool addRecipient(Recipient& recipient);
-    bool addRecipients(std::vector<Recipient>& recipients);
-    bool replaceRecipients(int64_t message_id, std::vector<Recipient>& recipients);
     bool removeRecipient(int64_t id);
-    bool removeAllRecipients(int64_t message_id);
 
     const std::string& getLastError() const;
 
