@@ -15,5 +15,5 @@ if(BUILD_ENCRYPTION_TESTS)
     find_package(GTest CONFIG REQUIRED)
     add_executable(encryption_test encryption_test.cpp)
     target_link_libraries(encryption_test PRIVATE smtp_proto logger_lib GTest::gtest GTest::gtest_main)
-    target_include_directories(encryption_test PRIVATE ${CMAKE_SOURCE_DIR}/logger)  # ← ДОДАЙ
+    target_include_directories(encryption_test PRIVATE ${CMAKE_SOURCE_DIR}/logger)
 endif()
