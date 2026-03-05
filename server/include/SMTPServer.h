@@ -2,31 +2,32 @@
 
 #include <boost/asio.hpp>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
-#include <optional>
 
-#include "SMTPServerSocket.h"
 #include "SMTPServerSession.h"
+#include "SMTPServerSocket.h"
 
-class SMTPServer {
+class SMTPServer
+{
 public:
-	SMTPServer(boost::asio::io_context& ioc, unsigned short port, 
-		const std::string& cert_file = "", const std::string& key_file = "");
+	SMTPServer(boost::asio::io_context& ioc, unsigned short port, const std::string& cert_file = "",
+			   const std::string& key_file = "");
 	~SMTPServer();
 
 	void run(std::size_t threads = 4);
 
-	void soft_stop();
+	void Stop();
 
 private:
-	void do_accept();
+	void DoAccept();
 
 	boost::asio::io_context& m_ioc;
 	boost::asio::executor_work_guard<boost::asio::io_context::executor_type> m_work_guard;
 	boost::asio::ip::tcp::acceptor m_acceptor;
 
-	std::atomic_bool m_running{ false };
+	std::atomic_bool m_running{false};
 	std::vector<std::thread> m_threads;
 
 	std::shared_ptr<boost::asio::ssl::context> m_ssl_ctx;

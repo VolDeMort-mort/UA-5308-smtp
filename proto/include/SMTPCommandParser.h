@@ -1,10 +1,9 @@
 #pragma once
-#include "SMTP_Types.h"
 
+#include "SMTP_Types.h"
 
 class SMTPCommandParser
 {
 public:
-	static void parseLine(std::string& line, ClientCommand& command);
+	static void ParseLine(std::string& line, ClientCommand& command);
 };
-

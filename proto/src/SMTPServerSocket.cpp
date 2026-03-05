@@ -4,46 +4,50 @@
 using boost::asio::ip::tcp;
 
 SMTPServerSocket::SMTPServerSocket(tcp::socket socket)
-	: m_socket(std::make_unique<PlainStream>(std::move(socket))),
-	m_strand(m_socket->get_executor()),
-	m_timer(m_socket->get_executor()),
-	m_buf(),
-	m_last_error(),
-	m_closing(false)
+	: m_socket(std::make_unique<PlainStream>(std::move(socket)))
+	, m_strand(m_socket->get_executor())
+	, m_timer(m_socket->get_executor())
+	, m_buf()
+	, m_closing(false)
 {
 }
 
-SMTPServerSocket::~SMTPServerSocket(){
+SMTPServerSocket::~SMTPServerSocket()
+{
 	m_timer.cancel();
-	if (m_socket)
-	{
-		m_socket->shutdown();
-	}
 }
 
-std::error_code SMTPServerSocket::last_error() const {
-	return m_last_error;
-}
-
-void SMTPServerSocket::close() {
+void SMTPServerSocket::Close()
+{
 	auto self = shared_from_this();
-	boost::asio::post(m_strand, [self]() {
-		if (self->m_closing) return;
-		self->m_closing = true;
-		self->m_timer.cancel();
-		self->m_socket->shutdown();
+	boost::asio::post(
+		m_strand,
+		[self]()
+		{
+			if (self->m_closing) return;
+			self->m_closing = true;
+			self->m_timer.cancel();
+			if (self->m_socket)
+			{
+				self->m_socket->shutdown();
+			}
 		});
 }
 
-static inline void build_response_string(const ServerResponse& resp, std::string& out) {
-	if (resp.lines.empty()) {
+static inline void BuildResponseString(const ServerResponse& resp, std::string& out)
+{
+	if (resp.lines.empty())
+	{
 		out = std::to_string(resp.code) + "\r\n";
 	}
-	else if (resp.lines.size() == 1) {
+	else if (resp.lines.size() == 1)
+	{
 		out = std::to_string(resp.code) + " " + resp.lines.front() + "\r\n";
 	}
-	else {
-		for (size_t i = 0; i < resp.lines.size(); ++i) {
+	else
+	{
+		for (size_t i = 0; i < resp.lines.size(); ++i)
+		{
 			if (i + 1 < resp.lines.size())
 				out += std::to_string(resp.code) + "-" + resp.lines[i] + "\r\n";
 			else
@@ -52,109 +56,113 @@ static inline void build_response_string(const ServerResponse& resp, std::string
 	}
 }
 
-void SMTPServerSocket::sendResponse(const ServerResponse& resp, WriteHandler handler) {
+void SMTPServerSocket::SendResponse(const ServerResponse& resp, WriteHandler handler)
+{
 	auto self = shared_from_this();
 	std::string out;
-	build_response_string(resp, out);
+	BuildResponseString(resp, out);
 
 	auto buf = std::make_shared<std::string>(std::move(out));
 
-	boost::asio::post(m_strand, [self, buf, handler = std::move(handler)]() mutable {
-		if (self->m_closing) {
-			if (handler) {
-				boost::asio::post(self->m_strand, [handler = std::move(handler)]() mutable {
-					handler(boost::asio::error::operation_aborted);
-					});
+	boost::asio::post(
+		m_strand,
+		[self, buf, handler = std::move(handler)]() mutable
+		{
+			if (self->m_closing)
+			{
+				if (handler) handler(boost::asio::error::operation_aborted);
+				return;
 			}
-			return;
-		}
 
-		self->m_socket->async_write(boost::asio::buffer(*buf),
-			boost::asio::bind_executor(self->m_strand,
-				[self, buf, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t) mutable {
-					if (ec) self->m_last_error = ec;
-
-					if (handler) {
-						boost::asio::post(self->m_strand, [handler = std::move(handler), ec]() mutable {
-							handler(ec);
-							});
-					}
-				}));
+			self->m_socket->async_write(
+				boost::asio::buffer(*buf),
+				boost::asio::bind_executor(
+					self->m_strand,
+					[self, buf, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t) mutable
+					{
+						if (handler) handler(ec);
+					}));
 		});
 }
 
-static inline std::string extract_from_streambuf(boost::asio::streambuf& buf, std::size_t n) {
+static inline std::string ExtractFromStreambuf(boost::asio::streambuf& buf, std::size_t n)
+{
 	auto data = buf.data();
 	std::string out(boost::asio::buffers_begin(data),
-		boost::asio::buffers_begin(data) + static_cast<std::ptrdiff_t>(n));
+					boost::asio::buffers_begin(data) + static_cast<std::ptrdiff_t>(n));
 	buf.consume(n);
 	return out;
 }
 
-void SMTPServerSocket::readCommand(std::chrono::milliseconds timeout, ReadHandler handler) {
+void SMTPServerSocket::ReadCommand(std::chrono::milliseconds timeout, ReadHandler handler)
+{
 	auto self = shared_from_this();
 
-	boost::asio::post(m_strand, [self, timeout, handler = std::move(handler)]() mutable {
-		if (self->m_closing) {
-			if (handler) {
-				boost::asio::post(self->m_strand, [handler = std::move(handler)]() mutable {
-					handler(ClientCommand{}, boost::asio::error::operation_aborted);
-					});
+	boost::asio::post(
+		m_strand,
+		[self, timeout, handler = std::move(handler)]() mutable
+		{
+			if (self->m_closing)
+			{
+				if (handler) handler(ClientCommand{}, boost::asio::error::operation_aborted);
+				return;
 			}
-			return;
-		}
 
-		auto completed = std::make_shared<bool>(false);
+			auto completed = std::make_shared<bool>(false);
 
-		if (timeout.count() > 0) {
-			self->m_timer.expires_after(timeout);
-			self->m_timer.async_wait(boost::asio::bind_executor(self->m_strand, [self, completed](const boost::system::error_code& ec) {
-				if (!ec && !*completed) {
-					self->m_socket->cancel();
-				}
-				}));
-		}
-
-		self->m_socket->async_read_until(self->m_buf, "\r\n",
-			boost::asio::bind_executor(self->m_strand,
-				[self, completed, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t bytes_transferred) mutable {
-					*completed = true;
-					self->m_timer.cancel();
-
-					if (ec) {
-						self->m_last_error = ec;
-						if (handler) {
-							boost::asio::post(self->m_strand, [handler = std::move(handler), ec]() mutable {
-								handler(ClientCommand{}, ec);
-								});
+			if (timeout.count() > 0)
+			{
+				self->m_timer.expires_after(timeout);
+				self->m_timer.async_wait(boost::asio::bind_executor(
+					self->m_strand,
+					[self, completed](const boost::system::error_code& ec)
+					{
+						if (!ec && !*completed)
+						{
+							self->m_socket->cancel();
 						}
-						return;
-					}
+					}));
+			}
 
-					std::string line = extract_from_streambuf(self->m_buf, bytes_transferred);
+			self->m_socket->async_read_until(
+				self->m_buf, "\r\n",
+				boost::asio::bind_executor(
+					self->m_strand,
+					[self, completed, handler = std::move(handler)](const boost::system::error_code& ec,
+																	std::size_t bytes_transferred) mutable
+					{
+						*completed = true;
+						self->m_timer.cancel();
 
-					ClientCommand cmd;
-					SMTPCommandParser::parseLine(line, cmd);
+						if (ec)
+						{
+							if (handler) handler(ClientCommand{}, ec);
+							return;
+						}
 
-					if (handler) {
-						boost::asio::post(self->m_strand, [handler = std::move(handler), cmd = std::move(cmd)]() mutable {
-							handler(std::move(cmd), {});
-							});
-					}
-				}));
+						std::string line = ExtractFromStreambuf(self->m_buf, bytes_transferred);
+
+						ClientCommand cmd;
+						SMTPCommandParser::ParseLine(line, cmd);
+
+						if (handler) handler(std::move(cmd), {});
+					}));
 		});
 }
 
-
-static inline ClientCommand dot_unstuff(std::string& buf) {
+static inline ClientCommand DotUnstuff(std::string& buf)
+{
 
 	const std::string term = "\r\n.\r\n";
-	if (buf.size() >= term.size() && buf.compare(buf.size() - term.size(), term.size(), term) == 0) {
+	if (buf.size() >= term.size() && buf.compare(buf.size() - term.size(), term.size(), term) == 0)
+	{
 		buf.erase(buf.size() - term.size());
 	}
-	else {
+	else
+	{
 		const std::string alt = ".\r\n";
-		if (buf.size() >= alt.size() && buf.compare(buf.size() - alt.size(), alt.size(), alt) == 0) {
+		if (buf.size() >= alt.size() && buf.compare(buf.size() - alt.size(), alt.size(), alt) == 0)
+		{
 			buf.erase(buf.size() - alt.size());
 		}
 	}
@@ -163,26 +171,32 @@ static inline ClientCommand dot_unstuff(std::string& buf) {
 	out.reserve(buf.size());
 
 	size_t pos = 0;
-	while (pos < buf.size()) {
+	while (pos < buf.size())
+	{
 		size_t lf = buf.find('\n', pos);
 		std::string_view line;
-		if (lf == std::string::npos) {
+		if (lf == std::string::npos)
+		{
 			line = std::string_view(buf.data() + pos, buf.size() - pos);
 			pos = buf.size();
 		}
-		else {
+		else
+		{
 			line = std::string_view(buf.data() + pos, lf - pos);
 			pos = lf + 1;
 		}
 
-		if (!line.empty() && line.back() == '\r') {
+		if (!line.empty() && line.back() == '\r')
+		{
 			line = std::string_view(line.data(), line.size() - 1);
 		}
 
-		if (line.size() >= 2 && line[0] == '.' && line[1] == '.') {
+		if (line.size() >= 2 && line[0] == '.' && line[1] == '.')
+		{
 			out.append(line.data() + 1, line.size() - 1);
 		}
-		else {
+		else
+		{
 			out.append(line.data(), line.size());
 		}
 		out += "\r\n";
@@ -192,83 +206,93 @@ static inline ClientCommand dot_unstuff(std::string& buf) {
 	return cmd;
 }
 
-
-void SMTPServerSocket::readDataBlock(std::chrono::milliseconds timeout, ReadHandler handler) {
+void SMTPServerSocket::ReadDataBlock(std::chrono::milliseconds timeout, ReadHandler handler)
+{
 	auto self = shared_from_this();
-	boost::asio::post(m_strand, [self, timeout, handler = std::move(handler)]() mutable {
-		if (self->m_closing) {
-			if (handler) {
-				boost::asio::post(self->m_strand, [handler = std::move(handler)]() mutable {
-					handler(ClientCommand{}, boost::asio::error::operation_aborted);
-					});
+	boost::asio::post(
+		m_strand,
+		[self, timeout, handler = std::move(handler)]() mutable
+		{
+			if (self->m_closing)
+			{
+				if (handler) handler(ClientCommand{}, boost::asio::error::operation_aborted);
+				return;
 			}
-			return;
-		}
 
-		auto completed = std::make_shared<bool>(false);
-		if (timeout.count() > 0) {
-			self->m_timer.expires_after(timeout);
-			self->m_timer.async_wait(boost::asio::bind_executor(self->m_strand, [self, completed](const boost::system::error_code& ec) {
-				if (!ec && !*completed) {
-					self->m_socket->cancel();
-				}
-				}));
-		}
-
-		self->m_socket->async_read_until(self->m_buf, "\r\n.\r\n",
-			boost::asio::bind_executor(self->m_strand,
-				[self, completed, handler = std::move(handler)](const boost::system::error_code& ec, std::size_t bytes_transferred) mutable {
-					*completed = true;
-					self->m_timer.cancel();
-
-					if (ec) {
-						self->m_last_error = ec;
-						if (handler) {
-							boost::asio::post(self->m_strand, [handler = std::move(handler), ec]() mutable {
-								handler(ClientCommand{}, ec);
-								});
+			auto completed = std::make_shared<bool>(false);
+			if (timeout.count() > 0)
+			{
+				self->m_timer.expires_after(timeout);
+				self->m_timer.async_wait(boost::asio::bind_executor(
+					self->m_strand,
+					[self, completed](const boost::system::error_code& ec)
+					{
+						if (!ec && !*completed)
+						{
+							self->m_socket->cancel();
 						}
-						return;
-					}
+					}));
+			}
 
-					std::string line = extract_from_streambuf(self->m_buf, bytes_transferred);
+			self->m_socket->async_read_until(
+				self->m_buf, "\r\n.\r\n",
+				boost::asio::bind_executor(
+					self->m_strand,
+					[self, completed, handler = std::move(handler)](const boost::system::error_code& ec,
+																	std::size_t bytes_transferred) mutable
+					{
+						*completed = true;
+						self->m_timer.cancel();
 
-					ClientCommand cmd = dot_unstuff(line);
+						if (ec)
+						{
+							if (handler) handler(ClientCommand{}, ec);
+							return;
+						}
 
-					if (handler) {
-						boost::asio::post(self->m_strand, [handler = std::move(handler), cmd = std::move(cmd)]() mutable {
-							handler(std::move(cmd), {});
-							});
-					}
-				}));
+						std::string line = ExtractFromStreambuf(self->m_buf, bytes_transferred);
+
+						ClientCommand cmd = DotUnstuff(line);
+
+						if (handler) handler(std::move(cmd), {});
+					}));
 		});
 }
 
-void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler){
-	if (m_is_tls) {
-		boost::asio::post(m_strand, [handler = std::move(handler)]{ 
-			handler(make_error_code(boost::system::errc::already_connected)); 
-			});
+void SMTPServerSocket::StartTls(boost::asio::ssl::context& ctx,
+								std::function<void(const boost::system::error_code&)> handler)
+{
+	if (m_is_tls)
+	{
+		handler(make_error_code(boost::system::errc::already_connected));
 		return;
 	}
 
-	if (m_buf.size() > 0){
+	if (m_buf.size() > 0)
+	{
 		m_buf.consume(m_buf.size());
 	}
 
 	tcp::socket raw_socket = m_socket->release_tcp_socket();
-	
+
+	m_socket.reset();
+
 	auto ssl = std::make_unique<boost::asio::ssl::stream<tcp::socket>>(std::move(raw_socket), ctx);
 
 	auto self = shared_from_this();
-	ssl->async_handshake(boost::asio::ssl::stream_base::server, 
-		boost::asio::bind_executor(m_strand, [self, ssl = std::move(ssl), handler = std::move(handler)](const boost::system::error_code& ec) mutable{
-			if(ec){
+	ssl->async_handshake(
+		boost::asio::ssl::stream_base::server,
+		boost::asio::bind_executor(
+			m_strand,
+			[self, ssl = std::move(ssl), handler = std::move(handler)](const boost::system::error_code& ec) mutable
+			{
+				if (ec)
+				{
+					handler(ec);
+					return;
+				}
+				self->m_socket = std::make_unique<SslStream>(std::move(*ssl));
+				self->m_is_tls = true;
 				handler(ec);
-				return;
-			}
-			self->m_socket = std::make_unique<SslStream>(std::move(*ssl));
-			self->m_is_tls = true;
-			handler(ec);
-		}));
+			}));
 }

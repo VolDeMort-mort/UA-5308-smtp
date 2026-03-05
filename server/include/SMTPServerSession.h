@@ -1,15 +1,16 @@
 #pragma once
 
+#include <chrono>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
-#include <functional>
-#include <chrono>
 
-#include "SMTP_Types.h"
 #include "SMTPServerSocket.h"
+#include "SMTP_Types.h"
 
-class SMTPServerSession : public std::enable_shared_from_this<SMTPServerSession> {
+class SMTPServerSession : public std::enable_shared_from_this<SMTPServerSession>
+{
 public:
 	using Ptr = std::shared_ptr<SMTPServerSession>;
 
@@ -18,7 +19,8 @@ public:
 	void run();
 
 private:
-	enum class State {
+	enum class State
+	{
 		NEW,
 		READY,
 		READING_DATA,
@@ -33,13 +35,13 @@ private:
 	std::vector<std::string> m_recipients;
 	std::string m_data_buffer;
 
-	std::chrono::milliseconds m_cmd_timeout{ std::chrono::milliseconds(300000) };
-	std::chrono::milliseconds m_data_timeout{ std::chrono::milliseconds(1200000) };
+	const std::chrono::seconds M_CMD_TIMEOUT{std::chrono::seconds(300)};
+	const std::chrono::seconds M_DATA_TIMEOUT{std::chrono::seconds(600)};
 
-	void send_response(const ServerResponse& resp);
-	void do_read_command();
-	void handle_command(ClientCommand cmd, const boost::system::error_code& ec);
-	void start_read_data();
+	void SendResponse(const ServerResponse& resp);
+	void DoReadCommand();
+	void HandleCommand(ClientCommand cmd, const boost::system::error_code& ec);
+	void StartReadData();
 
-	static bool extract_address(std::string& s);
+	static bool ExtractAddress(std::string& s);
 };

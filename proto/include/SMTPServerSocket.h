@@ -1,11 +1,12 @@
 #pragma once
+
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
-#include "SMTP_Types.h"
-#include "SMTPCommandParser.h"
 #include <functional>
 
 #include "PlainStream.h"
+#include "SMTPCommandParser.h"
+#include "SMTP_Types.h"
 #include "SslStream.h"
 
 class SMTPServerSocket : public std::enable_shared_from_this<SMTPServerSocket>
@@ -18,19 +19,16 @@ public:
 	SMTPServerSocket(boost::asio::ip::tcp::socket socket);
 	~SMTPServerSocket();
 
-	void readCommand(std::chrono::milliseconds timeout, ReadHandler handler);
-	void readDataBlock(std::chrono::milliseconds timeout, ReadHandler handler);
+	void ReadCommand(std::chrono::milliseconds timeout, ReadHandler handler);
+	void ReadDataBlock(std::chrono::milliseconds timeout, ReadHandler handler);
 
-	void sendResponse(const ServerResponse& resp, WriteHandler handler);
+	void SendResponse(const ServerResponse& resp, WriteHandler handler);
 
-	void SMTPServerSocket::start_tls(boost::asio::ssl::context& ctx,
-									 std::function<void(const boost::system::error_code&)> handler);
+	void StartTls(boost::asio::ssl::context& ctx, std::function<void(const boost::system::error_code&)> handler);
 
-	std::error_code last_error() const;
+	bool IsTls() { return m_is_tls; }
 
-	bool is_tls() { return m_is_tls; }
-
-	void close();
+	void Close();
 
 private:
 	std::unique_ptr<IStream> m_socket;
@@ -38,7 +36,6 @@ private:
 	boost::asio::strand<boost::asio::any_io_executor> m_strand;
 	boost::asio::streambuf m_buf;
 
-	std::error_code m_last_error;
 	bool m_closing = false;
 	bool m_is_tls = false;
 };

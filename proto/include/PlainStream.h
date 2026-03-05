@@ -1,4 +1,5 @@
 #pragma once
+
 #include "IStream.h"
 
 class PlainStream : public IStream, public std::enable_shared_from_this<PlainStream>
@@ -29,15 +30,13 @@ public:
 		m_socket.close(ec);
 	}
 
-	boost::asio::ip::tcp::socket release_tcp_socket() override { 
-		return std::move(m_socket); 
-	}
+	boost::asio::ip::tcp::socket release_tcp_socket() override { return std::move(m_socket); }
 
-	void cancel() override {
+	void cancel() override
+	{
 		boost::system::error_code ec;
 		m_socket.cancel(ec);
 	}
-
 
 private:
 	boost::asio::ip::tcp::socket m_socket;

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "IStream.h"
 
 class SslStream : public IStream
@@ -21,17 +22,15 @@ public:
 	}
 
 	void shutdown() override
-	{ 
+	{
 		boost::system::error_code ec;
 
-		m_ssl_stream.lowest_layer().cancel(ec);
+		m_ssl_stream.shutdown(ec);
 		m_ssl_stream.lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
 		m_ssl_stream.lowest_layer().close(ec);
 	}
 
-	boost::asio::ip::tcp::socket release_tcp_socket() override { 
-		return std::move(m_ssl_stream.next_layer()); 
-	}
+	boost::asio::ip::tcp::socket release_tcp_socket() override { return std::move(m_ssl_stream.next_layer()); }
 
 	void cancel() override
 	{

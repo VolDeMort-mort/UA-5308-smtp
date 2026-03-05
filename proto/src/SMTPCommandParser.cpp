@@ -1,21 +1,20 @@
-#include "SMTPCommandParser.h"
-#include <string>
+#include <algorithm>
 #include <cctype>
 #include <sstream>
-#include <algorithm>
+#include <string>
+
+#include "SMTPCommandParser.h"
 
 static void trim(std::string& s)
 {
 	size_t start = 0;
-	while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
-		++start;
+	while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
 	size_t end = s.size();
-	while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1])))
-		--end;
+	while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) --end;
 	s = s.substr(start, end - start);
 }
 
-void SMTPCommandParser::parseLine(std::string& line, ClientCommand& cmd)
+void SMTPCommandParser::ParseLine(std::string& line, ClientCommand& cmd)
 {
 	cmd.command = CommandType::UNKNOWN;
 	cmd.commandText.clear();
