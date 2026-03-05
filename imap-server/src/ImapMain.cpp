@@ -1,8 +1,8 @@
 #include <boost/asio.hpp>
 
-#include "../logger/Logger.h"
-#include "../logger/FileStrategy.h"
+#include "FileStrategy.h"
 #include "ImapServer.hpp"
+#include "Logger.h"
 
 int main(int argc, char** argv)
 {

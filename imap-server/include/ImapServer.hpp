@@ -2,7 +2,7 @@
 
 #include <boost/asio.hpp>
 
-#include "../logger/Logger.h"
+#include "Logger.h"
 
 constexpr int IMAP_PORT = 2553;
 

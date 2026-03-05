@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "../logger/Logger.h"
 #include "ImapCommand.hpp"
+#include "Logger.h"
 
 struct MailboxState
 {

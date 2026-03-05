@@ -1,6 +1,6 @@
 add_library(logger_lib STATIC
 	Logger.cpp
-	Filestrategy.cpp
+	FileStrategy.cpp
 	ConsoleStrategy.cpp
 )
 

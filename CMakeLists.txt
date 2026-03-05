@@ -13,6 +13,9 @@ option(BUILD_DATABASE "Build the Database" ON)
 
 add_subdirectory(proto)
 add_subdirectory(base64)
+add_subdirectory(logger)
+
+enable_testing()
 
 if(BUILD_SERVER)
     add_subdirectory(server)
