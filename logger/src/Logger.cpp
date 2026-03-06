@@ -1,8 +1,6 @@
 #include "Logger.h"
-
 #include <iostream>
 #include <thread>
-
 #include "ConsoleStrategy.h"
 #include "FileStrategy.h"
 
@@ -31,7 +29,8 @@ void Logger::PushToQueue(const std::string& message)
 		std::lock_guard<std::mutex> lock(m_queue_mtx);
 		m_queue.push(message);
 	}
-	if (m_queue.size() >= 50) m_cv.notify_one();
+	if (m_queue.size() >= 50) 
+		m_cv.notify_one();
 };
 
 void Logger::WorkQueue()
@@ -42,7 +41,8 @@ void Logger::WorkQueue()
 		{
 			std::unique_lock<std::mutex> lock(m_queue_mtx);
 			// wait for batch size, flush request from Read(), or timeout
-			m_cv.wait_for(lock, std::chrono::seconds(2), [this] { return m_queue.size() >= 50 || m_flush; });
+			m_cv.wait_for(lock, std::chrono::seconds(2),
+						  [this] { return m_queue.size() >= 50 || m_flush || !m_running_flag; });
 
 			// trigger on Read(), when logs are flushed
 			if (m_flush && m_queue.empty())
@@ -54,7 +54,7 @@ void Logger::WorkQueue()
 			}
 			if (m_queue.empty() && m_running_flag) 
 				continue;
-			if (m_queue.empty() && !m_running_flag) // leave cycle from logger destructor
+			if (m_queue.empty() && !m_running_flag) // leave thread when queue is empty & logger is off
 				break;
 
 			std::swap(local_queue, m_queue);
@@ -64,14 +64,14 @@ void Logger::WorkQueue()
 		{
 			if (!m_strategy->IsValid()) // if path is invalid,logs can`t be pushed into file
 			{
-				std::cerr << "Can`t open log file: " << FILE_PATH << "\n";
+				std::cerr << "Log strategy failure.\n";
 				m_strategy = std::make_unique<ConsoleStrategy>(); // set console output to prevent logs leaks
 			}
 			while (!local_queue.empty())
 			{
 				if (!m_strategy->Write(local_queue.front()))
 				{
-					std::cerr << "Can`t open log file: " << FILE_PATH << "\n";
+					std::cerr << "Log strategy failure.\n";
 					m_strategy = std::make_unique<ConsoleStrategy>();
 					continue;
 				}

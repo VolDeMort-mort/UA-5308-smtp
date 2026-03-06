@@ -1,4 +1,5 @@
 #include "FileStrategy.h"
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -6,9 +7,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <algorithm>
 #include <thread>
-
 
 FileStrategy::FileStrategy(LogLevel defaultLevel)
 	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
@@ -41,7 +40,8 @@ void FileStrategy::Rotate()
 	if (std::filesystem::exists(m_old_path)) // when both files are filled,delete older one
 		std::filesystem::remove(m_old_path);
 
-	if (std::filesystem::exists(m_current_path)) std::filesystem::rename(m_current_path, m_old_path);
+	if (std::filesystem::exists(m_current_path)) // switching the files when one is filled
+		std::filesystem::rename(m_current_path, m_old_path);
 
 	if (!OpenFile()) std::cerr << "Can`t open log file: " << m_current_path << "\n";
 	m_current_file_size = 0;
@@ -59,7 +59,6 @@ bool FileStrategy::IsValid()
 {
 	return m_file.is_open() && !m_file.fail();
 }
-
 void FileStrategy::Flush()
 {
 	m_file.flush();
@@ -68,7 +67,6 @@ FileStrategy::~FileStrategy()
 {
 	m_file.close();
 }
-
 std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 {
 	if (lvl > m_default_log_level) return {};
@@ -124,7 +122,6 @@ std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 
 	return std::string(buffer, totalLen);
 }
-
 std::vector<std::string> FileStrategy::Read(size_t limit)
 {
 	std::vector<std::string> result;
@@ -164,7 +161,6 @@ std::vector<std::string> FileStrategy::Read(size_t limit)
 
 	return result;
 }
-
 std::vector<std::string> FileStrategy::Search(LogLevel lvl, size_t limit, int readN)
 {
 	std::vector<std::string> results;
