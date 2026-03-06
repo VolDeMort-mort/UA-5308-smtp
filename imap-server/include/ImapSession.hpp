@@ -1,14 +1,19 @@
 #pragma once
 
 #include <boost/asio.hpp>
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
+#include "DataBaseManager.h"
 #include "ImapCommand.hpp"
 #include "Logger.h"
+#include "Repository/MessageRepository.h"
+#include "Repository/UserRepository.h"
 
 struct MailboxState
 {
@@ -17,6 +22,7 @@ struct MailboxState
 	size_t m_recent = 0;
 	size_t m_unseen = 0;
 	std::set<std::string> m_flags;
+	std::optional<int64_t> m_id; // folder id in db, needed for operations like fetch, store, etc
 	bool m_readOnly = false;
 };
 
@@ -30,7 +36,7 @@ enum class SessionState
 class ImapSession : public std::enable_shared_from_this<ImapSession>
 {
 public:
-	ImapSession(boost::asio::ip::tcp::socket socket, Logger& logger);
+	ImapSession(boost::asio::ip::tcp::socket socket, Logger& logger, DataBaseManager& db, UserDAL& u_dal);
 	void Start();
 
 private:
@@ -61,8 +67,11 @@ private:
 	boost::asio::ip::tcp::socket m_socket;
 	boost::asio::streambuf m_buffer;
 	Logger& m_logger;
+	MessageRepository m_mess_repo;
+	UserRepository m_user_repo;
 
 	SessionState m_state = SessionState::NonAuthenticated;
-	std::string m_authenticatedUser;
+	std::string m_authenticatedUserName;
+	std::optional<int64_t> m_authenticatedUserID;
 	MailboxState m_currentMailbox;
 };

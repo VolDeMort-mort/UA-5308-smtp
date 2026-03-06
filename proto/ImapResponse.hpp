@@ -51,10 +51,9 @@ inline std::string List(char separator, const std::string& mailbox, const std::s
 	return "* LIST (\\" + attributes + ") \"" + separator + "\" " + mailbox + "\r\n";
 }
 
-inline std::string Status(const std::string& mailbox, size_t messages, size_t Recent, size_t unseen)
+inline std::string Status(const std::string& mailbox, const std::string& statusData)
 {
-	return "* STATUS " + mailbox + " (MESSAGES " + std::to_string(messages) + " RECENT " + std::to_string(Recent) +
-		   " UNSEEN " + std::to_string(unseen) + ")\r\n";
+	return "* STATUS " + mailbox + " (" + statusData + ")\r\n";
 }
 
 inline std::string Fetch(size_t msgNum, const std::string& data)

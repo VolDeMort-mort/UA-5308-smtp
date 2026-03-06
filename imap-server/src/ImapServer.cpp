@@ -4,9 +4,9 @@
 
 #include "ImapSession.hpp"
 
-Imap::Imap(boost::asio::io_context& context, Logger& logger)
+Imap::Imap(boost::asio::io_context& context, Logger& logger, DataBaseManager& db)
 	: m_context(context), m_acceptor(context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), IMAP_PORT)),
-	  m_logger(logger)
+	  m_logger(logger), m_db(db), m_user_dal(m_db.getDB())
 {
 	m_logger.Log(PROD, "Imap server entity created");
 }
@@ -26,7 +26,7 @@ void Imap::AcceptConnection()
 		{
 			if (!ec)
 			{
-				std::make_shared<ImapSession>(std::move(socket), m_logger)->Start();
+				std::make_shared<ImapSession>(std::move(socket), m_logger, m_db, m_user_dal)->Start();
 			}
 			else
 			{

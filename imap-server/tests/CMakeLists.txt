@@ -14,7 +14,7 @@ add_executable(imap_tests
     ../src/ImapSession.cpp
 )
 
-target_link_libraries(imap_tests PRIVATE smtp_proto Threads::Threads GTest::gtest GTest::gtest_main logger_lib)
+target_link_libraries(imap_tests PRIVATE smtp_proto Threads::Threads GTest::gtest GTest::gtest_main logger_lib db_lib)
 target_include_directories(imap_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 gtest_discover_tests(imap_tests)

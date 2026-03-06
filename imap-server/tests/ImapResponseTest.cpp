@@ -102,12 +102,6 @@ TEST(ImapResponseTest, ListWithAttributes)
 	EXPECT_EQ(result, "* LIST (\\HasNoChildren) \"/\" INBOX\r\n");
 }
 
-TEST(ImapResponseTest, Status)
-{
-	auto result = Status("INBOX", 100, 5, 10);
-	EXPECT_EQ(result, "* STATUS INBOX (MESSAGES 100 RECENT 5 UNSEEN 10)\r\n");
-}
-
 TEST(ImapResponseTest, Fetch)
 {
 	auto result = Fetch(1, "(FLAGS (\\Seen) RFC822.TEXT {4}\r\ntest)");

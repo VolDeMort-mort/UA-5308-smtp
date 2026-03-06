@@ -1,6 +1,7 @@
 #include "ImapUtils.hpp"
 
 #include <algorithm>
+#include <numeric>
 #include <sstream>
 #include <unordered_map>
 
@@ -95,6 +96,76 @@ std::string CommandTypeToString(const ImapCommandType& type)
 		return it->second;
 	}
 	return "UNKNOWN";
+}
+
+std::string TrimParentheses(const std::string& str)
+{
+	if (str.size() >= 2 && str.front() == '(' && str.back() == ')')
+	{
+		return str.substr(1, str.size() - 2);
+	}
+	return str;
+}
+
+std::vector<std::string> Split(const std::string& str, char delim)
+{
+	std::vector<std::string> result;
+	std::stringstream ss(str);
+	std::string token;
+
+	while (std::getline(ss, token, delim))
+	{
+		result.push_back(token);
+	}
+
+	return result;
+}
+
+std::vector<int64_t> ParseSequenceSet(const std::string& sequenceSet, int64_t maxValue)
+{
+	std::vector<int64_t> res;
+	try
+	{
+		int num = std::stoi(sequenceSet);
+		res.push_back(num);
+	}
+	catch (const std::invalid_argument& e)
+	{
+		auto semicolon_index = sequenceSet.find(':');
+		if (semicolon_index != std::string::npos)
+		{
+			auto firstPart = sequenceSet.substr(0, semicolon_index);
+			auto secondPart = sequenceSet.substr(semicolon_index + 1);
+
+			int64_t first, second;
+			if (firstPart == "*")
+			{
+				swap(firstPart, secondPart);
+			}
+			if (secondPart == "*")
+			{
+				second = maxValue;
+			}
+			first = std::stoi(firstPart);
+			res.resize(second - first + 1);
+			std::iota(res.begin(), res.end(), first);
+		}
+		else
+		{
+			auto str_res = Split(sequenceSet, ',');
+			res.resize(str_res.size());
+			std::transform(str_res.begin(), str_res.end(), res.begin(),
+						   [](const std::string& s) { return std::stoi(s); });
+		}
+	}
+
+	return res;
+}
+
+void SortMessagesByTimeDescending(std::vector<Message>& messages)
+{
+	std::sort(messages.begin(), messages.end(),
+			  [](const Message& a, const Message& b) { return a.created_at > b.created_at; });
 }
 
 } // namespace IMAP_UTILS
