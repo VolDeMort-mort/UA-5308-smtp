@@ -1,5 +1,5 @@
 #include "FileStrategy.h"
-
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -7,6 +7,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 
 FileStrategy::FileStrategy(LogLevel defaultLevel)
 	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
@@ -20,7 +21,6 @@ FileStrategy::FileStrategy(LogLevel defaultLevel)
 
 bool FileStrategy::Write(const std::string& message)
 {
-	// std::unique_lock<std::shared_mutex> lock(shared_mutex);
 	if (!IsValid()) return false;
 
 	if (!CanWrite(message.size()))
@@ -40,7 +40,7 @@ void FileStrategy::Rotate()
 	if (std::filesystem::exists(m_old_path)) // when both files are filled,delete older one
 		std::filesystem::remove(m_old_path);
 
-	if (std::filesystem::exists(m_current_path)) 
+	if (std::filesystem::exists(m_current_path)) // switching the files when one is filled
 		std::filesystem::rename(m_current_path, m_old_path);
 
 	if (!OpenFile()) std::cerr << "Can`t open log file: " << m_current_path << "\n";
@@ -52,14 +52,13 @@ bool FileStrategy::CanWrite(int message_size)
 }
 bool FileStrategy::OpenFile()
 {
-	m_file.open(m_current_path, std::ios::app);
+	m_file.open(m_current_path, std::ios::app | std::ios::binary);
 	return IsValid();
 }
 bool FileStrategy::IsValid()
 {
 	return m_file.is_open() && !m_file.fail();
 }
-
 void FileStrategy::Flush()
 {
 	m_file.flush();
@@ -68,7 +67,6 @@ FileStrategy::~FileStrategy()
 {
 	m_file.close();
 }
-
 std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 {
 	if (lvl > m_default_log_level) return {};
@@ -124,49 +122,45 @@ std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 
 	return std::string(buffer, totalLen);
 }
-
 std::vector<std::string> FileStrategy::Read(size_t limit)
 {
-    std::vector<std::string> result;
-    std::ifstream file(m_current_path, std::ios::binary);
-    if (!file) return result;
+	std::vector<std::string> result;
+	std::ifstream file(m_current_path, std::ios::binary);
+	if (!file) return result;
 
-    file.seekg(0, std::ios::end);
-    std::streamoff pos = file.tellg();
-    if (pos == 0) return result;
+	file.seekg(0, std::ios::end);
+	std::streamoff pos = file.tellg();
+	if (pos == 0) return result;
 
-    file.seekg(pos - 1);
-    char last;
-    file.get(last);
-    if (last == '\n') pos--;
+	file.seekg(pos - 1);
+	char last;
+	file.get(last);
+	if (last == '\n') pos--;
 
-    std::string buffer;
-    size_t linesFound = 0;
+	std::string buffer;
+	size_t linesFound = 0;
 
-    while (pos > 0 && linesFound < limit)
-    {
-        pos--;
-        file.seekg(pos);
-        char c;
-        file.get(c);
-        if (c == '\n') linesFound++;
-        buffer.push_back(c);
-    }
+	while (pos > 0 && linesFound < limit)
+	{
+		pos--;
+		file.seekg(pos);
+		char c;
+		file.get(c);
+		if (c == '\n') linesFound++;
+		buffer.push_back(c);
+	}
 
-    if (!buffer.empty() && buffer.back() == '\n')
-        buffer.pop_back();
+	if (!buffer.empty() && buffer.back() == '\n') buffer.pop_back();
 
-    std::reverse(buffer.begin(), buffer.end());
+	std::reverse(buffer.begin(), buffer.end());
 
-    std::stringstream ss(buffer);
-    std::string line;
-    while (std::getline(ss, line))
-        if (!line.empty())
-            result.push_back(line);
+	std::stringstream ss(buffer);
+	std::string line;
+	while (std::getline(ss, line))
+		if (!line.empty()) result.push_back(line);
 
-    return result;
+	return result;
 }
-
 std::vector<std::string> FileStrategy::Search(LogLevel lvl, size_t limit, int readN)
 {
 	std::vector<std::string> results;
