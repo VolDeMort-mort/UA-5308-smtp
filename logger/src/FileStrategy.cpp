@@ -1,5 +1,4 @@
 #include "FileStrategy.h"
-
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -7,6 +6,9 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <algorithm>
+#include <thread>
+
 
 FileStrategy::FileStrategy(LogLevel defaultLevel)
 	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
@@ -50,7 +52,7 @@ bool FileStrategy::CanWrite(int message_size)
 }
 bool FileStrategy::OpenFile()
 {
-	m_file.open(m_current_path, std::ios::app);
+	m_file.open(m_current_path, std::ios::app | std::ios::binary);
 	return IsValid();
 }
 bool FileStrategy::IsValid()
