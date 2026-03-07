@@ -10,9 +10,9 @@ int main(int argc, char** argv)
 	logger.Log(DEBUG, "Imap main started");
 
 	boost::asio::io_context io;
-	DataBaseManager db("test.db", "../../database/scheme/001_init_scheme.sql");
+	DataBaseManager db("prod.db", "../../database/scheme/001_init_scheme.sql");
 
-	Imap imap(io, logger, db);
+	ImapServer imap(io, logger, db);
 	imap.Start();
 	logger.Log(DEBUG, "Imap main ended");
 	return 0;

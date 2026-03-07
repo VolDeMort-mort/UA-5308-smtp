@@ -4,15 +4,15 @@
 
 #include "DAL/UserDAL.h"
 #include "DataBaseManager.h"
-#include "Logger.h"
+#include "ILogger.h"
 
 constexpr int IMAP_PORT = 2553;
 
-class Imap
+class ImapServer
 {
 public:
-	Imap(boost::asio::io_context& context, Logger& m_logger, DataBaseManager& db);
-	Imap(const Imap&) = delete;
+	ImapServer(boost::asio::io_context& context, ILogger& m_logger, DataBaseManager& db);
+	ImapServer(const ImapServer&) = delete;
 	void Start();
 
 private:
@@ -20,7 +20,7 @@ private:
 
 	boost::asio::io_context& m_context;
 	boost::asio::ip::tcp::acceptor m_acceptor;
-	Logger& m_logger;
+	ILogger& m_logger;
 	DataBaseManager& m_db;
-	UserDAL m_user_dal;
+	UserDAL m_user_dal; // only here because of repos initialization, user repo`s signature should as message repo`s
 };

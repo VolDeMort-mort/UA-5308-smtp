@@ -4,21 +4,21 @@
 
 #include "ImapSession.hpp"
 
-Imap::Imap(boost::asio::io_context& context, Logger& logger, DataBaseManager& db)
+ImapServer::ImapServer(boost::asio::io_context& context, ILogger& logger, DataBaseManager& db)
 	: m_context(context), m_acceptor(context, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), IMAP_PORT)),
 	  m_logger(logger), m_db(db), m_user_dal(m_db.getDB())
 {
 	m_logger.Log(PROD, "Imap server entity created");
 }
 
-void Imap::Start()
+void ImapServer::Start()
 {
 	m_logger.Log(PROD, "Server started");
 	AcceptConnection();
 	m_context.run();
 }
 
-void Imap::AcceptConnection()
+void ImapServer::AcceptConnection()
 {
 	m_logger.Log(DEBUG, "AcceptConnection called");
 	m_acceptor.async_accept(
