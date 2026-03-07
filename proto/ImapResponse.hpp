@@ -27,8 +27,8 @@ inline std::string Untagged(const std::string& message)
 
 inline std::string Capability()
 {
-	return "* CAPABILITY IMAP4rev1 LOGIN LOGOUT SELECT LIST LSUB STATUS FETCH STORE CREATE DELETE RENAME IDLE MOVE "
-		   "EXPUNGE UID\r\n";
+	return "* CAPABILITY IMAP4rev1 LOGIN LOGOUT SELECT LIST LSUB STATUS FETCH STORE CREATE DELETE RENAME COPY "
+		   "EXPUNGE\r\n";
 }
 
 inline std::string Flags(const std::string& flagList = "(\\Seen \\Answered \\Flagged \\Draft \\Recent)")
@@ -48,7 +48,7 @@ inline std::string Recent(size_t count)
 
 inline std::string List(char separator, const std::string& mailbox, const std::string& attributes = "")
 {
-	return "* LIST (\\" + attributes + ") \"" + separator + "\" " + mailbox + "\r\n";
+	return "* LIST (\\" + attributes + ") \"" + separator + "\" \"" + mailbox + "\"\r\n";
 }
 
 inline std::string Status(const std::string& mailbox, const std::string& statusData)
