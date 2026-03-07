@@ -8,10 +8,11 @@
 #include <thread>
 #include <vector>
 
+#include "ILogger.h"
 #include "ILoggerStrategy.h"
 #include "IReadable.h"
 
-class Logger
+class Logger : public ILogger
 {
 public:
 	Logger(std::unique_ptr<ILoggerStrategy> strategy);

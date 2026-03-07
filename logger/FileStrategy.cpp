@@ -1,5 +1,6 @@
 #include "FileStrategy.h"
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -7,6 +8,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 
 FileStrategy::FileStrategy(LogLevel defaultLevel)
 	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
