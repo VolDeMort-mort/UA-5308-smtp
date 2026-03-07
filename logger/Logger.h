@@ -12,7 +12,7 @@
 #include "ILoggerStrategy.h"
 #include "IReadable.h"
 
-class Logger : ILogger
+class Logger : public ILogger
 {
 public:
 	Logger(std::unique_ptr<ILoggerStrategy> strategy);
