@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include "Entity/Message.h"
+
 TEST(ImapUtilsTest, ToUpperEmpty)
 {
 	auto result = IMAP_UTILS::ToUpper("");
@@ -151,4 +153,118 @@ TEST(ImapUtilsTest, CommandTypeToString)
 		auto result = IMAP_UTILS::CommandTypeToString(input_type);
 		EXPECT_EQ(result, expected_string) << "Failed on expected string: " << expected_string;
 	}
+}
+
+TEST(ImapUtilsTest, TrimParentheses_Empty)
+{
+	EXPECT_EQ(IMAP_UTILS::TrimParentheses(""), "");
+}
+
+TEST(ImapUtilsTest, TrimParentheses_Basic)
+{
+	EXPECT_EQ(IMAP_UTILS::TrimParentheses("(hello)"), "hello");
+}
+
+TEST(ImapUtilsTest, TrimParentheses_NoParentheses)
+{
+	EXPECT_EQ(IMAP_UTILS::TrimParentheses("hello"), "hello");
+}
+
+TEST(ImapUtilsTest, TrimParentheses_UnmatchedLeft)
+{
+	EXPECT_EQ(IMAP_UTILS::TrimParentheses("(hello"), "(hello");
+}
+
+TEST(ImapUtilsTest, TrimParentheses_UnmatchedRight)
+{
+	EXPECT_EQ(IMAP_UTILS::TrimParentheses("hello)"), "hello)");
+}
+
+TEST(ImapUtilsTest, TrimParentheses_Nested)
+{
+	EXPECT_EQ(IMAP_UTILS::TrimParentheses("((hello))"), "(hello)");
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_SingleNumber)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("5", 10);
+	std::vector<int64_t> expected = {5};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_CommaSeparated)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("1,3,5", 10);
+	std::vector<int64_t> expected = {1, 3, 5};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_Range)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("2:4", 10);
+	std::vector<int64_t> expected = {2, 3, 4};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_ReverseRange)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("4:2", 10);
+	std::vector<int64_t> expected = {2, 3, 4};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_StarSingle)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("*", 10);
+	std::vector<int64_t> expected = {10};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_StarRange)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("8:*", 10);
+	std::vector<int64_t> expected = {8, 9, 10};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, ParseSequenceSet_MixedAndOverlapping)
+{
+	auto result = IMAP_UTILS::ParseSequenceSet("1,3:5,4:6,*", 8);
+	std::vector<int64_t> expected = {1, 3, 4, 5, 6, 8};
+	EXPECT_EQ(result, expected);
+}
+
+TEST(ImapUtilsTest, SortMessagesByTimeDescending_Basic)
+{
+	Message m1;
+	m1.created_at = "2026-03-01 10:00:00";
+	Message m2;
+	m2.created_at = "2026-03-02 10:00:00";
+	Message m3;
+	m3.created_at = "2026-03-03 10:00:00";
+	std::vector<Message> msgs = {m2, m1, m3};
+
+	IMAP_UTILS::SortMessagesByTimeDescending(msgs);
+
+	ASSERT_EQ(msgs.size(), 3);
+	EXPECT_EQ(msgs[0].created_at, "2026-03-03 10:00:00");
+	EXPECT_EQ(msgs[1].created_at, "2026-03-02 10:00:00");
+	EXPECT_EQ(msgs[2].created_at, "2026-03-01 10:00:00");
+}
+
+TEST(ImapUtilsTest, SortMessagesByTimeDescending_Empty)
+{
+	std::vector<Message> empty_msgs;
+	IMAP_UTILS::SortMessagesByTimeDescending(empty_msgs);
+	EXPECT_TRUE(empty_msgs.empty());
+}
+
+TEST(ImapUtilsTest, SortMessagesByTimeDescending_Single)
+{
+	Message m1;
+	m1.created_at = "2026-03-01 10:00:00";
+	std::vector<Message> single_msg = {m1};
+	IMAP_UTILS::SortMessagesByTimeDescending(single_msg);
+	ASSERT_EQ(single_msg.size(), 1);
+	EXPECT_EQ(single_msg[0].created_at, "2026-03-01 10:00:00");
 }

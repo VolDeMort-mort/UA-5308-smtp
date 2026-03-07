@@ -124,40 +124,46 @@ std::vector<std::string> Split(const std::string& str, char delim)
 std::vector<int64_t> ParseSequenceSet(const std::string& sequenceSet, int64_t maxValue)
 {
 	std::vector<int64_t> res;
-	try
-	{
-		int num = std::stoi(sequenceSet);
-		res.push_back(num);
-	}
-	catch (const std::invalid_argument& e)
-	{
-		auto semicolon_index = sequenceSet.find(':');
-		if (semicolon_index != std::string::npos)
-		{
-			auto firstPart = sequenceSet.substr(0, semicolon_index);
-			auto secondPart = sequenceSet.substr(semicolon_index + 1);
 
-			int64_t first, second;
-			if (firstPart == "*")
+	auto parts = Split(sequenceSet, ',');
+
+	for (const auto& part : parts)
+	{
+		size_t colon_pos = part.find(':');
+
+		if (colon_pos != std::string::npos)
+		{
+			std::string firstPart = part.substr(0, colon_pos);
+			std::string secondPart = part.substr(colon_pos + 1);
+
+			int64_t first = (firstPart == "*") ? maxValue : std::stoll(firstPart);
+			int64_t second = (secondPart == "*") ? maxValue : std::stoll(secondPart);
+
+			if (first > second)
 			{
-				swap(firstPart, secondPart);
+				std::swap(first, second);
 			}
-			if (secondPart == "*")
+
+			for (int64_t i = first; i <= second; ++i)
 			{
-				second = maxValue;
+				res.push_back(i);
 			}
-			first = std::stoi(firstPart);
-			res.resize(second - first + 1);
-			std::iota(res.begin(), res.end(), first);
 		}
 		else
 		{
-			auto str_res = Split(sequenceSet, ',');
-			res.resize(str_res.size());
-			std::transform(str_res.begin(), str_res.end(), res.begin(),
-						   [](const std::string& s) { return std::stoi(s); });
+			if (part == "*")
+			{
+				res.push_back(maxValue);
+			}
+			else
+			{
+				res.push_back(std::stoll(part));
+			}
 		}
 	}
+
+	std::sort(res.begin(), res.end());
+	res.erase(std::unique(res.begin(), res.end()), res.end());
 
 	return res;
 }
