@@ -6,6 +6,7 @@ add_executable(imap_server
     src/ImapSession.cpp
     src/ImapParser.cpp
     src/ImapUtils.cpp
+    src/ImapCommandDispatcher.cpp
 )
 
 target_include_directories(imap_server PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
