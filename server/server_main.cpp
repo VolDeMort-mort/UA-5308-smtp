@@ -10,7 +10,7 @@
 int main()
 {
     constexpr uint16_t PORT = 25000;
-    const std::string DOMAIN = "localhost";
+    const std::string SERVER_DOMAIN = "localhost";
 
     try
     {
@@ -34,7 +34,7 @@ int main()
             if (!acceptor.Accept(connection) || !connection)
                 continue;
 
-            SmtpSession session(DOMAIN);
+            SmtpSession session(SERVER_DOMAIN);
 
             if (!connection->Send(session.Greeting()))
             {

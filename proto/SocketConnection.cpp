@@ -1,7 +1,17 @@
 #include "SocketConnection.hpp"
 
+#ifdef _WIN32
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#else
+
 #include <sys/select.h>
 #include <unistd.h>
+
+#endif
+
 
 using boost::asio::ip::tcp;
 
@@ -21,7 +31,7 @@ bool SocketConnection::WaitForEvent(bool for_read)
     if (!m_socket.is_open())
         return false;
 
-    int fd = m_socket.native_handle();
+    auto fd = m_socket.native_handle();
 
     fd_set read_set;
     fd_set write_set;
@@ -38,11 +48,21 @@ bool SocketConnection::WaitForEvent(bool for_read)
     timeout.tv_sec = m_timeout_seconds;
     timeout.tv_usec = 0;
 
-    int result = select(fd + 1,
-                        for_read ? &read_set : nullptr,
-                        for_read ? nullptr   : &write_set,
-                        nullptr,
-                        &timeout);
+
+#ifdef _WIN32 
+	int result = select(0,
+						for_read ? &read_set : nullptr,
+						for_read ? nullptr   : &write_set,
+						nullptr,
+						&timeout);
+#else
+	int result = select(fd + 1,
+						for_read ? &read_set : nullptr,
+						for_read ? nullptr   : &write_set,
+						nullptr,
+						&timeout);
+#endif
+ 
 
     if (result <= 0)
     {
