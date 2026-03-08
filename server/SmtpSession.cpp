@@ -1,14 +1,16 @@
-#include "SmtpParser.hpp"
 #include "SmtpSession.hpp"
 
-SmtpSession::SmtpSession(const std::string& domain)
-    : m_domain(domain)
+#include "SmtpParser.hpp"
+#include "SmtpResponse.hpp"
+
+SmtpSession::SmtpSession(std::string domain)
+    : m_domain(std::move(domain))
 {
 }
 
 std::string SmtpSession::Greeting() const
 {
-    return "220 " + m_domain + " Service ready\r\n";
+    return SmtpResponse::ServiceReady(m_domain);
 }
 
 bool SmtpSession::IsClosed() const noexcept
@@ -25,16 +27,33 @@ void SmtpSession::ResetMessage()
 
 std::string SmtpSession::ProcessLine(const std::string& line)
 {
+    constexpr size_t MAX_SMTP_LINE = 512;
+
+    if (line.size() > MAX_SMTP_LINE)
+        return SmtpResponse::SyntaxError();
+
     if (m_state == SmtpState::RECEIVING_DATA)
     {
         if (line == ".")
         {
             m_state = SmtpState::WAIT_MAIL;
+
             ResetMessage();
-            return "250 OK\r\n";
+
+            return SmtpResponse::Ok();
         }
 
         m_body += line + "\n";
+
+        if (m_body.size() > MAX_MESSAGE_SIZE)
+        {
+            m_state = SmtpState::WAIT_MAIL;
+
+            ResetMessage();
+
+            return SmtpResponse::MessageTooLarge();
+        }
+
         return {};
     }
 
@@ -44,49 +63,95 @@ std::string SmtpSession::ProcessLine(const std::string& line)
     {
         case SmtpCommandType::HELO:
         case SmtpCommandType::EHLO:
-            if (m_state != SmtpState::WAIT_HELO)
-                return "503 Bad sequence of commands\r\n";
-
-            m_state = SmtpState::WAIT_MAIL;
-            return "250 " + m_domain + " greets you\r\n";
+            return HandleHelo(command);
 
         case SmtpCommandType::MAIL:
-            if (m_state != SmtpState::WAIT_MAIL)
-                return "503 Bad sequence of commands\r\n";
-
-            m_sender = command.argument;
-            m_state = SmtpState::WAIT_RCPT;
-            return "250 OK\r\n";
+            return HandleMail(command);
 
         case SmtpCommandType::RCPT:
-            if (m_state != SmtpState::WAIT_RCPT)
-                return "503 Bad sequence of commands\r\n";
-
-            m_recipients.push_back(command.argument);
-            return "250 OK\r\n";
+            return HandleRcpt(command);
 
         case SmtpCommandType::DATA:
-            if (m_state != SmtpState::WAIT_RCPT || m_recipients.empty())
-                return "503 Bad sequence of commands\r\n";
-
-            m_state = SmtpState::RECEIVING_DATA;
-            return "354 End data with <CR><LF>.<CR><LF>\r\n";
+            return HandleData(command);
 
         case SmtpCommandType::RSET:
-            ResetMessage();
-            m_state = SmtpState::WAIT_MAIL;
-            return "250 OK\r\n";
+            return HandleRset();
 
         case SmtpCommandType::NOOP:
-            return "250 OK\r\n";
+            return HandleNoop();
 
         case SmtpCommandType::QUIT:
-            m_state = SmtpState::CLOSED;
-            return "221 Bye\r\n";
+            return HandleQuit();
 
         case SmtpCommandType::UNKNOWN:
-            return "502 Command not implemented\r\n";
+            return SmtpResponse::NotImplemented();
     }
 
-    return "500 Syntax error\r\n";
+    return SmtpResponse::SyntaxError();
+}
+
+std::string SmtpSession::HandleHelo(const SmtpCommand&)
+{
+    if (m_state != SmtpState::WAIT_HELO)
+        return SmtpResponse::BadSequence();
+
+    m_state = SmtpState::WAIT_MAIL;
+
+    return SmtpResponse::Hello(m_domain);
+}
+
+std::string SmtpSession::HandleMail(const SmtpCommand& command)
+{
+    if (m_state != SmtpState::WAIT_MAIL)
+        return SmtpResponse::BadSequence();
+
+    m_sender = command.argument;
+
+    m_state = SmtpState::WAIT_RCPT;
+
+    return SmtpResponse::Ok();
+}
+
+std::string SmtpSession::HandleRcpt(const SmtpCommand& command)
+{
+    if (m_state != SmtpState::WAIT_RCPT)
+        return SmtpResponse::BadSequence();
+
+    m_recipients.push_back(command.argument);
+
+    return SmtpResponse::Ok();
+}
+
+std::string SmtpSession::HandleData(const SmtpCommand&)
+{
+    if (m_state != SmtpState::WAIT_RCPT ||
+        m_recipients.empty())
+    {
+        return SmtpResponse::BadSequence();
+    }
+
+    m_state = SmtpState::RECEIVING_DATA;
+
+    return SmtpResponse::StartMailInput();
+}
+
+std::string SmtpSession::HandleRset()
+{
+    ResetMessage();
+
+    m_state = SmtpState::WAIT_MAIL;
+
+    return SmtpResponse::Ok();
+}
+
+std::string SmtpSession::HandleNoop()
+{
+    return SmtpResponse::Ok();
+}
+
+std::string SmtpSession::HandleQuit()
+{
+    m_state = SmtpState::CLOSED;
+
+    return SmtpResponse::Closing();
 }

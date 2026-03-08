@@ -1,4 +1,4 @@
-#pragma once
+#pragma oncl
 
 #include <string>
 
@@ -14,7 +14,7 @@ namespace SmtpResponse
         return "250 OK\r\n";
     }
 
-    inline std::string Greeting(const std::string& domain)
+    inline std::string Hello(const std::string& domain)
     {
         return "250 " + domain + " greets you\r\n";
     }
@@ -28,6 +28,11 @@ namespace SmtpResponse
     {
         return "503 Bad sequence of commands\r\n";
     }
+
+	inline std::string MessageTooLarge()
+	{
+		return "552 Message size exceeds fixed maximum\r\n";
+	}
 
     inline std::string SyntaxError()
     {

@@ -23,27 +23,32 @@ SmtpCommand SmtpParser::Parse(const std::string& line)
 {
     SmtpCommand command;
 
-    std::string upper = ToUpper(line);
+	std::string clean = line;
+
+	if (!clean.empty() && clean.back() == '\r')
+		clean.pop_back();
+
+    std::string upper = ToUpper(clean);
 
     if (StartsWith(upper, "HELO "))
     {
         command.type = SmtpCommandType::HELO;
-        command.argument = line.substr(5);
+        command.argument = clean.substr(5);
     }
     else if (StartsWith(upper, "EHLO "))
     {
         command.type = SmtpCommandType::EHLO;
-        command.argument = line.substr(5);
+        command.argument = clean.substr(5);
     }
     else if (StartsWith(upper, "MAIL FROM:"))
     {
         command.type = SmtpCommandType::MAIL;
-        command.argument = line.substr(10);
+        command.argument = clean.substr(10);
     }
     else if (StartsWith(upper, "RCPT TO:"))
     {
         command.type = SmtpCommandType::RCPT;
-        command.argument = line.substr(8);
+        command.argument = clean.substr(8);
     }
     else if (upper == "DATA")
     {
