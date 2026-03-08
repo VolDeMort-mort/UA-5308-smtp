@@ -1,163 +1,222 @@
+#include <gtest/gtest.h>
+#include "../ThreadPool/ThreadPool.h"
+
+#include <atomic>
 #include <chrono>
-#include <memory>
-#include <mutex>
-#include <string>
 #include <thread>
 #include <vector>
 
-#include <gtest/gtest.h>
+TEST(ThreadPoolTest, ExecutesAllTasks)
+{
+    ThreadPool pool;
+    ASSERT_TRUE(pool.Initialize(4));
 
-#include "ThreadPool.h"
-#include "../../logger/Logger.h"
-#include "../../logger/ILoggerStrategy.h"
+    std::atomic<int> counter = 0;
 
-struct Captured {
-    std::vector<std::string> messages;
-    std::mutex mtx;
-
-    bool Contains(const std::string& sub) {
-        std::lock_guard<std::mutex> lock(mtx);
-        for (const auto& m : messages)
-            if (m.find(sub) != std::string::npos) return true;
-        return false;
+    for (int i = 0; i < 100; ++i)
+    {
+        pool.AddTask([&counter]() {
+            counter.fetch_add(1, std::memory_order_relaxed);
+            });
     }
 
-    int CountContaining(const std::string& sub) {
-        std::lock_guard<std::mutex> lock(mtx);
-        int n = 0;
-        for (const auto& m : messages)
-            if (m.find(sub) != std::string::npos) ++n;
-        return n;
+    pool.Terminate();
+
+    EXPECT_EQ(counter.load(), 100);
+}
+
+TEST(ThreadPoolTest, TerminateFinishesAllQueuedTasks)
+{
+    ThreadPool pool;
+    ASSERT_TRUE(pool.Initialize(2));
+
+    std::atomic<int> counter = 0;
+
+    for (int i = 0; i < 50; ++i)
+    {
+        pool.AddTask([&counter]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            counter.fetch_add(1, std::memory_order_relaxed);
+            });
     }
-};
 
-class TestStrategy : public ILoggerStrategy {
-public:
-    std::shared_ptr<Captured> m_data;
-    explicit TestStrategy(std::shared_ptr<Captured> d) : m_data(std::move(d)) {}
+    pool.Terminate();
 
-    std::string SpecificLog(LogLevel, const std::string& msg) override { return msg + "\n"; }
-    bool IsValid() override { return true; }
-    bool Write(const std::string& msg) override {
-        std::lock_guard<std::mutex> lock(m_data->mtx);
-        m_data->messages.push_back(msg);
-        return true;
+    EXPECT_EQ(counter.load(), 50);
+}
+
+TEST(ThreadPoolTest, AddTaskAfterTerminateReturnsFalse)
+{
+    ThreadPool pool;
+    ASSERT_TRUE(pool.Initialize(2));
+
+    pool.Terminate();
+
+    bool result = pool.AddTask([]() {});
+    EXPECT_FALSE(result);
+}
+
+TEST(ThreadPoolTest, CanRestartAfterTerminate)
+{
+    ThreadPool pool;
+
+    ASSERT_TRUE(pool.Initialize(2));
+    pool.Terminate();
+
+    ASSERT_TRUE(pool.Initialize(2));
+
+    std::atomic<int> counter = 0;
+
+    pool.AddTask([&counter]() {
+        counter.fetch_add(1, std::memory_order_relaxed);
+        });
+
+    pool.Terminate();
+
+    EXPECT_EQ(counter.load(), 1);
+}
+
+TEST(ThreadPoolTest, ConcurrentAddTask)
+{
+    ThreadPool pool;
+    ASSERT_TRUE(pool.Initialize(4));
+
+    std::atomic<int> counter = 0;
+
+    const int threadsCount = 10;
+    const int tasksPerThread = 50;
+
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < threadsCount; ++i)
+    {
+        threads.emplace_back([&]() {
+            for (int j = 0; j < tasksPerThread; ++j)
+            {
+                pool.AddTask([&counter]() {
+                    counter.fetch_add(1, std::memory_order_relaxed);
+                    });
+            }
+            });
     }
-    void Flush() override {}
-};
 
-TEST(ThreadPool, GivenInitializedPool_WhenTaskAdded_FutureResolvesCorrectly) {
-    ThreadPool pool;
-    pool.initialize(2);
-    auto fut = pool.add_task([] { return 42; });
-    EXPECT_EQ(fut.get(), 42);
-    pool.terminate();
+    for (auto& t : threads)
+        t.join();
+
+    pool.Terminate();
+
+    EXPECT_EQ(counter.load(), threadsCount * tasksPerThread);
 }
 
-TEST(ThreadPool, GivenInitializedPool_WhenMultipleTasksAdded_AllFuturesResolve) {
+TEST(ThreadPoolTest, TerminateIsIdempotent)
+{
     ThreadPool pool;
-    pool.initialize(2);
-    std::vector<std::future<int>> futs;
-    for (int i = 0; i < 10; ++i)
-        futs.push_back(pool.add_task([i] { return i * i; }));
-    for (int i = 0; i < 10; ++i)
-        EXPECT_EQ(futs[i].get(), i * i);
-    pool.terminate();
+    ASSERT_TRUE(pool.Initialize(2));
+
+    EXPECT_TRUE(pool.Terminate());
+    EXPECT_TRUE(pool.Terminate());
 }
 
-TEST(ThreadPool, GivenUninitializedPool_WhenTaskAdded_FutureThrows) {
+TEST(ThreadPoolTest, InitializeTwiceFails)
+{
     ThreadPool pool;
-    auto fut = pool.add_task([] { return 1; });
-    EXPECT_THROW(fut.get(), std::runtime_error);
+
+    ASSERT_TRUE(pool.Initialize(2));
+    EXPECT_FALSE(pool.Initialize(4));
+
+    pool.Terminate();
 }
 
-TEST(ThreadPool, GivenPausedPool_WhenUnpaused_QueuedTaskCompletes) {
+TEST(ThreadPoolTest, InitializeWithZeroWorkersFails)
+{
     ThreadPool pool;
-    pool.initialize(2);
-    pool.pause();
-    auto fut = pool.add_task([] { return 99; });
+    EXPECT_FALSE(pool.Initialize(0));
+}
+
+TEST(ThreadPoolTest, AddTaskBeforeInitializeReturnsFalse)
+{
+    ThreadPool pool;
+
+    bool result = pool.AddTask([]() {});
+    EXPECT_FALSE(result);
+}
+
+TEST(ThreadPoolTest, TasksExecuteConcurrently)
+{
+    ThreadPool pool;
+    ASSERT_TRUE(pool.Initialize(4));
+
+    std::atomic<int> running = 0;
+    std::atomic<int> maxRunning = 0;
+
+    for (int i = 0; i < 20; ++i)
+    {
+        pool.AddTask([&]() {
+            int current = ++running;
+
+            maxRunning.store(
+                std::max(maxRunning.load(), current),
+                std::memory_order_relaxed);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+            --running;
+            });
+    }
+
+    pool.Terminate();
+
+    EXPECT_GT(maxRunning.load(), 1);
+}
+
+TEST(ThreadPoolTest, TerminateWhileAddingTasks)
+{
+    ThreadPool pool;
+    ASSERT_TRUE(pool.Initialize(4));
+
+    std::atomic<int> counter = 0;
+    std::atomic<bool> stopAdding = false;
+
+    std::thread adder([&]() {
+        while (!stopAdding.load())
+        {
+            pool.AddTask([&]() {
+                counter.fetch_add(1, std::memory_order_relaxed);
+                });
+        }
+        });
+
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    EXPECT_NE(fut.wait_for(std::chrono::milliseconds(0)), std::future_status::ready);
-    pool.unpause();
-    EXPECT_EQ(fut.get(), 99);
-    pool.terminate();
+
+    pool.Terminate();
+    stopAdding = true;
+
+    adder.join();
+
+    EXPECT_GE(counter.load(), 0);
 }
 
-TEST(ThreadPool, GivenTerminatedPool_WhenTaskAdded_FutureThrows) {
-    ThreadPool pool;
-    pool.initialize(2);
-    pool.terminate();
-    auto fut = pool.add_task([] { return 1; });
-    EXPECT_THROW(fut.get(), std::runtime_error);
-}
+TEST(ThreadPoolTest, DestructorStopsPool)
+{
+    std::atomic<int> counter = 0;
 
-TEST(ThreadPoolLogger, GivenPoolWithLogger_WhenTaskAdded_AddedMessageLogged) {
-    auto cap = std::make_shared<Captured>();
     {
-        Logger logger(std::make_unique<TestStrategy>(cap));
         ThreadPool pool;
-        pool.set_logger(&logger);
-        pool.initialize(2);
-        pool.add_task([] { return 1; }).get();
-        pool.terminate();
+        ASSERT_TRUE(pool.Initialize(2));
+
+        for (int i = 0; i < 20; ++i)
+        {
+            pool.AddTask([&]() {
+                counter.fetch_add(1, std::memory_order_relaxed);
+                });
+        }
     }
-    EXPECT_TRUE(cap->Contains("Task 0 added"));
+
+    EXPECT_EQ(counter.load(), 20);
 }
 
-TEST(ThreadPoolLogger, GivenPoolWithLogger_WhenWorkerExecutesTask_ExecutionMessagesLogged) {
-    auto cap = std::make_shared<Captured>();
-    {
-        Logger logger(std::make_unique<TestStrategy>(cap));
-        ThreadPool pool;
-        pool.set_logger(&logger);
-        pool.initialize(2);
-        pool.add_task([] { return 1; }).get();
-        pool.terminate();
-    }
-    EXPECT_TRUE(cap->Contains("executing task"));
-    EXPECT_TRUE(cap->Contains("finished task"));
-}
-
-TEST(ThreadPoolLogger, GivenPoolWithLogger_WhenTerminated_TerminationMessagesLogged) {
-    auto cap = std::make_shared<Captured>();
-    {
-        Logger logger(std::make_unique<TestStrategy>(cap));
-        ThreadPool pool;
-        pool.set_logger(&logger);
-        pool.initialize(2);
-        pool.terminate();
-    }
-    EXPECT_TRUE(cap->Contains("Terminating"));
-    EXPECT_TRUE(cap->Contains("Terminated"));
-}
-
-TEST(ThreadPoolLogger, GivenPoolWithLogger_WhenPausedAndUnpaused_StateMessagesLogged) {
-    auto cap = std::make_shared<Captured>();
-    {
-        Logger logger(std::make_unique<TestStrategy>(cap));
-        ThreadPool pool;
-        pool.set_logger(&logger);
-        pool.initialize(2);
-        pool.pause();
-        pool.unpause();
-        pool.terminate();
-    }
-    EXPECT_TRUE(cap->Contains("Paused"));
-    EXPECT_TRUE(cap->Contains("Unpaused"));
-}
-
-TEST(ThreadPoolLogger, GivenPoolWithLogger_WhenConcurrentTasksAdded_AllTasksLogged) {
-    auto cap = std::make_shared<Captured>();
-    {
-        Logger logger(std::make_unique<TestStrategy>(cap));
-        ThreadPool pool;
-        pool.set_logger(&logger);
-        pool.initialize(4);
-        std::vector<std::future<int>> futs;
-        for (int i = 0; i < 100; ++i)
-            futs.push_back(pool.add_task([i] { return i; }));
-        for (auto& f : futs) f.get();
-        pool.terminate();
-    }
-    EXPECT_EQ(cap->CountContaining("added"), 100);
+int main(int argc, char** argv)
+{
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
