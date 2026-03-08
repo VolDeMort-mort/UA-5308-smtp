@@ -6,16 +6,23 @@
 class SocketConnection
 {
 public:
-	explicit SocketConnection(boost::asio::ip::tcp::socket socket);
+    explicit SocketConnection(boost::asio::ip::tcp::socket socket);
 
-	bool send(const std::string& data);
+    bool Send(const std::string& data);
 	bool sendRaw(const unsigned char* buffer, std::size_t size);
-	bool receive(std::string& outData);
-	bool receiveRaw(unsigned char* buffer, std::size_t size); 
-	bool close();
-	bool isConnected() const noexcept;
+    bool Receive(std::string& out_data);
+	bool receiveRaw(unsigned char* buffer, std::size_t size);
+    bool Close();
+    bool IsOpen() const noexcept;
+
+    void SetTimeout(int seconds);
 
 private:
-	boost::asio::ip::tcp::socket m_socket;
-	bool m_connected{false};
+    static constexpr size_t MAX_LINE_SIZE = 8192;
+
+    boost::asio::ip::tcp::socket m_socket;
+    boost::asio::streambuf m_buffer;
+
+    int m_timeout_seconds{30};
+	bool WaitForEvent(bool for_read);
 };

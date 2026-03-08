@@ -1,31 +1,39 @@
+#include <string>
+
+#include <boost/asio.hpp>
+
 #include "SocketConnector.hpp"
 
 using boost::asio::ip::tcp;
 
-bool SocketConnector::initialize(boost::asio::io_context& ioContext)
+bool SocketConnector::Initialize(boost::asio::io_context& io_context)
 {
-	m_ioContext = &ioContext;
-	return true;
+    m_io_context = &io_context;
+    return true;
 }
 
-bool SocketConnector::connect(const std::string& host, uint16_t port, std::unique_ptr<SocketConnection>& outConnection)
+bool SocketConnector::Connect(const std::string& host,
+                               uint16_t port,
+                               std::unique_ptr<SocketConnection>& connection)
 {
-	if (!m_ioContext) return false;
+    if (!m_io_context)
+        return false;
 
-	try
-	{
-		tcp::resolver resolver(*m_ioContext);
-		auto endpoints = resolver.resolve(host, std::to_string(port));
+    try
+    {
+        tcp::resolver resolver(*m_io_context);
+        auto endpoints = resolver.resolve(host, std::to_string(port));
 
-		tcp::socket socket(*m_ioContext);
-		boost::asio::connect(socket, endpoints);
+        tcp::socket socket(*m_io_context);
+        boost::asio::connect(socket, endpoints);
 
-		outConnection = std::make_unique<SocketConnection>(std::move(socket));
+        connection = std::make_unique<SocketConnection>(std::move(socket));
 
-		return true;
-	}
-	catch (...)
-	{
-		return false;
-	}
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+
 }

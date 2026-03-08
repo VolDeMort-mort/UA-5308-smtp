@@ -2,49 +2,50 @@
 #include <iostream>
 #include <memory>
 
+#include "ClientSecureChannel.hpp"
+#include "FileStrategy.h"
+#include "Logger.h"
+#include "ServerSecureChannel.hpp"
 #include "SmtpSession.hpp"
 #include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
-#include "ServerSecureChannel.hpp"
-#include "ClientSecureChannel.hpp"
 #include "SocketConnector.hpp"
-#include "Logger.h"
-#include "FileStrategy.h"
 
 int main()
 {
+	constexpr uint16_t PORT = 25000;
+	const std::string SERVER_DOMAIN = "localhost";
+
 	try
 	{
 		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
-		constexpr uint16_t port = 25000;
-		const std::string domain = "localhost";
 
-		boost::asio::io_context ioContext;
+		boost::asio::io_context io_context;
 
 		SocketAcceptor acceptor;
 
-		if (!acceptor.initialize(ioContext, port))
+		if (!acceptor.Initialize(io_context, PORT))
 		{
 			std::cerr << "Failed to initialize acceptor\n";
 			return 1;
 		}
-		
-		std::cout << "SMTP Server running on port " << port << std::endl;
+
+		std::cout << "SMTP Server running on port " << PORT << std::endl;
 
 		while (true)
 		{
 			std::unique_ptr<SocketConnection> connection;
 
-			if (!acceptor.accept(connection)) continue;
+			if (!acceptor.Accept(connection) || !connection) continue;
 
 			ServerSecureChannel channel(*connection);
 			channel.setLogger(&logger);
 
-			SmtpSession session(domain);
+			SmtpSession session(SERVER_DOMAIN);
 
-			if (!channel.Send(session.greeting()))
+			if (!channel.Send(session.Greeting()))
 			{
-				connection->close();
+				connection->Close();
 				continue;
 			}
 
@@ -52,12 +53,13 @@ int main()
 
 			while (channel.Receive(input))
 			{
-				std::string response = session.processLine(input);
+				std::string response = session.ProcessLine(input);
 
 				if (!response.empty())
 				{
 					if (!channel.Send(response)) break;
 				}
+
 				if (session.getState() == SmtpState::STARTTLS)
 				{
 					if (!channel.StartTLS())
@@ -65,16 +67,19 @@ int main()
 						std::cerr << "TLS handshake failed\n";
 						break;
 					}
+
 					session.resetToHelo();
 				}
-				if (session.isClosed()) break;
+
+				if (session.IsClosed()) break;
 			}
-			connection->close();
+
+			connection->Close();
 		}
 	}
-	catch (const std::exception& e)
+	catch (const std::exception& exception)
 	{
-		std::cerr << "Server error: " << e.what() << std::endl;
+		std::cerr << "Server error: " << exception.what() << std::endl;
 	}
 
 	return 0;
