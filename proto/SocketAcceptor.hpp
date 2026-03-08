@@ -8,14 +8,15 @@
 class SocketAcceptor
 {
 public:
-	SocketAcceptor() = default;
+    SocketAcceptor() = default;
 
-	bool initialize(boost::asio::io_context& ioContext, uint16_t port);
+    bool Initialize(boost::asio::io_context& io_context,
+                    uint16_t port);
 
-	bool accept(std::unique_ptr<SocketConnection>& outConnection);
+    bool Accept(std::unique_ptr<SocketConnection>& connection);
 
-	bool stop();
+    bool Stop();
 
 private:
-	std::unique_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
+    std::unique_ptr<boost::asio::ip::tcp::acceptor> m_acceptor;
 };
