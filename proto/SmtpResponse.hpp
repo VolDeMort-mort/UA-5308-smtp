@@ -48,12 +48,12 @@ namespace SmtpResponse
     {
         return "221 Bye\r\n";
     }
-	inline std::string startTls()
+	inline std::string StartTls()
 	{
 		return "220 Ready to start TLS\r\n";
 	}
 
-	inline std::string readyToStartTLS(const std::string& domain)
+	inline std::string ReadyToStartTLS(const std::string& domain)
 	{
 		return "250 " + domain + " STARTTLS\r\n";
 	}

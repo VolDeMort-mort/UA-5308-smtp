@@ -26,17 +26,17 @@ struct ChannelFixture : public ::testing::Test
 		constexpr uint16_t port = 29999;
 
 		SocketAcceptor acceptor;
-		acceptor.initialize(serverIo, port);
+		acceptor.Initialize(serverIo, port);
 
 		std::thread clientThread(
 			[port]()
 			{
 				SocketConnector connector;
-				connector.initialize(clientIo);
-				connector.connect("localhost", port, clientConn);
+				connector.Initialize(clientIo);
+				connector.Connect("localhost", port, clientConn);
 			});
 
-		acceptor.accept(serverConn);
+		acceptor.Accept(serverConn);
 		clientThread.join();
 
 		server = std::make_unique<ServerSecureChannel>(*serverConn);
@@ -56,8 +56,8 @@ struct ChannelFixture : public ::testing::Test
 
 	static void TearDownTestSuite()
 	{
-		serverConn->close();
-		clientConn->close();
+		serverConn->Close();
+		clientConn->Close();
 	}
 };
 
@@ -85,7 +85,7 @@ TEST_F(ChannelFixture, MessageMatch)
 
 	std::thread serverThread([&]() { server->Send(message); });
 
-	client->Receive(received);
+	EXPECT_TRUE(client->Receive(received));
 	serverThread.join();
 
 	EXPECT_EQ(received, message);

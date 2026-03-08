@@ -18,7 +18,6 @@ endif()
 
 add_subdirectory(proto)
 add_subdirectory(base64)
-add_subdirectory(logger)
 
 enable_testing()
 

@@ -68,7 +68,7 @@ int main()
 						break;
 					}
 
-					session.resetToHelo();
+					session.ResetToHelo();
 				}
 
 				if (session.IsClosed()) break;

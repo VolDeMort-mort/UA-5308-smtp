@@ -93,20 +93,20 @@ bool SecureChannel::Send(const std::string& data)
 {
 	if (!m_secure)
 	{
-		return m_conn.send(data);
+		return m_conn.Send(data);
 	}
 
 	std::string encrypted_text = Encrypt(data);
 	std::uint32_t text_len = static_cast<std::uint32_t>(encrypted_text.size());
 	std::uint32_t net_len = htonl(text_len);
 
-	if (!m_conn.sendRaw(reinterpret_cast<unsigned char*>(&net_len), sizeof(net_len)))
+	if (!m_conn.SendRaw(reinterpret_cast<unsigned char*>(&net_len), sizeof(net_len)))
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "SECURECHANNEL_SEND: failed to send message length");
 		return false;
 	}
 
-	if (!m_conn.sendRaw(reinterpret_cast<const unsigned char*>(encrypted_text.data()), encrypted_text.size()))
+	if (!m_conn.SendRaw(reinterpret_cast<const unsigned char*>(encrypted_text.data()), encrypted_text.size()))
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "SECURECHANNEL_SEND: failed to send message");
 		return false;
@@ -120,12 +120,12 @@ bool SecureChannel::Receive(std::string& data)
 {
 	if (!m_secure)
 	{
-		return m_conn.receive(data);
+		return m_conn.Receive(data);
 	}
 
 	std::uint32_t text_len = 0;
 
-	if (!m_conn.receiveRaw(reinterpret_cast<unsigned char*>(&text_len), sizeof(text_len)))
+	if (!m_conn.ReceiveRaw(reinterpret_cast<unsigned char*>(&text_len), sizeof(text_len)))
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "SECURECHANNEL_RECEIVE: failed to receive message length");
 		return false;
@@ -134,7 +134,7 @@ bool SecureChannel::Receive(std::string& data)
 	text_len = ntohl(text_len);
 
 	std::string encrypted_text(text_len, '\0');
-	if (!m_conn.receiveRaw(reinterpret_cast<unsigned char*>(&encrypted_text[0]), text_len))
+	if (!m_conn.ReceiveRaw(reinterpret_cast<unsigned char*>(&encrypted_text[0]), text_len))
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "SECURECHANNEL_RECEIVE: failed to receive message");
 		return false;

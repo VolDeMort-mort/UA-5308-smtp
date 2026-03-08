@@ -30,7 +30,7 @@ public:
 
 	SmtpState getState() const noexcept { return m_state; }
 
-	void resetToHelo();
+    void ResetToHelo();
 
 private:
 
@@ -47,6 +47,8 @@ private:
     std::string HandleNoop();
 
     std::string HandleQuit();
+
+    std::string HandleStartTLS();
 
     void ResetMessage();
 

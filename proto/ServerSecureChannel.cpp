@@ -27,7 +27,7 @@ bool ServerSecureChannel::StartTLS()
 {
 	unsigned char clientPublicKey[crypto_kx_PUBLICKEYBYTES];
 
-	if (!m_conn.receiveRaw(clientPublicKey, sizeof(clientPublicKey)))
+	if (!m_conn.ReceiveRaw(clientPublicKey, sizeof(clientPublicKey)))
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "STARTTLS: failed to receive client's public key");
 		return false;
@@ -43,7 +43,7 @@ bool ServerSecureChannel::StartTLS()
 		return false;
 	}
 	
-	if (!m_conn.sendRaw(publicKey, sizeof(publicKey)))
+	if (!m_conn.SendRaw(publicKey, sizeof(publicKey)))
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "STARTTLS: failed to send server's public key");
 		sodium_memzero(privateKey, sizeof(privateKey));
