@@ -1,50 +1,63 @@
-﻿#include <iostream>
-#include <fstream>
+﻿#include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
-#include "../common/models/Email.h"
+#include <vector>
+#include <windows.h> // Тільки для Windows, щоб бачити кирилицю
+
 #include "../common/mime/MimeParser.h"
-#include "MockLogger.h" 
+#include "../common/models/Email.h"
+#include "MockLogger.h"
 
-int main() {
-    std::cout << "=== REAL .eml MIME CRASH TEST ===\n\n";
+int main()
+{
+	// Вмикаємо UTF-8 у консолі. БЕЗ ЦЬОГО ТИ БАЧИШ "КРАКОЗЯБРИ"!
+	SetConsoleOutputCP(65001);
 
-    MockLogger systemLogger;
+	std::cout << "=== ULTIMATE EML PARSER TEST ===\n\n";
 
-    std::ifstream emlFile("C:/Users/WellDone/Downloads/emlFile.eml");
+	MockLogger systemLogger;
 
-    if (!emlFile.is_open()) {
-        std::cerr << "Error: Could not open the .eml file!\n";
-        return 1;
-    }
+	// Вкажи шлях до свого файлу
+	std::string filePath = "C:/Users/WellDone/Downloads/emlFile.eml";
+	std::ifstream emlFile(filePath);
 
-    std::stringstream buffer;
-    buffer << emlFile.rdbuf();
-    std::string realRawEmail = buffer.str();
+	if (!emlFile.is_open())
+	{
+		std::cerr << "Error: Could not open file: " << filePath << "\n";
+		return 1;
+	}
 
-    std::cout << "Loaded .eml file. Size: " << realRawEmail.length() << " bytes.\n";
-    std::cout << "Starting parser...\n\n";
+	std::stringstream buffer;
+	buffer << emlFile.rdbuf();
+	std::string realRawEmail = buffer.str();
 
-    Email parsedEmail;
-    bool parseSuccess = MimeParser::parseEmail(realRawEmail, parsedEmail, systemLogger);
+	std::cout << "Loaded .eml file. Size: " << realRawEmail.length() << " bytes.\n";
 
-    if (!parseSuccess) {
-        std::cerr << "CRASH! Failed to parse the real email!\n";
-        return 1;
-    }
+	Email parsedEmail;
+	// Парсимо!
+	MimeParser::parseEmail(realRawEmail, parsedEmail, systemLogger);
 
-    std::cout << "\n=== PARSED RESULTS ===\n";
-    std::cout << "Sender: " << parsedEmail.sender << "\n";
-    std::cout << "Subject: " << parsedEmail.subject << "\n";
+	std::cout << "\n=== PARSED HEADERS ===\n";
+	std::cout << "Sender:  " << parsedEmail.sender << "\n";
+	std::cout << "Subject: " << parsedEmail.subject << "\n"; // Тепер тут має бути кирилиця!
+	std::cout << "Date:    " << parsedEmail.date << "\n";
 
-    std::cout << "\nPlain Text length: " << parsedEmail.plainText.length() << " chars\n";
-    if (parsedEmail.plainText.length() > 0) {
-        std::cout << "Preview: " << parsedEmail.plainText.substr(0, 50) << "...\n";
-    }
+	std::cout << "\n=== ATTACHMENTS ===\n";
+	if (parsedEmail.attachments.empty())
+	{
+		std::cout << "No attachments.\n";
+	}
+	else
+	{
+		for (const auto& attach : parsedEmail.attachments)
+		{
+			std::cout << "[FILE] Name: " << attach.fileName << "\n";
+			std::cout << "       Type: " << attach.mimeType << "\n";
+			std::cout << "       Size: " << attach.fileSize << " bytes\n";
+			std::cout << "       Data: " << (attach.base64Data.empty() ? "EMPTY" : "OK (Base64)") << "\n\n";
+		}
+	}
 
-    std::cout << "\nHTML Text length: " << parsedEmail.htmlText.length() << " chars\n";
-    std::cout << "Forwarded emails count: " << parsedEmail.forwardedEmails.size() << "\n";
-    std::cout << "Attachments count: " << parsedEmail.attachments.size() << "\n";
-
-    return 0;
+	return 0;
 }
