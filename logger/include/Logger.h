@@ -30,7 +30,7 @@ public:
 
 	/**
 	 * @brief Logger dtor
-	 * @details guarantees write all logs to file from queue before leaving
+	 * @details guarantees write all logs to storage from queue before leaving
 	 */
 	~Logger();
 

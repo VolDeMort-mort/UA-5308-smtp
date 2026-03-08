@@ -19,7 +19,7 @@ public:
 	virtual std::vector<std::string> Read(size_t limit) = 0;
 
 	/**
-	 * @brief Add logs into queue for writing
+	 * @brief Search logs in file by lvl param
 	 * @param level Filters logs by level
 	 * @param limit Max count of finding logs for return
 	 * @param read_n Count of logs in which will be searching
