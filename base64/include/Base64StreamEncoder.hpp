@@ -1,8 +1,11 @@
 #pragma once
-#include <ostream>
-#include <cstdint>
+
 #include "Base64Common.hpp"
 #include "AttachmentConfig.hpp"
+
+#include <ostream>
+#include <cstdint>
+
 
 class Base64StreamEncoder
 {

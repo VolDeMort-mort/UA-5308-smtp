@@ -16,6 +16,4 @@ cmake-build-debug/
 cmake-build-release/
 .cache/
 
-tests/
-
 main.cpp

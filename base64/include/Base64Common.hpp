@@ -1,7 +1,8 @@
 #pragma once
+
 #include <array>
-#include <unordered_map>
 #include <string>
+#include <cstdint>
 
 namespace Base64
 {
@@ -17,14 +18,14 @@ namespace Base64
     '4','5','6','7','8','9','+','/'
     };
 
-    inline const std::array<int, 256>& get_decode_table()
+    inline const std::array<std::int32_t, 256>& get_decode_table()
     {
-        static const std::array<int, 256> table = []
+		static const std::array<std::int32_t, 256> table = []
             {
-                std::array<int, 256> t{};
+			std::array<std::int32_t, 256> t{};
                 t.fill(-1);
 
-                for (int i = 0; i < 64; ++i)
+                for (std::int32_t i = 0; i < 64; ++i)
                 {
                     t[static_cast<unsigned char>(alphabet[i])] = i;
                 }
@@ -36,4 +37,3 @@ namespace Base64
         return table;
     }
 }
-

@@ -4,14 +4,14 @@ project(smtp LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- ÒÂÎ¯ ÄÎÄÀÂÀÍÍß: Îïö³¿ êîìï³ëÿòîğà ---
+# UTF-8 support on MSVC
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
 find_package(Boost REQUIRED)
 
-# --- ÒÂÎ¯ ÄÎÄÀÂÀÍÍß: GTest ---
+# --- GTest ---
 include(FetchContent)
 FetchContent_Declare(
   googletest
@@ -31,7 +31,6 @@ add_subdirectory(base64)
 add_subdirectory(logger)
 add_subdirectory(mime)
 add_subdirectory(proto)
-
 
 if(BUILD_SERVER)
     add_subdirectory(server)

@@ -1,9 +1,10 @@
-#include <gtest/gtest.h>
 #include "Base64Encoder.hpp"
 #include "Base64Decoder.hpp"
 #include "Base64StreamEncoder.hpp"
 #include "Base64StreamDecoder.hpp"
 #include "AttachmentHandler.hpp"
+
+#include <gtest/gtest.h>
 
 TEST(BasicEncoder, EmptyInput)
 {

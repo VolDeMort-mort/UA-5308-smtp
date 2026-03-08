@@ -4,8 +4,8 @@
 class MockLogger : public ILoggerStrategy
 {
 public:
-	void SpecificLog(LogLevel, const std::string&) override {}
-
-private:
-	void Write(const std::string&) override {}
+	std::string SpecificLog(LogLevel, const std::string&) override { return ""; }
+	bool IsValid() override { return true; }
+	bool Write(const std::string&) override { return true; }
+	void Flush() override {}
 };
