@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import "../Components"
+import SmtpMua
 
 RowLayout {
     Layout.fillWidth: true
@@ -23,7 +24,11 @@ RowLayout {
             anchors.rightMargin: 15
             spacing: 12
 
-            SvgIcon { pathData: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M21 21l-4.35-4.35"; color: mutedTextColor; size: 16 }
+            SvgIcon {
+                pathData: Icons.search;
+                color: mutedTextColor;
+                size: 16
+            }
             TextInput {
                 Layout.fillWidth: true
                 color: textColor
@@ -31,7 +36,11 @@ RowLayout {
                 text: "Search..."
                 verticalAlignment: TextInput.AlignVCenter
             }
-            SvgIcon { pathData: "M22 3H2l8 9.46V19l4 2v-8.54L22 3z"; color: mutedTextColor; size: 16 }
+            SvgIcon {
+                pathData: Icons.filter;
+                color: mutedTextColor;
+                size: 16
+            }
         }
     }
 }

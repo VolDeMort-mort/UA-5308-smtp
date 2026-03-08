@@ -84,7 +84,7 @@ Popup {
             }
 
             IconButton {
-                iconPath: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                iconPath: Icons.cross
                 onClicked: readPopup.close()
             }
         }
@@ -137,10 +137,10 @@ Popup {
             Layout.fillWidth: true
             spacing: 15
 
-            IconButton { iconPath: "M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z"; text: "Reply" }
-            IconButton { iconPath: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"; text: "Delete" }
+            IconButton { iconPath: Icons.forward; text: "Reply" }
+            IconButton { iconPath: Icons.trash; text: "Delete" }
             IconButton {
-                iconPath: "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                iconPath: Icons.star
                 text: "Star"
                 iconColor: msgData && msgData.isStarred ? "#F59E0B" : Theme.mutedTextColor
             }

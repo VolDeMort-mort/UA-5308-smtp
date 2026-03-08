@@ -10,6 +10,23 @@ Rectangle {
     property int currentNavIndex: 0
     property int currentFoldIndex: 0
 
+    readonly property var navModel: [
+        { name: "Inbox", path: Icons.inbox },
+        { name: "Sent", path: Icons.sent },
+        { name: "Drafts", path: Icons.draft },
+        { name: "Starred", path: Icons.star },
+        { name: "Saved", path: Icons.bookmark },
+        { name: "Spam", path: Icons.spam },
+        { name: "Trash", path: Icons.trash }
+    ]
+
+    readonly property var folModel:[
+        {name: "School", path: Icons.folder},
+        {name: "Work", path: Icons.folder},
+        {name: "Family", path: Icons.folder}
+    ]
+
+
     Layout.fillHeight: true
     Layout.preferredWidth: isCollapsed ? 70 : 280
     color: sidebarBg
@@ -33,7 +50,6 @@ Rectangle {
         anchors.leftMargin: 10
         anchors.rightMargin: 10
         spacing: 20
-
 
         // Profile part
         RowLayout {
@@ -63,16 +79,13 @@ Rectangle {
 
         // Create btn
         Rectangle {
-            // anchors.fill: parent
             radius: 15
             color: panelColor
 
             implicitWidth: sidebar.isCollapsed ? 50: parent.width
             height: 50
 
-
             Layout.alignment: !sidebar.isCollapsed ? Qt.AlignHCenter : Qt.AlignLeft
-
 
             RowLayout {
                 anchors.fill: parent
@@ -85,7 +98,7 @@ Rectangle {
                 }
 
                 SvgIcon {
-                    pathData: "M12 5v14 M5 12h14"
+                    pathData: Icons.plus
                     color: textColor
                     size: 20
                     Layout.alignment: Qt.AlignVCenter
@@ -94,7 +107,7 @@ Rectangle {
                 Text {
                     text: sidebar.isCollapsed ? "" : "Create new"
                     color: textColor
-                    font.pixelSize: 20
+                    font.pixelSize: 18
                     font.bold: true
 
                     horizontalAlignment: Text.AlignCenter
@@ -121,10 +134,10 @@ Rectangle {
             spacing: 8
 
             Repeater {
-                model: navModel
+                model: sidebar.navModel
                 delegate: SidebarItem {
-                    label: sidebar.isCollapsed ? "" : model.name
-                    iconPath: model.path
+                    label: sidebar.isCollapsed ? "" : modelData.name
+                    iconPath: modelData.path
                     isActive: sidebar.currentNavIndex === index
                     isCollapsed: sidebar.isCollapsed
                     onClicked: sidebar.currentNavIndex = index
@@ -148,7 +161,7 @@ Rectangle {
             visible: !sidebar.isCollapsed
             color: mutedTextColor
             font.bold: true
-            font.pixelSize: 20
+            font.pixelSize: 18
             Layout.alignment: Qt.AlignCenter
         }
 
@@ -167,10 +180,10 @@ Rectangle {
                 spacing: 6
 
                 Repeater {
-                    model: folModel
+                    model: sidebar.folModel
                     delegate: SidebarItem {
-                        label: sidebar.isCollapsed ? "" : model.name
-                        iconPath: model.path
+                        label: sidebar.isCollapsed ? "" : modelData.name
+                        iconPath: modelData.path
                         isActive: sidebar.currentFoldIndex === index
                         isCollapsed: sidebar.isCollapsed
                         onClicked: sidebar.currentFoldIndex = index
@@ -179,10 +192,10 @@ Rectangle {
 
                 SidebarItem {
                     label: sidebar.isCollapsed ? "" : "New folder"
-                    iconPath: "M12 5v14 M5 12h14"
+                    iconPath: Icons.plus
                     isCollapsed: sidebar.isCollapsed
                     onClicked: {
-                        folModel.append({"name": "New Folder", "path": "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"})
+                        folModel.append({"name": "New Folder", "path": Icons.folder})
                     }
                 }
             }
@@ -195,17 +208,22 @@ Rectangle {
             spacing: 8
             Layout.leftMargin: 10
 
+            // Settings btn
             SvgIcon {
-                pathData: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z";
+                pathData: Icons.settings;
                 color: mutedTextColor;
                 size: 16
                 visible: !sidebar.isCollapsed}
 
-            Text { text: "Settings"; color: mutedTextColor; font.pixelSize: 20; visible: !sidebar.isCollapsed}
+            Text {
+                text: "Settings";
+                color: mutedTextColor;
+                font.pixelSize: 18;
+                visible: !sidebar.isCollapsed}
 
             Item { Layout.fillWidth: true; visible: !isCollapsed }
 
-            // Hide/show btn
+            // Hide/show rect
             Rectangle {
                 id: collapseBtn
                 Layout.alignment: sidebar.isCollapsed ? Qt.AlignHCenter : Qt.AlignLeft
@@ -220,7 +238,7 @@ Rectangle {
                     anchors.centerIn: parent
 
                     SvgIcon {
-                        pathData: "M19 12H5 M12 19l-7-7 7-7"
+                        pathData: Icons.rightArrow
                         color: textColor; size: 20
                         rotation: sidebar.isCollapsed ? 180 : 0
                         Behavior on rotation { NumberAnimation { duration: 300 } }

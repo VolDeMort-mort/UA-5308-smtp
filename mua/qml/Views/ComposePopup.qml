@@ -121,7 +121,8 @@ Popup {
                 id: attachBtn
                 flat: true
                 contentItem: RowLayout {
-                    SvgIcon { pathData: "M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.93 1.57 3.5 3.5 3.5s3.5-1.57 3.5-3.5V5c0-2.48-2.02-4.5-4.5-4.5S8 2.52 8 5v12.5c0 3.59 2.91 6.5 6.5 6.5s6.5-2.91 6.5-6.5V6h-1.5z"; color: Theme.mutedTextColor; size: 18 }
+                    SvgIcon { pathData: Icons.attachment;
+                        color: Theme.mutedTextColor; size: 18 }
                     Text { text: "Attach file"; color: Theme.mutedTextColor; font.pixelSize: 13 }
                 }
             }
