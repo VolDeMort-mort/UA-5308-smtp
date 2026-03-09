@@ -26,9 +26,8 @@ Rectangle {
         {name: "Family", path: Icons.folder}
     ]
 
-
     Layout.fillHeight: true
-    Layout.preferredWidth: isCollapsed ? 70 : 280
+    Layout.preferredWidth: isCollapsed ? 70 : 250
     color: sidebarBg
 
     radius: isCollapsed ? 20 : 0
@@ -57,7 +56,7 @@ Rectangle {
             Layout.preferredHeight: 40
             Layout.leftMargin: 10
 
-            spacing: sidebar.isCollapsed ? 0 : 12
+            spacing: sidebar.isCollapsed ? 0 : 10
 
             Rectangle {
                 width: 36; height: 36; radius: 18; color: "#E2E8F0"
@@ -137,7 +136,7 @@ Rectangle {
         // Navigation part
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: 5
 
             Repeater {
                 model: sidebar.navModel
@@ -153,7 +152,7 @@ Rectangle {
 
         // Spacer
         Rectangle {
-            Layout.fillWidth: sidebar.isCollapsed ? false: true
+            Layout.fillWidth: true
             Layout.leftMargin: sidebar.isCollapsed ? 10 : 0
             Layout.rightMargin: sidebar.isCollapsed ? 10 : 0
             height: 1
@@ -183,7 +182,7 @@ Rectangle {
             ColumnLayout {
                 id: navLayout
                 width: navFlickable.width
-                spacing: 6
+                spacing: 5
 
                 Repeater {
                     model: sidebar.folModel
