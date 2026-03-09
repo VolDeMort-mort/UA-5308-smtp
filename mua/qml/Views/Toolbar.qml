@@ -126,7 +126,7 @@ Rectangle {
                 hoverEnabled: true
 
                 onClicked: {
-                    let globalPos = allButton.mapToItem(mainWindow.contentItem, 0, allButton.height + 5)
+                    let globalPos = allButton.mapToItem(roowWindow.contentItem, 0, allButton.height + 5)
                     mainFilterPopup.x = globalPos.x - mainFilterPopup.width * 0.8
                     mainFilterPopup.y = globalPos.y
                     mainFilterPopup.open()

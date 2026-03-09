@@ -6,24 +6,23 @@ import SmtpMua
 Rectangle {
     id: sidebar
 
+    property var folderModel: null
+
     property bool isCollapsed: false
     property int currentNavIndex: 0
     property int currentFoldIndex: -1
 
-    readonly property var navModel: [
-        { name: "Inbox", path: Icons.inbox },
-        { name: "Sent", path: Icons.sent },
-        { name: "Drafts", path: Icons.draft },
-        { name: "Starred", path: Icons.star },
-        { name: "Saved", path: Icons.bookmark },
-        { name: "Spam", path: Icons.spam },
-        { name: "Trash", path: Icons.trash }
-    ]
+    signal folderSelected(int fol_id)
+    signal navSelected(int navType)
 
-    readonly property var folModel:[
-        {name: "School", path: Icons.folder},
-        {name: "Work", path: Icons.folder},
-        {name: "Family", path: Icons.folder}
+    readonly property var navModel: [
+        { name: "Inbox", path: Icons.inbox, navType: NavType.Inbox },
+        { name: "Sent", path: Icons.sent, navType: NavType.Sent },
+        { name: "Drafts", path: Icons.draft, navType: NavType.Draft },
+        { name: "Starred", path: Icons.star, navType: NavType.Starred },
+        { name: "Saved", path: Icons.bookmark, navType: NavType.Saved },
+        { name: "Spam", path: Icons.spam, navType: NavType.Spam },
+        { name: "Trash", path: Icons.trash, navType: NavType.Trash }
     ]
 
     Layout.fillHeight: true
@@ -64,6 +63,13 @@ Rectangle {
                 radius: 18;
                 color: "white"
                 Layout.alignment: Qt.AlignHCenter
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: sideBarController.handleProfileClick()
+                }
             }
 
             ColumnLayout {
@@ -95,8 +101,6 @@ Rectangle {
             height: 50
 
             Layout.alignment: !sidebar.isCollapsed ? Qt.AlignHCenter : Qt.AlignLeft
-
-            Component.onCompleted: {console.log(sidebar.width, create_tn.width)}
 
             RowLayout {
                 anchors.fill: parent
@@ -131,11 +135,10 @@ Rectangle {
             }
 
             MouseArea {
-                id: mArea
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: {composePopup.open()}
+                onClicked: sideBarController.handleComposeMail()
             }
         }
 
@@ -147,6 +150,7 @@ Rectangle {
             contentHeight: implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
+            // Basic navigation
             ColumnLayout {
                 id: navLayout
                 width: parent.width
@@ -160,10 +164,7 @@ Rectangle {
                         iconPath: modelData.path
                         isActive: sidebar.currentNavIndex === index
                         isCollapsed: sidebar.isCollapsed
-                        onClicked: {
-                            sidebar.currentNavIndex = index;
-                            sidebar.currentFoldIndex = -1;
-                        }
+                        onClicked: sideBarController.handleNavClick(modelData.navType, index)
                     }
                 }
 
@@ -195,16 +196,13 @@ Rectangle {
 
                 // Folders navigation
                 Repeater {
-                    model: sidebar.folModel
+                    model: folderModel
                     delegate: SidebarItem {
-                        label: sidebar.isCollapsed ? "" : modelData.name
-                        iconPath: modelData.path
+                        label: sidebar.isCollapsed ? "" : model.name
+                        iconPath: Icons.folder
                         isActive: sidebar.currentFoldIndex === index
                         isCollapsed: sidebar.isCollapsed
-                        onClicked: {
-                            sidebar.currentFoldIndex = index
-                            sidebar.currentNavIndex = -1;
-                        }
+                        onClicked: sideBarController.handleFoldClick(index, model.id_fol)
                     }
                 }
 
@@ -213,14 +211,12 @@ Rectangle {
                     label: sidebar.isCollapsed ? "" : "New folder"
                     iconPath: Icons.plus
                     isCollapsed: sidebar.isCollapsed
-                    onClicked: {
-                        folModel.append({"name": "New Folder", "path": Icons.folder})
-                    }
+                    onClicked: sideBarController.handleCreateFolder()
                 }
             }
         }
 
-        // Controlls part
+        // Settings part
         RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
@@ -284,4 +280,44 @@ Rectangle {
             }
         }
     }
+
+    // Logic
+    QtObject{
+        id: sideBarController
+
+
+        function handleProfileClick(){
+            console.log("Opening profile...")
+        }
+
+        function handleComposeMail(){
+            composePopup.open()
+            console.log("Opening compose window...")
+        }
+
+        function handleNavClick(type, index){
+            sidebar.currentNavIndex = index;
+            sidebar.currentFoldIndex = -1;
+
+            console.log("Opened mails with index: ", index)
+            navSelected(type)
+        }
+
+        function handleFoldClick(index, fol_id){
+            sidebar.currentFoldIndex = index
+            sidebar.currentNavIndex = -1;
+            console.log("Opened folder with id: ", fol_id)
+
+            folderSelected(fol_id)
+        }
+
+        function handleCreateFolder(){
+            console.log("Creating new folder...")
+        }
+
+        function handleSettingsClick(){
+            console.log("Opening settings...")
+        }
+    }
 }
+

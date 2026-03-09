@@ -43,6 +43,8 @@ qt_add_qml_module(smtp_mua
         qml/Views/FilterPopup.qml
 
         qml/main.qml
+        QML_FILES qml/Components/FilterModel.qml
+        QML_FILES qml/Components/NavType.qml
 
 
 )

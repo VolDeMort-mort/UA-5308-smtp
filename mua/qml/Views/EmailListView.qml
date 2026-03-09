@@ -28,8 +28,6 @@ Rectangle {
         highlightFollowsCurrentItem: true
         currentIndex: -1
 
-        model: mockEmailModel
-
-        delegate: EmailDelegate {}
+        model: filteredModel
     }
 }
