@@ -9,7 +9,9 @@ public:
     explicit SocketConnection(boost::asio::ip::tcp::socket socket);
 
     bool Send(const std::string& data);
+	bool SendRaw(const unsigned char* buffer, std::size_t size);
     bool Receive(std::string& out_data);
+	bool ReceiveRaw(unsigned char* buffer, std::size_t size);
     bool Close();
     bool IsOpen() const noexcept;
 

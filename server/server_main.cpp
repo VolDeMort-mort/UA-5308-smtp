@@ -1,72 +1,86 @@
+#include <boost/asio.hpp>
 #include <iostream>
 #include <memory>
 
-#include <boost/asio.hpp>
-
+#include "ClientSecureChannel.hpp"
+#include "FileStrategy.h"
+#include "Logger.h"
+#include "ServerSecureChannel.hpp"
+#include "SmtpSession.hpp"
 #include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
-#include "SmtpSession.hpp"
+#include "SocketConnector.hpp"
 
 int main()
 {
-    constexpr uint16_t PORT = 25000;
-    const std::string SERVER_DOMAIN = "localhost";
+	constexpr uint16_t PORT = 25000;
+	const std::string SERVER_DOMAIN = "localhost";
 
-    try
-    {
-        boost::asio::io_context io_context;
+	try
+	{
+		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
 
-        SocketAcceptor acceptor;
+		boost::asio::io_context io_context;
 
-        if (!acceptor.Initialize(io_context, PORT))
-        {
-            std::cerr << "Failed to initialize acceptor\n";
-            return 1;
-        }
+		SocketAcceptor acceptor;
 
-        std::cout << "SMTP Server running on port "
-                  << PORT << std::endl;
+		if (!acceptor.Initialize(io_context, PORT))
+		{
+			std::cerr << "Failed to initialize acceptor\n";
+			return 1;
+		}
 
-        while (true)
-        {
-            std::unique_ptr<SocketConnection> connection;
+		std::cout << "SMTP Server running on port " << PORT << std::endl;
 
-            if (!acceptor.Accept(connection) || !connection)
-                continue;
+		while (true)
+		{
+			std::unique_ptr<SocketConnection> connection;
 
-            SmtpSession session(SERVER_DOMAIN);
+			if (!acceptor.Accept(connection) || !connection) continue;
 
-            if (!connection->Send(session.Greeting()))
-            {
-                connection->Close();
-                continue;
-            }
+			ServerSecureChannel channel(*connection);
+			channel.setLogger(&logger);
 
-            std::string input;
+			SmtpSession session(SERVER_DOMAIN);
 
-            while (connection->Receive(input))
-            {
-                std::string response =
-                    session.ProcessLine(input);
+			if (!channel.Send(session.Greeting()))
+			{
+				connection->Close();
+				continue;
+			}
 
-                if (!response.empty())
-                {
-                    if (!connection->Send(response))
-                        break;
-                }
+			std::string input;
 
-                if (session.IsClosed())
-                    break;
-            }
+			while (channel.Receive(input))
+			{
+				std::string response = session.ProcessLine(input);
 
-            connection->Close();
-        }
-    }
-    catch (const std::exception& exception)
-    {
-        std::cerr << "Server error: "
-                  << exception.what() << std::endl;
-    }
+				if (!response.empty())
+				{
+					if (!channel.Send(response)) break;
+				}
 
-    return 0;
+				if (session.getState() == SmtpState::STARTTLS)
+				{
+					if (!channel.StartTLS())
+					{
+						std::cerr << "TLS handshake failed\n";
+						break;
+					}
+
+					session.ResetToHelo();
+				}
+
+				if (session.IsClosed()) break;
+			}
+
+			connection->Close();
+		}
+	}
+	catch (const std::exception& exception)
+	{
+		std::cerr << "Server error: " << exception.what() << std::endl;
+	}
+
+	return 0;
 }

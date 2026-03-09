@@ -4,15 +4,16 @@
 
 enum class SmtpCommandType
 {
-    HELO,
-    EHLO,
-    MAIL,
-    RCPT,
-    DATA,
-    RSET,
-    NOOP,
-    QUIT,
-    UNKNOWN
+	HELO,
+	EHLO,
+	MAIL,
+	RCPT,
+	DATA,
+	RSET,
+	NOOP,
+	QUIT,
+	UNKNOWN,
+	STARTTLS
 };
 
 struct SmtpCommand

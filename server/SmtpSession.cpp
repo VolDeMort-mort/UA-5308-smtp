@@ -25,6 +25,12 @@ void SmtpSession::ResetMessage()
     m_body.clear();
 }
 
+void SmtpSession::ResetToHelo()
+{
+	m_state = SmtpState::WAIT_HELO;
+	ResetMessage();
+}
+
 std::string SmtpSession::ProcessLine(const std::string& line)
 {
     constexpr size_t MAX_SMTP_LINE = 512;
@@ -85,17 +91,25 @@ std::string SmtpSession::ProcessLine(const std::string& line)
 
         case SmtpCommandType::UNKNOWN:
             return SmtpResponse::NotImplemented();
+
+		case SmtpCommandType::STARTTLS:
+			return HandleStartTLS();
     }
 
     return SmtpResponse::SyntaxError();
 }
 
-std::string SmtpSession::HandleHelo(const SmtpCommand&)
+std::string SmtpSession::HandleHelo(const SmtpCommand& command)
 {
     if (m_state != SmtpState::WAIT_HELO)
         return SmtpResponse::BadSequence();
 
     m_state = SmtpState::WAIT_MAIL;
+
+	if (command.type == SmtpCommandType::EHLO)
+	{
+		return SmtpResponse::ReadyToStartTLS(m_domain);
+	}
 
     return SmtpResponse::Hello(m_domain);
 }
@@ -154,4 +168,16 @@ std::string SmtpSession::HandleQuit()
     m_state = SmtpState::CLOSED;
 
     return SmtpResponse::Closing();
+}
+
+std::string SmtpSession::HandleStartTLS()
+{
+	if (m_state != SmtpState::WAIT_MAIL)
+	{
+		return SmtpResponse::BadSequence();
+	}
+
+     m_state = SmtpState::STARTTLS;
+
+     return SmtpResponse::StartTls();
 }

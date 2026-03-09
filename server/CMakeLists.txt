@@ -6,4 +6,4 @@ add_executable(smtp_server
     SmtpSession.cpp
 )
 
-target_link_libraries(smtp_server PRIVATE smtp_proto Threads::Threads)
+target_link_libraries(smtp_server PRIVATE smtp_proto Threads::Threads logger_lib)
