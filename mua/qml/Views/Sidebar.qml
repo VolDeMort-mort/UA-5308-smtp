@@ -28,7 +28,7 @@ Rectangle {
 
     Layout.fillHeight: true
     Layout.preferredWidth: isCollapsed ? 70 : 250
-    color: sidebarBg
+    color: Theme.sidebarBg
 
     radius: isCollapsed ? 20 : 0
 
@@ -59,7 +59,10 @@ Rectangle {
             spacing: sidebar.isCollapsed ? 0 : 10
 
             Rectangle {
-                width: 36; height: 36; radius: 18; color: "#E2E8F0"
+                width: 36;
+                height: 36;
+                radius: 18;
+                color: "white"
                 Layout.alignment: Qt.AlignHCenter
             }
 
@@ -71,12 +74,12 @@ Rectangle {
 
                 Text {
                     text: "Name Surname";
-                    color: textColor;
+                    color: Theme.textColor;
                     font.bold: true;
                     font.pixelSize: Theme.fontSizeLarge }
                 Text {
                     text: "testmail@gmail.com";
-                    color: mutedTextColor;
+                    color: Theme.mutedTextColor;
                     font.pixelSize: Theme.fontSizeSmall
                 }
             }
@@ -85,7 +88,7 @@ Rectangle {
         // Create btn
         Rectangle {
             radius: 15
-            color: panelColor
+            color: Theme.panelColor
 
             implicitWidth: sidebar.isCollapsed ? 50: parent.width
             height: 50
@@ -104,14 +107,14 @@ Rectangle {
 
                 SvgIcon {
                     pathData: Icons.plus
-                    color: textColor
+                    color: Theme.textColor
                     size: 20
                     Layout.alignment: Qt.AlignVCenter
                 }
 
                 Text {
                     text: sidebar.isCollapsed ? "" : "Create new"
-                    color: textColor
+                    color: Theme.textColor
                     font.pixelSize: Theme.fontSizeHeader
                     font.bold: true
 
@@ -156,7 +159,7 @@ Rectangle {
             Layout.leftMargin: sidebar.isCollapsed ? 10 : 0
             Layout.rightMargin: sidebar.isCollapsed ? 10 : 0
             height: 1
-            color: itemBorderColor
+            color: Theme.itemBorderColor
             opacity: 1
         }
 
@@ -164,7 +167,7 @@ Rectangle {
         Text {
             text: "Your folders"
             visible: !sidebar.isCollapsed
-            color: mutedTextColor
+            color: Theme.mutedTextColor
             font.bold: true
             font.pixelSize: Theme.fontSizeLarge
             Layout.alignment: Qt.AlignCenter
@@ -216,13 +219,13 @@ Rectangle {
             // Settings btn
             SvgIcon {
                 pathData: Icons.settings;
-                color: mutedTextColor;
+                color: Theme.mutedTextColor;
                 size: 16
                 visible: !sidebar.isCollapsed}
 
             Text {
                 text: "Settings";
-                color: mutedTextColor;
+                color: Theme.mutedTextColor;
                 font.pixelSize: Theme.fontSizeLarge;
                 visible: !sidebar.isCollapsed}
 
@@ -235,7 +238,7 @@ Rectangle {
                 width: sidebar.isCollapsed ? 44 : 100
                 height: 44
                 radius: 22
-                color: panelColor
+                color: Theme.panelColor
 
                 Behavior on width { NumberAnimation { duration: 250 } }
 
@@ -244,13 +247,15 @@ Rectangle {
 
                     SvgIcon {
                         pathData: Icons.rightArrow
-                        color: textColor; size: 20
+                        color: Theme.textColor;
+                        size: 20
                         rotation: sidebar.isCollapsed ? 180 : 0
                         Behavior on rotation { NumberAnimation { duration: 300 } }
                     }
 
                     Text {
-                        text: "Hide"; color: textColor;
+                        text: "Hide";
+                        color: Theme.textColor;
                         font.bold: true;
                         font.pixelSize: Theme.fontSizeLarge
                         visible: !sidebar.isCollapsed

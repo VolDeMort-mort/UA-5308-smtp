@@ -20,7 +20,7 @@ QtObject {
     readonly property color itemBorderColor: colors.itemBorderColor
     readonly property color textColor: colors.textColor
     readonly property color mutedTextColor: colors.mutedTextColor
-    readonly property color unreadColor: colors.unreadColor
+    readonly property color iconSelectColor: colors.iconSelectColor
 
     readonly property int fontSizeSmall: 12
     readonly property int fontSizeMedium: 14

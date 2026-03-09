@@ -99,11 +99,12 @@ Popup {
             // Avatar icon (stub)
             Rectangle {
                 width: 40; height: 40; radius: 20
-                color: "#F59E0B"
+                color: Theme.iconSelectColor
                 Text {
                     anchors.centerIn: parent
                     text: msgData ? msgData.receiver[0].toUpperCase() : "?"
-                    color: "white"; font.bold: true
+                    color: "white"
+                    font.bold: true
                 }
             }
 
@@ -143,7 +144,7 @@ Popup {
             IconButton {
                 iconPath: Icons.star
                 text: "Star"
-                iconColor: msgData && msgData.isStarred ? "#F59E0B" : Theme.mutedTextColor
+                iconColor: msgData && msgData.isStarred ? Theme.iconSelectColor : Theme.mutedTextColor
             }
         }
 
@@ -185,10 +186,13 @@ Popup {
             id: iconRow
             anchors.centerIn: parent
             spacing: 6
-            SvgIcon { pathData: iconPath; color: parent.parent.containsMouse ? "#F59E0B" : iconColor; size: 18 }
+            SvgIcon {
+                pathData: iconPath;
+                color: parent.parent.containsMouse ? Theme.iconSelectColor : iconColor
+                size: 18 }
             Text {
                 text: parent.parent.text;
-                color: parent.parent.containsMouse ? "#F59E0B" : Theme.mutedTextColor;
+                color: parent.parent.containsMouse ? Theme.iconSelectColor : Theme.mutedTextColor;
                 visible: text !== ""
                 font.pixelSize: Theme.fontSizeMedium
             }

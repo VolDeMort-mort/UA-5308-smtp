@@ -19,8 +19,8 @@ CheckBox {
         implicitWidth: 18; implicitHeight: 18
         radius: 4
         anchors.verticalCenter: parent.verticalCenter
-        color: control.checked ? "#F59E0B" : "transparent"
-        border.color: control.checked ? "#F59E0B" : Theme.mutedTextColor
+        color: control.checked ? Theme.iconSelectColor : "transparent"
+        border.color: control.checked ? Theme.iconSelectColor : Theme.mutedTextColor
         border.width: 1.5
 
         Rectangle {

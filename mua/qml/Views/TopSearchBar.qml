@@ -15,8 +15,8 @@ RowLayout {
         Layout.alignment: Qt.AlignHCenter
         height: 40
         radius: 20
-        color: panelColor
-        border.color: itemBorderColor
+        color: Theme.panelColor
+        border.color: Theme.itemBorderColor
 
         RowLayout {
             anchors.fill: parent
@@ -26,19 +26,19 @@ RowLayout {
 
             SvgIcon {
                 pathData: Icons.search;
-                color: mutedTextColor;
+                color: Theme.mutedTextColor;
                 size: 16
             }
             TextInput {
                 Layout.fillWidth: true
-                color: textColor
+                color: Theme.textColor
                 font.pixelSize: Theme.fontSizeMedium
                 text: "Search..."
                 verticalAlignment: TextInput.AlignVCenter
             }
             SvgIcon {
                 pathData: Icons.filter;
-                color: mutedTextColor;
+                color: Theme.mutedTextColor;
                 size: 16
             }
         }

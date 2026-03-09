@@ -8,7 +8,7 @@ Item {
     property string iconPath: ""
     property string label: ""
     property bool isActive: false
-    property color bgColor: isActive ? panelColor : (mArea.containsMouse ? Qt.darker(panelColor, 1.2) : "transparent")
+    property color bgColor: isActive ? Theme.panelColor : (mArea.containsMouse ? Qt.darker(Theme.panelColor, 1.2) : "transparent")
     property bool boldText: isActive
     property bool isCollapsed: false
     signal clicked()
@@ -37,7 +37,7 @@ Item {
 
             SvgIcon {
                 pathData: itemRoot.iconPath
-                color: itemRoot.isActive ? textColor : mutedTextColor
+                color: itemRoot.isActive ? Theme.textColor : Theme.mutedTextColor
                 size: 16
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -45,7 +45,7 @@ Item {
             Text {
                 visible: !isCollapsed
                 text: itemRoot.label
-                color: itemRoot.isActive ? textColor : mutedTextColor
+                color: itemRoot.isActive ? Theme.textColor : Theme.mutedTextColor
                 font.pixelSize: Theme.fontSizeMedium
                 font.bold: itemRoot.boldText
 

@@ -4,7 +4,7 @@ import QtQuick.Shapes
 Item {
     id: iconRoot
     property string pathData: ""
-    property color color: "#64748B"
+    property color color: "transparent"
     property color fill: "transparent"
     property int size: 18
     property real strokeWidth: 3

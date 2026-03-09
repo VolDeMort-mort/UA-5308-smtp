@@ -8,8 +8,8 @@ Rectangle {
     height: 44
     radius: 20
 
-    color: itemBgColor
-    border.color: model.isChecked ? "#F59E0B" : itemBorderColor
+    color: Theme.itemBgColor
+    border.color: model.isChecked ? Theme.iconSelectColor : Theme.itemBorderColor
     border.width: model.isChecked ? 1.5 : 1
 
     // Main layout
@@ -25,7 +25,7 @@ Rectangle {
             SvgIcon {
                 anchors.centerIn: parent
                 pathData: model.isChecked ? Icons.selectCheckbox : Icons.deselCheckbox
-                color: model.isChecked ? "#F59E0B" : mutedTextColor
+                color: model.isChecked ? Theme.iconSelectColor : Theme.mutedTextColor
                 size: 16
             }
             MouseArea {
@@ -41,8 +41,8 @@ Rectangle {
             SvgIcon {
                 anchors.centerIn: parent
                 pathData: Icons.circle
-                color: model.isSeen ? "#F59E0B" : mutedTextColor
-                fill: model.isSeen ? "#F59E0B" : "transparent"
+                color: model.isSeen ? Theme.iconSelectColor : Theme.mutedTextColor
+                fill: model.isSeen ? Theme.iconSelectColor : "transparent"
                 strokeWidth: 3
                 size: 10
             }
@@ -60,8 +60,8 @@ Rectangle {
             SvgIcon {
                 anchors.centerIn: parent
                 pathData: Icons.bookmark
-                color: model.isSaved ? "#F59E0B" : Theme.mutedTextColor
-                fill: model.isSaved ? "#F59E0B" : "transparent"
+                color: model.isSaved ? Theme.iconSelectColor : Theme.mutedTextColor
+                fill: model.isSaved ? Theme.iconSelectColor : "transparent"
                 size: 14
             }
             MouseArea {
@@ -77,8 +77,8 @@ Rectangle {
             SvgIcon {
                 anchors.centerIn: parent
                 pathData: Icons.star
-                color: model.isStarred ? "#F59E0B" : mutedTextColor
-                fill: model.isStarred ? "#F59E0B" : "transparent"
+                color: model.isStarred ? Theme.iconSelectColor : Theme.mutedTextColor
+                fill: model.isStarred ? Theme.iconSelectColor : "transparent"
                 size: 16
             }
             MouseArea {

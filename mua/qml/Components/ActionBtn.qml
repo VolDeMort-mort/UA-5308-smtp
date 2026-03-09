@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import SmtpMua
 
 Button {
     id: control
@@ -16,10 +17,10 @@ Button {
         implicitHeight: 32
         radius: 16
 
-        color: control.pressed ? Qt.darker(itemBgColor, 1.2) :
-               (control.hovered ? Qt.alpha("#FFFFFF", 0.05) : itemBgColor)
+        color: control.pressed ? Qt.darker(Theme.itemBgColor, 1.2) :
+               (control.hovered ? Qt.alpha("#FFFFFF", 0.05) : Theme.itemBgColor)
 
-        border.color: control.hovered ? Qt.alpha("#FFFFFF", 0.2) : itemBorderColor
+        border.color: control.hovered ? Qt.alpha("#FFFFFF", 0.2) : Theme.itemBorderColor
         border.width: 1
         clip: true
     }

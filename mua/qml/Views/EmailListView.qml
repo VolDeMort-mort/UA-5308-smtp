@@ -1,13 +1,14 @@
 import QtQuick
 import QtQuick.Layouts
 import "../Components"
+import SmtpMua
 
 Rectangle {
     id: listViewContainer
     Layout.fillWidth: true
     Layout.fillHeight: true
 
-    color: sidebarBg
+    color: Theme.sidebarBg
 
     radius: 20
 

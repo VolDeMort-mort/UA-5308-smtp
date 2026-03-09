@@ -138,7 +138,7 @@ Popup {
                 Layout.preferredWidth: 100
                 Layout.preferredHeight: 36
                 background: Rectangle {
-                    color: "#F59E0B"
+                    color: Theme.iconSelectColor
                     radius: 18
                 }
                 contentItem: Text {
