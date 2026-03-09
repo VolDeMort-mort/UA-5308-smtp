@@ -8,7 +8,7 @@ Rectangle {
 
     property bool isCollapsed: false
     property int currentNavIndex: 0
-    property int currentFoldIndex: 0
+    property int currentFoldIndex: -1
 
     readonly property var navModel: [
         { name: "Inbox", path: Icons.inbox },
@@ -140,56 +140,60 @@ Rectangle {
         }
 
         // Navigation part
-        ColumnLayout {
-            width: parent.width
-            spacing: 5
-
-            Repeater {
-                model: sidebar.navModel
-                delegate: SidebarItem {
-                    label: sidebar.isCollapsed ? "" : modelData.name
-                    iconPath: modelData.path
-                    isActive: sidebar.currentNavIndex === index
-                    isCollapsed: sidebar.isCollapsed
-                    onClicked: sidebar.currentNavIndex = index
-                }
-            }
-        }
-
-        // Spacer
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.leftMargin: sidebar.isCollapsed ? 10 : 0
-            Layout.rightMargin: sidebar.isCollapsed ? 10 : 0
-            height: 1
-            color: Theme.itemBorderColor
-            opacity: 1
-        }
-
-        // "Your folders"
-        Text {
-            text: "Your folders"
-            visible: !sidebar.isCollapsed
-            color: Theme.mutedTextColor
-            font.bold: true
-            font.pixelSize: Theme.fontSizeLarge
-            Layout.alignment: Qt.AlignCenter
-        }
-
-        // Folders part
         Flickable {
-            id: navFlickable
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            contentHeight: navLayout.implicitHeight
+            contentHeight: implicitHeight
             boundsBehavior: Flickable.StopAtBounds
 
             ColumnLayout {
                 id: navLayout
-                width: navFlickable.width
+                width: parent.width
                 spacing: 5
 
+                // Basic navigation
+                Repeater {
+                    model: sidebar.navModel
+                    delegate: SidebarItem {
+                        label: sidebar.isCollapsed ? "" : modelData.name
+                        iconPath: modelData.path
+                        isActive: sidebar.currentNavIndex === index
+                        isCollapsed: sidebar.isCollapsed
+                        onClicked: {
+                            sidebar.currentNavIndex = index;
+                            sidebar.currentFoldIndex = -1;
+                        }
+                    }
+                }
+
+                // Spacer
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.topMargin: navLayout.spacing
+                    Layout.leftMargin: sidebar.isCollapsed ? 10 : 0
+                    Layout.rightMargin: sidebar.isCollapsed ? 10 : 0
+                    Layout.bottomMargin: navLayout.spacing
+
+                    height: 1
+                    color: Theme.itemBorderColor
+                    opacity: 1
+                }
+
+                // "Your folders"
+                Text {
+                    Layout.topMargin: navLayout.spacing
+                    Layout.bottomMargin: navLayout.spacing
+                    Layout.alignment: Qt.AlignCenter
+
+                    text: "Your folders"
+                    visible: !sidebar.isCollapsed
+                    color: Theme.mutedTextColor
+                    font.bold: true
+                    font.pixelSize: Theme.fontSizeLarge
+                }
+
+                // Folders navigation
                 Repeater {
                     model: sidebar.folModel
                     delegate: SidebarItem {
@@ -197,9 +201,13 @@ Rectangle {
                         iconPath: modelData.path
                         isActive: sidebar.currentFoldIndex === index
                         isCollapsed: sidebar.isCollapsed
-                        onClicked: sidebar.currentFoldIndex = index
+                        onClicked: {
+                            sidebar.currentFoldIndex = index
+                            sidebar.currentNavIndex = -1;
+                        }
                     }
                 }
+
 
                 SidebarItem {
                     label: sidebar.isCollapsed ? "" : "New folder"

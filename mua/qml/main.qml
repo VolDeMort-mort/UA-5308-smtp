@@ -52,7 +52,6 @@ ApplicationWindow {
                 createdAt: "10:45 AM"
 
                 isChecked: false
-
             }
 
             ListElement {
