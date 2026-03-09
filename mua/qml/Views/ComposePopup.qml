@@ -70,7 +70,7 @@ Popup {
         Text {
             text: "New Message"
             color: Theme.textColor
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontSizeHeader
             font.bold: true
         }
 
@@ -104,7 +104,7 @@ Popup {
                     id: bodyText
                     placeholderText: "Write your message here..."
                     color: Theme.textColor
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeMedium
                     wrapMode: TextEdit.WordWrap
                     leftPadding: 10
                     topPadding: 10
@@ -123,7 +123,10 @@ Popup {
                 contentItem: RowLayout {
                     SvgIcon { pathData: Icons.attachment;
                         color: Theme.mutedTextColor; size: 18 }
-                    Text { text: "Attach file"; color: Theme.mutedTextColor; font.pixelSize: 13 }
+                    Text {
+                        text: "Attach file";
+                        color: Theme.mutedTextColor;
+                        font.pixelSize: Theme.fontSizeMedium }
                 }
             }
 
@@ -163,7 +166,7 @@ Popup {
         Text {
             text: label
             color: Theme.mutedTextColor
-            font.pixelSize: 14
+            font.pixelSize: Theme.fontSizeMedium
             Layout.preferredWidth: 60
         }
         Rectangle {
@@ -183,7 +186,7 @@ Popup {
                 anchors.fill: parent
                 verticalAlignment: TextInput.AlignVCenter
                 color: Theme.textColor
-                font.pixelSize: 14
+                font.pixelSize: Theme.fontSizeMedium
                 clip: true
 
                 Text {

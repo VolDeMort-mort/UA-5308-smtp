@@ -39,14 +39,14 @@ Item {
                 pathData: itemRoot.iconPath
                 color: itemRoot.isActive ? textColor : mutedTextColor
                 size: 16
-Layout.alignment: Qt.AlignHCenter
+                Layout.alignment: Qt.AlignHCenter
             }
 
             Text {
                 visible: !isCollapsed
                 text: itemRoot.label
                 color: itemRoot.isActive ? textColor : mutedTextColor
-                font.pixelSize: 18
+                font.pixelSize: Theme.fontSizeMedium
                 font.bold: itemRoot.boldText
 
                 horizontalAlignment: Text.AlignLeft

@@ -77,7 +77,7 @@ Popup {
             Text {
                 text: msgData ? msgData.subject : "No Subject"
                 color: Theme.textColor
-                font.pixelSize: 22
+                font.pixelSize: Theme.fontSizeHeader
                 font.bold: true
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -113,12 +113,13 @@ Popup {
                 Text {
                     text: msgData ? msgData.receiver : "Unknown"
                     color: Theme.textColor
-                    font.pixelSize: 14; font.bold: true
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.bold: true
                 }
                 Text {
                     text: "to me"
                     color: Theme.mutedTextColor
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeSmall
                 }
             }
 
@@ -128,7 +129,7 @@ Popup {
             Text {
                 text: msgData ? msgData.createdAt : ""
                 color: Theme.mutedTextColor
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeSmall
             }
         }
 
@@ -163,7 +164,7 @@ Popup {
                 width: parent.width
                 text: msgData ? msgData.body : ""
                 color: Theme.textColor
-                font.pixelSize: 15
+                font.pixelSize: Theme.fontSizeMedium
                 lineHeight: 1.4
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
@@ -188,7 +189,8 @@ Popup {
             Text {
                 text: parent.parent.text;
                 color: parent.parent.containsMouse ? "#F59E0B" : Theme.mutedTextColor;
-                visible: text !== ""; font.pixelSize: 13
+                visible: text !== ""
+                font.pixelSize: Theme.fontSizeMedium
             }
         }
     }

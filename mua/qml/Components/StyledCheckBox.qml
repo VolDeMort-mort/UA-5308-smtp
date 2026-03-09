@@ -9,7 +9,7 @@ CheckBox {
 
     contentItem: Text {
         text: control.text
-        font.pixelSize: 14
+        font.pixelSize: Theme.fontSizeMedium
         color: Theme.textColor
         leftPadding: control.indicator.width + control.spacing
         verticalAlignment: Text.AlignVCenter

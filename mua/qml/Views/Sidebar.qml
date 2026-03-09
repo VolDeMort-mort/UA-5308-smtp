@@ -70,11 +70,17 @@ Rectangle {
                 opacity: sidebar.isCollapsed ? 0 : 1
                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
-                Text { text: "Name Surname"; color: textColor; font.bold: true; font.pixelSize: 16 }
-                Text { text: "testmail@gmail.com"; color: mutedTextColor; font.pixelSize: 12 }
+                Text {
+                    text: "Name Surname";
+                    color: textColor;
+                    font.bold: true;
+                    font.pixelSize: Theme.fontSizeLarge }
+                Text {
+                    text: "testmail@gmail.com";
+                    color: mutedTextColor;
+                    font.pixelSize: Theme.fontSizeSmall
+                }
             }
-
-            Item { Layout.fillWidth: true; visible: !sidebar.isCollapsed }
         }
 
         // Create btn
@@ -107,7 +113,7 @@ Rectangle {
                 Text {
                     text: sidebar.isCollapsed ? "" : "Create new"
                     color: textColor
-                    font.pixelSize: 18
+                    font.pixelSize: Theme.fontSizeHeader
                     font.bold: true
 
                     horizontalAlignment: Text.AlignCenter
@@ -161,7 +167,7 @@ Rectangle {
             visible: !sidebar.isCollapsed
             color: mutedTextColor
             font.bold: true
-            font.pixelSize: 18
+            font.pixelSize: Theme.fontSizeLarge
             Layout.alignment: Qt.AlignCenter
         }
 
@@ -218,7 +224,7 @@ Rectangle {
             Text {
                 text: "Settings";
                 color: mutedTextColor;
-                font.pixelSize: 18;
+                font.pixelSize: Theme.fontSizeLarge;
                 visible: !sidebar.isCollapsed}
 
             Item { Layout.fillWidth: true; visible: !isCollapsed }
@@ -246,7 +252,8 @@ Rectangle {
 
                     Text {
                         text: "Hide"; color: textColor;
-                        font.bold: true; font.pixelSize: 14
+                        font.bold: true;
+                        font.pixelSize: Theme.fontSizeLarge
                         visible: !sidebar.isCollapsed
                     }
                 }

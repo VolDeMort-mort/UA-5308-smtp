@@ -32,7 +32,7 @@ RowLayout {
             TextInput {
                 Layout.fillWidth: true
                 color: textColor
-                font.pixelSize: 14
+                font.pixelSize: Theme.fontSizeMedium
                 text: "Search..."
                 verticalAlignment: TextInput.AlignVCenter
             }

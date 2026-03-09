@@ -18,7 +18,7 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 30
         anchors.rightMargin: 30
-        spacing: 8
+        spacing: 10
 
         // Select all btn
         ActionBtn {
@@ -29,8 +29,8 @@ Rectangle {
             ]
             onClicked: {
                 allSelected = !allSelected
-                for (var i = 0; i < emailModel.count; ++i) {
-                    emailModel.setProperty(i, "checked", allSelected)
+                for (var i = 0; i < mockEmailModel.count; ++i) {
+                    mockEmailModel.setProperty(i, "checked", allSelected)
                 }
             }
         }
@@ -44,7 +44,7 @@ Rectangle {
         }
 
         // Spacer
-        Text { text: "|"; color: itemBorderColor; font.pixelSize: 16; Layout.margins: 4 }
+        Text { text: "|"; color: itemBorderColor; font.pixelSize: Theme.fontSizeMedium; Layout.margins: 4 }
 
 
         // Forward to btn
@@ -52,7 +52,7 @@ Rectangle {
             implicitWidth: 95
             iconRow.children: [
                 SvgIcon { pathData: Icons.moveTo; color: mutedTextColor; size: 14 },
-                Text { text: "Forward"; color: mutedTextColor; font.pixelSize: 13 }
+                Text { text: "Forward"; color: mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -61,7 +61,7 @@ Rectangle {
             implicitWidth: 105
             iconRow.children: [
                 SvgIcon { pathData: Icons.folder; color: mutedTextColor; size: 14 },
-                Text { text: "Move to"; color: mutedTextColor; font.pixelSize: 13 }
+                Text { text: "Move to"; color: mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -70,7 +70,7 @@ Rectangle {
             implicitWidth: 85
             iconRow.children: [
                 SvgIcon { pathData: Icons.spam; color: mutedTextColor; size: 14 },
-                Text { text: "Spam"; color: mutedTextColor; font.pixelSize: 13 }
+                Text { text: "Spam"; color: mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -79,7 +79,7 @@ Rectangle {
             implicitWidth: 90
             iconRow.children: [
                 SvgIcon { pathData: Icons.trash; color: mutedTextColor; size: 14 },
-                Text { text: "Delete"; color: mutedTextColor; font.pixelSize: 18 }
+                Text { text: "Delete"; color: mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -106,7 +106,7 @@ Rectangle {
                 Text {
                     text: "All"
                     color: Theme.textColor
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeMedium
                 }
 
                 SvgIcon {

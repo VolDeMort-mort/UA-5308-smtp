@@ -104,7 +104,7 @@ Popup {
         Text {
             text: label
             color: Theme.mutedTextColor
-            font.pixelSize: 14
+            font.pixelSize: Theme.fontSizeMedium
             Layout.preferredWidth: 40
         }
 
@@ -122,7 +122,7 @@ Popup {
                 verticalAlignment: TextInput.AlignVCenter
                 text: placeholder
                 color: Theme.mutedTextColor
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontSizeMedium
             }
         }
     }

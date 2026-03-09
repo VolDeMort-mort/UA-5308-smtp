@@ -21,4 +21,9 @@ QtObject {
     readonly property color textColor: colors.textColor
     readonly property color mutedTextColor: colors.mutedTextColor
     readonly property color unreadColor: colors.unreadColor
+
+    readonly property int fontSizeSmall: 12
+    readonly property int fontSizeMedium: 14
+    readonly property int fontSizeLarge: 16
+    readonly property int fontSizeHeader: 20
 }

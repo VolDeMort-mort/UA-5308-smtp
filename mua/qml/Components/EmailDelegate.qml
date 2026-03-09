@@ -105,7 +105,7 @@ Rectangle {
                     text: model.receiver
                     color: Theme.textColor
                     font.bold: !model.isSeen
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeMedium
                     elide: Text.ElideRight
                 }
 
@@ -119,7 +119,7 @@ Rectangle {
                     text: model.subject
                     color: Theme.textColor
                     font.bold: !model.isSeen
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeMedium
                     elide: Text.ElideRight
                 }
 
@@ -128,7 +128,7 @@ Rectangle {
                     Layout.preferredWidth: 100
                     text: model.body
                     color: Theme.mutedTextColor
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeMedium
                     elide: Text.ElideRight
                 }
 
@@ -136,7 +136,7 @@ Rectangle {
                     Layout.alignment: Qt.AlignRight
                     text: model.createdAt
                     color: Theme.mutedTextColor
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeSmall
                 }            }
 
             MouseArea {
