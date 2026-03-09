@@ -54,7 +54,7 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
-            Layout.leftMargin: 10
+            Layout.leftMargin: 5
 
             spacing: sidebar.isCollapsed ? 0 : 10
 
@@ -87,13 +87,16 @@ Rectangle {
 
         // Create btn
         Rectangle {
+            id: create_tn
             radius: 15
             color: Theme.panelColor
 
-            implicitWidth: sidebar.isCollapsed ? 50: parent.width
+            implicitWidth: parent.width
             height: 50
 
             Layout.alignment: !sidebar.isCollapsed ? Qt.AlignHCenter : Qt.AlignLeft
+
+            Component.onCompleted: {console.log(sidebar.width, create_tn.width)}
 
             RowLayout {
                 anchors.fill: parent
@@ -138,7 +141,7 @@ Rectangle {
 
         // Navigation part
         ColumnLayout {
-            Layout.fillWidth: true
+            width: parent.width
             spacing: 5
 
             Repeater {
@@ -214,7 +217,9 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             spacing: 8
-            Layout.leftMargin: 10
+            Layout.leftMargin: sidebar.isCollapsed ? 0 : 10
+
+            Layout.alignment: Qt.AlignHCenter
 
             // Settings btn
             SvgIcon {
@@ -229,15 +234,16 @@ Rectangle {
                 font.pixelSize: Theme.fontSizeLarge;
                 visible: !sidebar.isCollapsed}
 
-            Item { Layout.fillWidth: true; visible: !isCollapsed }
+            Item { Layout.fillWidth: true; visible: !sidebar.isCollapsed }
 
             // Hide/show rect
             Rectangle {
                 id: collapseBtn
-                Layout.alignment: sidebar.isCollapsed ? Qt.AlignHCenter : Qt.AlignLeft
-                width: sidebar.isCollapsed ? 44 : 100
+                // Layout.alignment: sidebar.isCollapsed ? Qt.AlignHCenter : Qt.AlignLeft
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: sidebar.isCollapsed ? 44 : 100
                 height: 44
-                radius: 22
+                radius: 20
                 color: Theme.panelColor
 
                 Behavior on width { NumberAnimation { duration: 250 } }

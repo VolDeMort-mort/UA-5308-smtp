@@ -21,15 +21,18 @@ Item {
     Layout.rightMargin: isCollapsed ? 0 : 10
     height: 38
 
+    // Item container
     Rectangle {
         id: bg
         anchors.fill: parent
-        radius: isCollapsed ? height / 2 : 12
+        radius: 12
         color: isActive ? bgColor : "transparent"
+
+        // Items layuot
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: 20
+            anchors.leftMargin: isCollapsed ? 0 : 20
+            anchors.rightMargin: isCollapsed ? 0 : 20
             spacing: iconTextSpacing
 
             anchors.centerIn: parent
@@ -57,6 +60,7 @@ Item {
 
             Item {
                 Layout.fillWidth: true
+                visible: !isCollapsed
             }
         }
 

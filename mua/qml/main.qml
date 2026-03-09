@@ -8,8 +8,13 @@ import SmtpMua
 ApplicationWindow {
     id: mainWindow
     visible: true
-    width: 1024
-    height: 1024
+
+    width: Screen.width
+    height: Screen.height
+    minimumWidth: 800
+    minimumHeight: 600
+
+    visibility: Window.Maximized
     title: "Email Client"
 
     color: Theme.windowBg;
