@@ -95,6 +95,8 @@ ApplicationWindow {
         ListElement { id_fol: 1; name: "School";}
         ListElement { id_fol: 2; name: "Work";}
         ListElement { id_fol: 3; name: "Family";}
+        ListElement { id_fol: 4; name: "Family";}
+
     }
 
 
