@@ -24,8 +24,14 @@ Rectangle {
         ActionBtn {
             implicitWidth: 50
             iconRow.children: [
-                SvgIcon { pathData: Icons.deselCheckbox; color: Theme.mutedTextColor; size: 14 },
-                SvgIcon { pathData: Icons.downArrow; color: Theme.mutedTextColor; size: 12 }
+                SvgIcon {
+                    pathData: Icons.deselCheckbox
+                    color: Theme.textColor
+                    size: 14 },
+                SvgIcon {
+                    pathData: Icons.downArrow
+                    color: Theme.textColor
+                    size: 12 }
             ]
             onClicked: {
                 allSelected = !allSelected
@@ -39,14 +45,17 @@ Rectangle {
         ActionBtn {
             implicitWidth: 40
             iconRow.children: [
-                SvgIcon { pathData: Icons.refresh; color: Theme.mutedTextColor; size: 14 }
+                SvgIcon {
+                    pathData: Icons.refresh
+                    color: Theme.textColor
+                    size: 14 }
             ]
         }
 
         // Spacer
         Text {
             text: "|";
-            color: Theme.itemBorderColor;
+            color: Theme.textColor;
             font.pixelSize: Theme.fontSizeMedium;
             Layout.margins: 4 }
 
@@ -55,8 +64,8 @@ Rectangle {
         ActionBtn {
             implicitWidth: 95
             iconRow.children: [
-                SvgIcon { pathData: Icons.moveTo; color: Theme.mutedTextColor; size: 14 },
-                Text { text: "Forward"; color: Theme.mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
+                SvgIcon { pathData: Icons.moveTo; color: Theme.textColor; size: 14 },
+                Text { text: "Forward"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -64,8 +73,8 @@ Rectangle {
         ActionBtn {
             implicitWidth: 105
             iconRow.children: [
-                SvgIcon { pathData: Icons.folder; color: Theme.mutedTextColor; size: 14 },
-                Text { text: "Move to"; color: Theme.mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
+                SvgIcon { pathData: Icons.folder; color: Theme.textColor; size: 14 },
+                Text { text: "Move to"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -73,8 +82,8 @@ Rectangle {
         ActionBtn {
             implicitWidth: 85
             iconRow.children: [
-                SvgIcon { pathData: Icons.spam; color: Theme.mutedTextColor; size: 14 },
-                Text { text: "Spam"; color: Theme.mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
+                SvgIcon { pathData: Icons.spam; color: Theme.textColor; size: 14 },
+                Text { text: "Spam"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -82,8 +91,8 @@ Rectangle {
         ActionBtn {
             implicitWidth: 90
             iconRow.children: [
-                SvgIcon { pathData: Icons.trash; color: Theme.mutedTextColor; size: 14 },
-                Text { text: "Delete"; color: Theme.mutedTextColor; font.pixelSize: Theme.fontSizeMedium }
+                SvgIcon { pathData: Icons.trash; color: Theme.textColor; size: 14 },
+                Text { text: "Delete"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
         }
 
@@ -126,7 +135,7 @@ Rectangle {
                 hoverEnabled: true
 
                 onClicked: {
-                    let globalPos = allButton.mapToItem(roowWindow.contentItem, 0, allButton.height + 5)
+                    let globalPos = allButton.mapToItem(rootWindow.contentItem, 0, allButton.height + 5)
                     mainFilterPopup.x = globalPos.x - mainFilterPopup.width * 0.8
                     mainFilterPopup.y = globalPos.y
                     mainFilterPopup.open()

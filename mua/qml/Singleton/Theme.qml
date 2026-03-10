@@ -21,6 +21,7 @@ QtObject {
     readonly property color textColor: colors.textColor
     readonly property color mutedTextColor: colors.mutedTextColor
     readonly property color iconSelectColor: colors.iconSelectColor
+    readonly property color mailBgColor: colors.mailBgColor
 
     readonly property int fontSizeSmall: 12
     readonly property int fontSizeMedium: 14

@@ -29,7 +29,7 @@ Rectangle {
     Layout.preferredWidth: isCollapsed ? 70 : 250
     color: Theme.sidebarBg
 
-    radius: isCollapsed ? 20 : 0
+    // radius: isCollapsed ? 20 : 0
 
     topRightRadius: 20
     bottomRightRadius: 20
@@ -189,7 +189,7 @@ Rectangle {
 
                     text: "Your folders"
                     visible: !sidebar.isCollapsed
-                    color: Theme.mutedTextColor
+                    color: Theme.textColor
                     font.bold: true
                     font.pixelSize: Theme.fontSizeLarge
                 }

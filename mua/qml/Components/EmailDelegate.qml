@@ -4,19 +4,25 @@ import SmtpMua
 
 Rectangle {
     id: delegateRoot
+
     width: ListView.view.width
-    height: 44
+    height: 40
     radius: 20
 
-    color: Theme.itemBgColor
-    border.color: model.isChecked ? Theme.iconSelectColor : Theme.itemBorderColor
-    border.width: model.isChecked ? 1.5 : 1
+    color: model.isSeen ? Qt.darker(Theme.mailBgColor, 1.2): Theme.mailBgColor
+
+    opacity: model.isSeen ? 0.5 : 1.0
+
+    MouseArea {
+        anchors.fill: parent
+        onClicked: delegController.handleBodyClick()
+    }
 
     // Main layout
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 10
-        anchors.rightMargin: 10
+        anchors.leftMargin: 20
+        anchors.rightMargin: 20
         spacing: 10
 
         // Selected icon
@@ -24,14 +30,13 @@ Rectangle {
             width: 20; height: 20
             SvgIcon {
                 anchors.centerIn: parent
-                pathData: model.isChecked ? Icons.selectCheckbox : Icons.deselCheckbox
+                pathData: model.isChecked ? Icons.selectCheckBox : Icons.deselCheckbox
                 color: model.isChecked ? Theme.iconSelectColor : Theme.mutedTextColor
                 size: 16
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked:
-                    mockEmailModel.setProperty(index, "isChecked", !model.isChecked)
+                onClicked: delegController.handleSelectClick()
             }
         }
 
@@ -41,15 +46,10 @@ Rectangle {
             SvgIcon {
                 anchors.centerIn: parent
                 pathData: Icons.circle
-                color: model.isSeen ? Theme.iconSelectColor : Theme.mutedTextColor
-                fill: model.isSeen ? Theme.iconSelectColor : "transparent"
+                color: !model.isSeen ? Theme.iconSelectColor : Theme.mutedTextColor
+                fill: !model.isSeen ? Theme.iconSelectColor : "transparent"
                 strokeWidth: 3
                 size: 10
-            }
-            MouseArea {
-                anchors.fill: parent
-                onClicked:
-                    mockEmailModel.setProperty(index, "isSeen", !model.isSeen)
             }
         }
 
@@ -66,8 +66,8 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked:
-                    mockEmailModel.setProperty(index, "isSaved", !model.isSaved)
+                onClicked: delegController.handleSaveClick()
+
             }
         }
 
@@ -83,79 +83,91 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent
-                onClicked:
-                    mockEmailModel.setProperty(index, "isStarred", !model.isStarred)
+                onClicked: delegController.handleStarClick()
+
             }
         }
 
-        // Mail info
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
+        RowLayout {
+            Layout.fillWidth: parent
+            spacing: 15
 
-
-            RowLayout {
-                anchors.fill: parent
-                spacing: 15
-
-                Text {
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 80
-                    Layout.maximumWidth: 150
-                    text: model.receiver
-                    color: Theme.textColor
-                    font.bold: !model.isSeen
-                    font.pixelSize: Theme.fontSizeMedium
-                    elide: Text.ElideRight
-                }
-
-                Item{
-                    Layout.fillWidth: true
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 80
-                    text: model.subject
-                    color: Theme.textColor
-                    font.bold: !model.isSeen
-                    font.pixelSize: Theme.fontSizeMedium
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    Layout.preferredWidth: 100
-                    text: model.body
-                    color: Theme.mutedTextColor
-                    font.pixelSize: Theme.fontSizeMedium
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    Layout.alignment: Qt.AlignRight
-                    text: model.createdAt
-                    color: Theme.mutedTextColor
-                    font.pixelSize: Theme.fontSizeSmall
-                }            }
-
-            MouseArea {
-                anchors.fill: parent
-                onClicked: {
-                    delegateRoot.ListView.view.currentIndex = index
-                }
+            Text {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 80
+                Layout.maximumWidth: 150
+                text: model.receiver
+                color: Theme.textColor
+                font.bold: !model.isSeen
+                font.pixelSize: Theme.fontSizeMedium
+                elide: Text.ElideRight
             }
-        }
+
+            Item{
+                Layout.fillWidth: true
+            }
+
+            Text {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 80
+                text: model.subject
+                color: Theme.textColor
+                font.bold: !model.isSeen
+                font.pixelSize: Theme.fontSizeMedium
+                elide: Text.ElideRight
+            }
+
+            Text {
+                Layout.fillWidth: true
+                Layout.preferredWidth: 100
+                text: model.body
+                color: Theme.mutedTextColor
+                font.pixelSize: Theme.fontSizeMedium
+                elide: Text.ElideRight
+            }
+
+            Text {
+                Layout.alignment: Qt.AlignRight
+                text: model.createdAt
+                color: Theme.mutedTextColor
+                font.pixelSize: Theme.fontSizeSmall
+            }            }
+    }
+
+    // Borders
+    Rectangle {
+        width: parent.width - parent.radius * 1.4
+        height: 2.5
+        color: Theme.itemBorderColor
+        anchors.bottom: parent.bottom
+        anchors.horizontalCenter: parent.horizontalCenter
     }
 
 
+    // Click handling
+    QtObject {
+        id: delegController
 
-    MouseArea {
-        anchors.fill: parent
-        onClicked:{
+        function handleSelectClick() {
+            mockEmailModel.setProperty(model.index, "isChecked", !model.isChecked)
+        }
+
+        function handleSaveClick() {
+            mockEmailModel.setProperty(model.index, "isSaved", !model.isSaved)
+        }
+
+        function handleStarClick() {
+            mockEmailModel.setProperty(model.index, "isStarred", !model.isStarred)
+        }
+
+        function handleBodyClick() {
             delegateRoot.ListView.view.currentIndex = index
             readMail.msgData = mockEmailModel.get(index)
             readMail.open()
+
+            if (!model.isSeen) {
+                mockEmailModel.setProperty(index, "isSeen", !model.isSeen)
+            }
         }
     }
 }

@@ -5,7 +5,6 @@ DelegateModel {
     id: root
     model: null
 
-    // Стан фільтрації
     property int filterStatus: -1
     property int filterFolder: -1
     property bool starredOnly: false

@@ -39,7 +39,7 @@ ApplicationWindow {
 
         ListElement {
             id_msg: 1; id_fol: 1; subject: "Welcome to SMTP Client"; body: "This is a test message to check your UI layout.";
-            receiver: "user@example.com"; status: 0; isSeen: true; isStarred: true; isSaved: false; createdAt: "10:45 AM"; isChecked: false
+            receiver: "user@example.com"; status: 0; isSeen: false; isStarred: true; isSaved: false; createdAt: "10:45 AM"; isChecked: false
         }
 
         ListElement {
@@ -54,7 +54,7 @@ ApplicationWindow {
 
         ListElement {
             id_msg: 4; id_fol: 1; subject: "Amazon: Your order has shipped!"; body: "Great news! Your package with 'Mechanical Keyboard' is on its way to your destination.";
-            receiver: "ship@amazon.com"; status: 2; isSeen: true; isStarred: false; isSaved: false; createdAt: "09:12 AM"; isChecked: false
+            receiver: "ship@amazon.com"; status: 2; isSeen: false; isStarred: false; isSaved: false; createdAt: "09:12 AM"; isChecked: false
         }
 
         ListElement {
@@ -64,7 +64,7 @@ ApplicationWindow {
 
         ListElement {
             id_msg: 6; id_fol: 3; subject: "LinkedIn: You have 5 new job matches"; body: "Software Engineer, QA Intern, C++ Developer and more roles that match your skills.";
-            receiver: "jobs@linkedin.com"; status: 3; isSeen: true; isStarred: false; isSaved: true; createdAt: "Mar 08"; isChecked: false
+            receiver: "jobs@linkedin.com"; status: 3; isSeen: false; isStarred: false; isSaved: true; createdAt: "Mar 08"; isChecked: false
         }
 
         ListElement {
@@ -74,7 +74,7 @@ ApplicationWindow {
 
         ListElement {
             id_msg: 8; id_fol: 3; subject: "Discord: You missed a call"; body: "Your friend 'Gamer123' tried to call you in the 'General' voice channel.";
-            receiver: "notifications@discord.com"; status: 2; isSeen: true; isStarred: false; isSaved: false; createdAt: "Mar 06"; isChecked: false
+            receiver: "notifications@discord.com"; status: 2; isSeen: false; isStarred: false; isSaved: false; createdAt: "Mar 06"; isChecked: false
         }
 
         ListElement {

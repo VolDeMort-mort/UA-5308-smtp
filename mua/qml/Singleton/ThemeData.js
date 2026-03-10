@@ -9,6 +9,7 @@ const themes = {
         "itemBorderColor": "#2A364F",
         "textColor": "#E2E8F0",
         "mutedTextColor": "#8494A8",
-        "iconSelectColor": "#F59E0B"
+        "iconSelectColor": "#F59E0B",
+        "mailBgColor": "#1B263B"
     }
 }
