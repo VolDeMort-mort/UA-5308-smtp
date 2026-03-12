@@ -24,6 +24,12 @@ void ImapServer::AcceptConnection()
 	m_acceptor.async_accept(
 		[this](std::error_code ec, boost::asio::ip::tcp::socket socket)
 		{
+			if (ec.value() == boost::asio::error::operation_aborted)
+			{
+				m_logger.Log(DEBUG, "Acceptor stopped");
+				return;
+			}
+
 			if (!ec)
 			{
 				std::make_shared<ImapSession>(std::move(socket), m_logger, m_db, m_user_dal)->Start();

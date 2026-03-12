@@ -353,7 +353,6 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 		try
 		{
 			auto messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
-			IMAP_UTILS::SortMessagesByTimeDescending(messages);
 			auto lists_ids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], messages.size());
 
 			std::vector<Message> selected_messages;
@@ -555,7 +554,6 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 		try
 		{
 			auto messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
-			IMAP_UTILS::SortMessagesByTimeDescending(messages);
 			auto lists_ids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], messages.size());
 
 			std::vector<Message> selected_messages;
@@ -737,7 +735,6 @@ std::string ImapCommandDispatcher::HandleCopy(const ImapCommand& cmd)
 			try
 			{
 				auto messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
-				IMAP_UTILS::SortMessagesByTimeDescending(messages);
 				auto lists_ids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], messages.size());
 
 				std::vector<Message> selected_messages;
@@ -794,7 +791,6 @@ std::string ImapCommandDispatcher::HandleExpunge(const ImapCommand& cmd)
 	else
 	{
 		auto messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
-		IMAP_UTILS::SortMessagesByTimeDescending(messages);
 
 		std::vector<std::pair<Message, int>> messages_indexes;
 		int index = 1;
@@ -804,6 +800,11 @@ std::string ImapCommandDispatcher::HandleExpunge(const ImapCommand& cmd)
 		std::vector<std::pair<Message, int>> expunged_seq_nums;
 		std::copy_if(messages_indexes.begin(), messages_indexes.end(), std::back_inserter(expunged_seq_nums),
 					 [](const std::pair<Message, int>& msg_pair) { return msg_pair.first.is_deleted; });
+
+		// sorting by sequence numbers to send expunged responses in correct order
+		std::sort(expunged_seq_nums.begin(), expunged_seq_nums.end(),
+				  [](const std::pair<Message, int>& a, const std::pair<Message, int>& b)
+				  { return a.second > b.second; });
 
 		for (const auto& [mess, index] : expunged_seq_nums)
 		{

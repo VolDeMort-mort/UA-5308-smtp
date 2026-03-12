@@ -103,12 +103,16 @@ void ImapSession::WriteResponse(const std::string& msg)
 	m_logger.Log(DEBUG, "ImapSession::WriteResponse - Start");
 
 	auto self = shared_from_this();
-	boost::asio::async_write(m_socket, boost::asio::buffer(msg),
-							 [this, self](std::error_code ec, std::size_t bytes_transferred)
+	auto payload = std::make_shared<std::string>(msg);
+
+	// should introduce a write queue, so that one socket won`t have multiple concurrent async_write calls
+	boost::asio::async_write(m_socket, boost::asio::buffer(*payload),
+							 [this, self, payload](std::error_code ec, std::size_t bytes_transferred)
 							 {
 								 if (ec)
 								 {
 									 m_logger.Log(PROD, "ImapSession::WriteResponse - Error: " + ec.message());
+									 m_socket.close();
 								 }
 								 else
 								 {
