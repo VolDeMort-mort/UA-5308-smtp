@@ -1,3 +1,5 @@
+include(GoogleTest)
+
 add_executable(mime_tests
     MimeBuilderTest.cpp
     MimeEncoderTest.cpp
@@ -17,5 +19,4 @@ target_include_directories(mime_tests
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-include(GoogleTest)
 gtest_discover_tests(mime_tests)

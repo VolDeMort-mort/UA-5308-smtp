@@ -1,8 +1,11 @@
 #pragma once
+
+#include <string>
+
 #include "SmtpCommand.hpp"
 
 class SmtpParser
 {
 public:
-	static SmtpCommand parse(const std::string& line);
+    static SmtpCommand Parse(const std::string& line);
 };

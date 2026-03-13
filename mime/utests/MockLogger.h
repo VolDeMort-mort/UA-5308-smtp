@@ -1,5 +1,5 @@
 #pragma once
-#include "../../logger/ILoggerStrategy.h"
+#include "ILoggerStrategy.h"
 
 class MockStrategy : public ILoggerStrategy
 {

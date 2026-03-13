@@ -2,7 +2,7 @@
 
 #include "../include/Email.h"
 #include "../include/MimeBuilder.h"
-#include "../../logger/Logger.h"
+#include "Logger.h"
 #include "MockLogger.h"
 
 using namespace SmtpClient;

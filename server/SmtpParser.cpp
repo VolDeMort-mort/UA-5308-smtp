@@ -1,65 +1,75 @@
-#include "SmtpParser.hpp"
-
 #include <algorithm>
+#include <cctype>
+
+#include "SmtpParser.hpp"
 
 namespace
 {
+    std::string ToUpper(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(),
+                       [](unsigned char c){ return std::toupper(c); });
+        return value;
+    }
 
-std::string toUpper(std::string str)
-{
-	std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) { return std::toupper(c); });
-	return str;
+    bool StartsWith(const std::string& value,
+                    const std::string& prefix)
+    {
+        return value.rfind(prefix, 0) == 0;
+    }
 }
 
-bool startsWith(const std::string& str, const std::string& prefix)
+SmtpCommand SmtpParser::Parse(const std::string& line)
 {
-	return str.rfind(prefix, 0) == 0;
-}
+    SmtpCommand command;
 
-} // namespace
+	std::string clean = line;
 
-SmtpCommand SmtpParser::parse(const std::string& line)
-{
-	SmtpCommand cmd;
+	if (!clean.empty() && clean.back() == '\r')
+		clean.pop_back();
 
-	std::string upper = toUpper(line);
+    std::string upper = ToUpper(clean);
 
-	if (startsWith(upper, "HELO "))
+    if (StartsWith(upper, "HELO "))
+    {
+        command.type = SmtpCommandType::HELO;
+        command.argument = clean.substr(5);
+    }
+    else if (StartsWith(upper, "EHLO "))
+    {
+        command.type = SmtpCommandType::EHLO;
+        command.argument = clean.substr(5);
+    }
+    else if (StartsWith(upper, "MAIL FROM:"))
+    {
+        command.type = SmtpCommandType::MAIL;
+        command.argument = clean.substr(10);
+    }
+    else if (StartsWith(upper, "RCPT TO:"))
+    {
+        command.type = SmtpCommandType::RCPT;
+        command.argument = clean.substr(8);
+    }
+    else if (upper == "DATA")
+    {
+        command.type = SmtpCommandType::DATA;
+    }
+    else if (upper == "RSET")
+    {
+        command.type = SmtpCommandType::RSET;
+    }
+    else if (upper == "NOOP")
+    {
+        command.type = SmtpCommandType::NOOP;
+    }
+    else if (upper == "QUIT")
+    {
+        command.type = SmtpCommandType::QUIT;
+    }
+	else if (upper == "STARTTLS")
 	{
-		cmd.type = SmtpCommandType::HELO;
-		cmd.argument = line.substr(5);
-	}
-	else if (startsWith(upper, "EHLO "))
-	{
-		cmd.type = SmtpCommandType::EHLO;
-		cmd.argument = line.substr(5);
-	}
-	else if (startsWith(upper, "MAIL FROM:"))
-	{
-		cmd.type = SmtpCommandType::MAIL;
-		cmd.argument = line.substr(10);
-	}
-	else if (startsWith(upper, "RCPT TO:"))
-	{
-		cmd.type = SmtpCommandType::RCPT;
-		cmd.argument = line.substr(8);
-	}
-	else if (upper == "DATA")
-	{
-		cmd.type = SmtpCommandType::DATA;
-	}
-	else if (upper == "RSET")
-	{
-		cmd.type = SmtpCommandType::RSET;
-	}
-	else if (upper == "NOOP")
-	{
-		cmd.type = SmtpCommandType::NOOP;
-	}
-	else if (upper == "QUIT")
-	{
-		cmd.type = SmtpCommandType::QUIT;
+		command.type = SmtpCommandType::STARTTLS;
 	}
 
-	return cmd;
+    return command;
 }

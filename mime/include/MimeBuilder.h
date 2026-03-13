@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-#include "../../logger/Logger.h"
+#include "Logger.h"
 #include "Email.h"
 
 namespace SmtpClient {
