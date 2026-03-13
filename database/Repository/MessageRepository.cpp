@@ -3,8 +3,7 @@
 MessageRepository::MessageRepository(DataBaseManager& db)
     : m_message_dal(db.getDB())
     , m_folder_dal(db.getDB())
-    , m_attachment_dal(db.getDB())
-    , m_recipient_dal(db.getDB()) 
+    , m_recipient_dal(db.getDB())
 {}
 
 bool MessageRepository::setError(const std::string& msg) const
@@ -18,9 +17,32 @@ const std::string& MessageRepository::getLastError() const
     return m_last_error;
 }
 
+bool MessageRepository::assignUID(Message& msg, int64_t folder_id)
+{
+    auto folder = m_folder_dal.findByID(folder_id);
+    if (!folder.has_value())
+        return setError("assignUID: folder not found");
+
+    msg.folder_id = folder_id;
+    msg.uid       = folder->next_uid;
+
+    if (!m_message_dal.insert(msg))
+        return setError(m_message_dal.getLastError());
+
+    if (!m_folder_dal.incrementNextUID(folder_id))
+        return setError(m_folder_dal.getLastError());
+
+    return true;
+}
+
 std::optional<Message> MessageRepository::findByID(int64_t id) const
 {
     return m_message_dal.findByID(id);
+}
+
+std::optional<Message> MessageRepository::findByUID(int64_t folder_id, int64_t uid) const
+{
+    return m_message_dal.findByUID(folder_id, uid);
 }
 
 std::vector<Message> MessageRepository::findByUser(int64_t user_id) const
@@ -33,83 +55,39 @@ std::vector<Message> MessageRepository::findByFolder(int64_t folder_id) const
     return m_message_dal.findByFolder(folder_id);
 }
 
-std::vector<Message> MessageRepository::findByStatus(int64_t user_id,
-                                                      MessageStatus status) const
+std::vector<Message> MessageRepository::findUnseen(int64_t folder_id) const
 {
-    return m_message_dal.findByStatus(user_id, status);
+    return m_message_dal.findUnseen(folder_id);
 }
 
-std::vector<Message> MessageRepository::findUnseen(int64_t user_id) const
+std::vector<Message> MessageRepository::findDeleted(int64_t folder_id) const
 {
-    return m_message_dal.findUnseen(user_id);
+    return m_message_dal.findDeleted(folder_id);
 }
 
-std::vector<Message> MessageRepository::findStarred(int64_t user_id) const
+std::vector<Message> MessageRepository::findFlagged(int64_t folder_id) const
 {
-    return m_message_dal.findStarred(user_id);
+    return m_message_dal.findFlagged(folder_id);
 }
 
-std::vector<Message> MessageRepository::findImportant(int64_t user_id) const
-{
-    return m_message_dal.findImportant(user_id);
-}
-
-std::vector<Message> MessageRepository::search(int64_t user_id,
-                                                const std::string& query) const
+std::vector<Message> MessageRepository::search(int64_t user_id, const std::string& query) const
 {
     return m_message_dal.search(user_id, query);
 }
 
-bool MessageRepository::saveDraft(Message& msg)
+bool MessageRepository::deliver(Message& msg, int64_t folder_id)
 {
-    msg.status  = MessageStatus::Draft;
-    msg.is_seen = true;
-
-    return m_message_dal.insert(msg);
+    msg.is_seen   = false;
+    msg.is_recent = true;
+    msg.is_draft  = false;
+    return assignUID(msg, folder_id);
 }
 
-bool MessageRepository::editDraft(const Message& msg)
+bool MessageRepository::saveToFolder(Message& msg, int64_t folder_id)
 {
-    if (!msg.id.has_value())
-        return setError("editDraft: message has no id");
-
-    auto existing = m_message_dal.findByID(msg.id.value());
-    if (!existing.has_value())
-        return setError("editDraft: message not found");
-
-    if (existing->status != MessageStatus::Draft)
-        return setError("editDraft: only Draft messages can be edited");
-
-    return m_message_dal.update(msg);
-}
-
-bool MessageRepository::send(Message& msg)
-{
-    if (msg.id.has_value())
-    {
-        auto existing = m_message_dal.findByID(msg.id.value());
-        if (!existing.has_value())
-            return setError("send: message not found");
-
-        if (existing->status != MessageStatus::Draft)
-            return setError("send: only Draft messages can be sent");
-
-        msg.status  = MessageStatus::Sent;
-        msg.is_seen = true;
-        return m_message_dal.update(msg);
-    }
-
-    msg.status  = MessageStatus::Sent;
-    msg.is_seen = true;
-    return m_message_dal.insert(msg);
-}
-
-bool MessageRepository::setDelivered(Message& msg)
-{
-    msg.status  = MessageStatus::Received;
-    msg.is_seen = false;
-
-    return m_message_dal.insert(msg);
+    msg.is_seen   = true;
+    msg.is_recent = false;
+    return assignUID(msg, folder_id);
 }
 
 bool MessageRepository::markSeen(int64_t id, bool seen)
@@ -117,65 +95,85 @@ bool MessageRepository::markSeen(int64_t id, bool seen)
     return m_message_dal.updateSeen(id, seen);
 }
 
-bool MessageRepository::markStarred(int64_t id, bool starred)
+bool MessageRepository::markDeleted(int64_t id, bool deleted)
+{
+    return m_message_dal.updateDeleted(id, deleted);
+}
+
+bool MessageRepository::markFlagged(int64_t id, bool flagged)
 {
     auto msg = m_message_dal.findByID(id);
     if (!msg.has_value())
-        return setError("markStarred: message not found");
+        return setError("markFlagged: message not found");
 
-    return m_message_dal.updateFlags(id, msg->is_seen, starred, msg->is_important);
+    return m_message_dal.updateFlags(id, msg->is_seen, msg->is_deleted, msg->is_draft,
+                                     msg->is_answered, flagged, msg->is_recent);
 }
 
-bool MessageRepository::markImportant(int64_t id, bool important)
+bool MessageRepository::markAnswered(int64_t id, bool answered)
 {
     auto msg = m_message_dal.findByID(id);
     if (!msg.has_value())
-        return setError("markImportant: message not found");
+        return setError("markAnswered: message not found");
 
-    return m_message_dal.updateFlags(id, msg->is_seen, msg->is_starred, important);
+    return m_message_dal.updateFlags(id, msg->is_seen, msg->is_deleted, msg->is_draft,
+                                     answered, msg->is_flagged, msg->is_recent);
 }
 
-bool MessageRepository::moveToFolder(int64_t id, std::optional<int64_t> folder_id)
-{
-    return m_message_dal.moveToFolder(id, folder_id);
-}
-
-bool MessageRepository::moveToTrash(int64_t id)
+bool MessageRepository::markDraft(int64_t id, bool draft)
 {
     auto msg = m_message_dal.findByID(id);
     if (!msg.has_value())
-        return setError("moveToTrash: message not found");
+        return setError("markDraft: message not found");
 
-    if (msg->status == MessageStatus::Deleted)
-        return setError("moveToTrash: message is already deleted");
-
-    return m_message_dal.softDelete(id);
+    return m_message_dal.updateFlags(id, msg->is_seen, msg->is_deleted, draft,
+                                     msg->is_answered, msg->is_flagged, msg->is_recent);
 }
 
-bool MessageRepository::restore(int64_t id)
+bool MessageRepository::updateFlags(int64_t id, bool is_seen, bool is_deleted, bool is_draft,
+                                    bool is_answered, bool is_flagged, bool is_recent)
 {
-    auto msg = m_message_dal.findByID(id);
-    if (!msg.has_value())
-        return setError("restore: message not found");
+    return m_message_dal.updateFlags(id, is_seen, is_deleted, is_draft,
+                                     is_answered, is_flagged, is_recent);
+}
 
-    if (msg->status != MessageStatus::Deleted)
-        return setError("restore: only Deleted messages can be restored");
+bool MessageRepository::moveToFolder(int64_t id, int64_t folder_id)
+{
+    auto folder = m_folder_dal.findByID(folder_id);
+    if (!folder.has_value())
+        return setError("moveToFolder: folder not found");
 
-    MessageStatus restored = msg->receiver.empty()
-                             ? MessageStatus::Sent
-                             : MessageStatus::Received;
+    int64_t new_uid = folder->next_uid;
 
-    return m_message_dal.updateStatus(id, restored);
+    if (!m_message_dal.moveToFolder(id, folder_id, new_uid))
+        return setError(m_message_dal.getLastError());
+
+    if (!m_folder_dal.incrementNextUID(folder_id))
+        return setError(m_folder_dal.getLastError());
+
+    return true;
+}
+
+bool MessageRepository::expunge(int64_t folder_id)
+{
+    auto deleted = m_message_dal.findDeleted(folder_id);
+
+    for (const auto& msg : deleted)
+    {
+        if (!msg.id.has_value())
+            continue;
+
+        if (!m_message_dal.hardDelete(msg.id.value()))
+            return setError(m_message_dal.getLastError());
+    }
+
+    return true;
 }
 
 bool MessageRepository::hardDelete(int64_t id)
 {
-    auto msg = m_message_dal.findByID(id);
-    if (!msg.has_value())
-        return setError("HardDelete: message not found");
-
-    if (msg->status != MessageStatus::Deleted)
-        return setError("HardDelete: message must be Deleted before it can be HardDeleted");
+    if (!m_message_dal.findByID(id).has_value())
+        return setError("hardDelete: message not found");
 
     return m_message_dal.hardDelete(id);
 }
@@ -201,8 +199,7 @@ bool MessageRepository::createFolder(Folder& folder)
     if (folder.name.empty())
         return setError("createFolder: folder name cannot be empty");
 
-    auto existing = m_folder_dal.findByName(folder.user_id, folder.name);
-    if (existing.has_value())
+    if (m_folder_dal.findByName(folder.user_id, folder.name).has_value())
         return setError("createFolder: folder '" + folder.name + "' already exists");
 
     return m_folder_dal.insert(folder);
@@ -227,57 +224,10 @@ bool MessageRepository::renameFolder(int64_t id, const std::string& new_name)
 
 bool MessageRepository::deleteFolder(int64_t id)
 {
-    auto folder = m_folder_dal.findByID(id);
-    if (!folder.has_value())
+    if (!m_folder_dal.findByID(id).has_value())
         return setError("deleteFolder: folder not found");
 
     return m_folder_dal.hardDelete(id);
-}
-
-std::optional<Attachment> MessageRepository::findAttachmentByID(int64_t id) const
-{
-    return m_attachment_dal.findByID(id);
-}
-
-std::vector<Attachment> MessageRepository::findAttachmentsByMessage(int64_t message_id) const
-{
-    return m_attachment_dal.findByMessage(message_id);
-}
-
-bool MessageRepository::addAttachment(Attachment& attachment)
-{
-    auto msg = m_message_dal.findByID(attachment.message_id);
-    if (!msg.has_value())
-        return setError("addAttachment: message not found");
-
-    if (attachment.file_name.empty())
-        return setError("addAttachment: file_name cannot be empty");
-
-    if (attachment.storage_path.empty())
-        return setError("addAttachment: storage_path cannot be empty");
-
-    return m_attachment_dal.insert(attachment);
-}
-
-bool MessageRepository::updateAttachment(const Attachment& attachment)
-{
-    if (!attachment.id.has_value())
-        return setError("updateAttachment: attachment has no id");
-
-    auto existing = m_attachment_dal.findByID(attachment.id.value());
-    if (!existing.has_value())
-        return setError("updateAttachment: attachment not found");
-
-    return m_attachment_dal.update(attachment);
-}
-
-bool MessageRepository::removeAttachment(int64_t id)
-{
-    auto existing = m_attachment_dal.findByID(id);
-    if (!existing.has_value())
-        return setError("removeAttachment: attachment not found");
-
-    return m_attachment_dal.hardDelete(id);
 }
 
 std::optional<Recipient> MessageRepository::findRecipientByID(int64_t id) const
@@ -292,8 +242,7 @@ std::vector<Recipient> MessageRepository::findRecipientsByMessage(int64_t messag
 
 bool MessageRepository::addRecipient(Recipient& recipient)
 {
-    auto msg = m_message_dal.findByID(recipient.message_id);
-    if (!msg.has_value())
+    if (!m_message_dal.findByID(recipient.message_id).has_value())
         return setError("addRecipient: message not found");
 
     if (recipient.address.empty())
@@ -304,8 +253,7 @@ bool MessageRepository::addRecipient(Recipient& recipient)
 
 bool MessageRepository::removeRecipient(int64_t id)
 {
-    auto existing = m_recipient_dal.findByID(id);
-    if (!existing.has_value())
+    if (!m_recipient_dal.findByID(id).has_value())
         return setError("removeRecipient: recipient not found");
 
     return m_recipient_dal.hardDelete(id);

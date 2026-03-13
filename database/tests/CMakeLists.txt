@@ -13,9 +13,14 @@ if(TEST_FILE)
     set(TEST_SOURCES ${TEST_FILE})
 else()
     set(TEST_SOURCES)
-    foreach(f TestMessageDAL.cpp TestUserDAL.cpp TestAttachmentDAL.cpp
-              TestFolderDAL.cpp TestRecipientDAL.cpp
-              TestMessageRepository.cpp TestUserRepository.cpp)
+    foreach(f
+        TestUserDAL.cpp
+        TestFolderDAL.cpp
+        TestMessageDAL.cpp
+        TestRecipientDAL.cpp
+        TestUserRepository.cpp
+        TestMessageRepository.cpp
+    )
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${f}")
             list(APPEND TEST_SOURCES ${f})
         endif()
@@ -23,12 +28,16 @@ else()
 endif()
 
 add_executable(smtp_tests ${TEST_SOURCES})
+
+target_include_directories(smtp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 target_link_libraries(smtp_tests PRIVATE db_lib GTest::gtest_main)
-gtest_discover_tests(smtp_tests
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    DISCOVERY_MODE PRE_TEST
-)
 
 target_compile_definitions(smtp_tests PRIVATE
     SCHEMA_PATH="${CMAKE_BINARY_DIR}/scheme/001_init_scheme.sql"
+)
+
+gtest_discover_tests(smtp_tests
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    DISCOVERY_MODE PRE_TEST
 )

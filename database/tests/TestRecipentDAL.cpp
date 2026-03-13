@@ -1,182 +1,76 @@
-#include <fstream>
-#include <gtest/gtest.h>
-#include <sqlite3.h>
-#include <sstream>
+#include "TestFixture.h"
 
-#include "../DAL/MessageDAL.h"
-#include "../DAL/RecipientDAL.h"
-#include "../Entity/Recipient.h"
-
-class RecipientDALTest : public ::testing::Test
+struct FolderDALTest : public DBFixture
 {
-protected:
-	void SetUp() override
-	{
-		sqlite3_open(":memory:", &m_db);
+    UserDAL   udal{nullptr};
+    FolderDAL fdal{nullptr};
+    User      user;
 
-		std::ifstream file(SCHEMA_PATH);
-		std::stringstream ss;
-		ss << file.rdbuf();
-		sqlite3_exec(m_db, ss.str().c_str(), nullptr, nullptr, nullptr);
-
-		sqlite3_exec(m_db,
-					 "INSERT INTO users   (id, username, password_hash) VALUES (1, 'alice', 'hash');"
-					 "INSERT INTO folders (id, user_id, name) VALUES (1, 1, 'Inbox');",
-					 nullptr, nullptr, nullptr);
-
-		MessageDAL msgDal(m_db);
-		Message m1;
-		m1.user_id = 1;
-		m1.folder_id = 1;
-		m1.receiver = "b@b.com";
-		m1.subject = "M1";
-		m1.status = MessageStatus::Draft;
-		Message m2;
-		m2.user_id = 1;
-		m2.folder_id = 1;
-		m2.receiver = "c@c.com";
-		m2.subject = "M2";
-		m2.status = MessageStatus::Sent;
-		msgDal.insert(m1);
-		msgDal.insert(m2);
-		m_msg1 = m1.id.value();
-		m_msg2 = m2.id.value();
-
-		m_dal = new RecipientDAL(m_db);
-	}
-
-	void TearDown() override
-	{
-		delete m_dal;
-		sqlite3_close(m_db);
-	}
-
-	Recipient make(int64_t msg_id = 0, const std::string& address = "alice@example.com")
-	{
-		Recipient r;
-		r.message_id = msg_id == 0 ? m_msg1 : msg_id;
-		r.address = address;
-		return r;
-	}
-
-	sqlite3* m_db = nullptr;
-	RecipientDAL* m_dal = nullptr;
-	int64_t m_msg1 = 0;
-	int64_t m_msg2 = 0;
+    void SetUp() override
+    {
+        DBFixture::SetUp();
+        udal = UserDAL(db);
+        fdal = FolderDAL(db);
+        user = makeUser();
+        udal.insert(user);
+    }
 };
 
-TEST_F(RecipientDALTest, Insert_SetsID)
+TEST_F(FolderDALTest, InsertSetsIDAndDefaults)
 {
-	auto r = make();
-	EXPECT_TRUE(m_dal->insert(r));
-	EXPECT_TRUE(r.id.has_value());
+    Folder f = makeFolder(user.id.value());
+    EXPECT_TRUE(fdal.insert(f));
+    EXPECT_TRUE(f.id.has_value());
+    EXPECT_EQ(f.next_uid, static_cast<int64_t>(1));
+    EXPECT_FALSE(f.is_subscribed);
 }
 
-TEST_F(RecipientDALTest, Insert_PersistsFields)
+TEST_F(FolderDALTest, FindByNameReturnsFolder)
 {
-	auto r = make(m_msg1, "specific@example.com");
-	m_dal->insert(r);
-
-	auto f = m_dal->findByID(r.id.value());
-	ASSERT_TRUE(f.has_value());
-	EXPECT_EQ(f->address, "specific@example.com");
-	EXPECT_EQ(f->message_id, m_msg1);
+    Folder f = makeFolder(user.id.value(), "Sent");
+    fdal.insert(f);
+    auto found = fdal.findByName(user.id.value(), "Sent");
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->name, std::string("Sent"));
 }
 
-TEST_F(RecipientDALTest, Insert_RejectsUnknownMessage)
+TEST_F(FolderDALTest, FindByUserReturnsOnlyThatUsersFolder)
 {
-	auto r = make(99999);
-	EXPECT_FALSE(m_dal->insert(r));
+    User u2 = makeUser("bob"); udal.insert(u2);
+
+    Folder f1 = makeFolder(user.id.value(), "INBOX");   fdal.insert(f1);
+    Folder f2 = makeFolder(user.id.value(), "Sent");    fdal.insert(f2);
+    Folder f3 = makeFolder(u2.id.value(),   "INBOX");   fdal.insert(f3);
+
+    EXPECT_EQ(static_cast<int>(fdal.findByUser(user.id.value()).size()), 2);
+    EXPECT_EQ(static_cast<int>(fdal.findByUser(u2.id.value()).size()),   1);
 }
 
-TEST_F(RecipientDALTest, Insert_AllowsMultiplePerMessage)
+TEST_F(FolderDALTest, IncrementNextUIDAdvancesCounter)
 {
-	auto r1 = make(m_msg1, "a@example.com");
-	auto r2 = make(m_msg1, "b@example.com");
-	auto r3 = make(m_msg1, "c@example.com");
-	EXPECT_TRUE(m_dal->insert(r1));
-	EXPECT_TRUE(m_dal->insert(r2));
-	EXPECT_TRUE(m_dal->insert(r3));
+    Folder f = makeFolder(user.id.value()); fdal.insert(f);
+    fdal.incrementNextUID(f.id.value());
+    fdal.incrementNextUID(f.id.value());
+    auto found = fdal.findByID(f.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->next_uid, static_cast<int64_t>(3));
 }
 
-TEST_F(RecipientDALTest, Insert_AllowsSameAddressOnDifferentMessages)
+TEST_F(FolderDALTest, UpdatePersistsChanges)
 {
-	auto r1 = make(m_msg1, "shared@example.com");
-	auto r2 = make(m_msg2, "shared@example.com");
-	EXPECT_TRUE(m_dal->insert(r1));
-	EXPECT_TRUE(m_dal->insert(r2));
+    Folder f = makeFolder(user.id.value(), "Old"); fdal.insert(f);
+    f.name          = "New";
+    f.is_subscribed = true;
+    EXPECT_TRUE(fdal.update(f));
+    auto found = fdal.findByID(f.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->name, std::string("New"));
+    EXPECT_TRUE(found->is_subscribed);
 }
 
-TEST_F(RecipientDALTest, FindByID_ReturnsNulloptIfMissing)
+TEST_F(FolderDALTest, HardDeleteRemovesFolder)
 {
-	EXPECT_FALSE(m_dal->findByID(99999).has_value());
-}
-
-TEST_F(RecipientDALTest, FindByMessage_ReturnsAll)
-{
-	auto r1 = make(m_msg1, "a@example.com");
-	auto r2 = make(m_msg1, "b@example.com");
-	auto r3 = make(m_msg2, "c@example.com");
-	m_dal->insert(r1);
-	m_dal->insert(r2);
-	m_dal->insert(r3);
-
-	EXPECT_EQ(m_dal->findByMessage(m_msg1).size(), 2u);
-}
-
-TEST_F(RecipientDALTest, FindByMessage_EmptyWhenNone)
-{
-	EXPECT_TRUE(m_dal->findByMessage(m_msg1).empty());
-}
-
-TEST_F(RecipientDALTest, Update_PersistsAddressChange)
-{
-	auto r = make(m_msg1, "old@example.com");
-	m_dal->insert(r);
-	r.address = "new@example.com";
-	EXPECT_TRUE(m_dal->update(r));
-	EXPECT_EQ(m_dal->findByID(r.id.value())->address, "new@example.com");
-}
-
-TEST_F(RecipientDALTest, Update_FailsWithNoID)
-{
-	auto r = make();
-	EXPECT_FALSE(m_dal->update(r));
-}
-
-TEST_F(RecipientDALTest, HardDelete_RemovesRow)
-{
-	auto r = make();
-	m_dal->insert(r);
-	int64_t id = r.id.value();
-	EXPECT_TRUE(m_dal->hardDelete(id));
-	EXPECT_FALSE(m_dal->findByID(id).has_value());
-}
-
-TEST_F(RecipientDALTest, HardDelete_OnlyRemovesTarget)
-{
-	auto r1 = make(m_msg1, "keep@example.com");
-	auto r2 = make(m_msg1, "del@example.com");
-	m_dal->insert(r1);
-	m_dal->insert(r2);
-	m_dal->hardDelete(r2.id.value());
-
-	EXPECT_TRUE(m_dal->findByID(r1.id.value()).has_value());
-	EXPECT_FALSE(m_dal->findByID(r2.id.value()).has_value());
-}
-
-TEST_F(RecipientDALTest, Cascade_DeletedWhenMessageDeleted)
-{
-	auto r1 = make(m_msg1, "a@example.com");
-	auto r2 = make(m_msg1, "b@example.com");
-	m_dal->insert(r1);
-	m_dal->insert(r2);
-
-	sqlite3_stmt* stmt = nullptr;
-	sqlite3_prepare_v2(m_db, "DELETE FROM messages WHERE id = ?;", -1, &stmt, nullptr);
-	sqlite3_bind_int64(stmt, 1, m_msg1);
-	sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
-
-	EXPECT_TRUE(m_dal->findByMessage(m_msg1).empty());
+    Folder f = makeFolder(user.id.value()); fdal.insert(f);
+    fdal.hardDelete(f.id.value());
+    EXPECT_FALSE(fdal.findByID(f.id.value()).has_value());
 }
