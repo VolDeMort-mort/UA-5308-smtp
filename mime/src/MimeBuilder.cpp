@@ -4,17 +4,16 @@
 #include <algorithm>     
 #include <string>        
 #include <chrono>
-#include <iomanip>
 #include <random>
 #include <sstream>
 
 #include "../include/MimeEncoder.h"
-#include "../utils/TimeUtils.h"
-#include "../utils/StringUtils.h"
+#include  "../../common/utils/TimeUtils.h"
+#include  "../../common/utils/StringUtils.h"
 namespace SmtpClient {
 
 bool MimeBuilder::BuildEmail(const Email& email_data, std::string& out_mime,
-							 ILoggerStrategy& logger)
+							 Logger& logger)
 {
 	if (!ValidateEmail(email_data, logger)) return false;
 
@@ -32,40 +31,41 @@ bool MimeBuilder::BuildEmail(const Email& email_data, std::string& out_mime,
 		AppendAttachments(email_data, mixed_boundary, out_mime);
 		out_mime += "--" + mixed_boundary + "--\r\n";
 	}
+	
 	else
 	{
 		AppendBodyContent(email_data, mixed_boundary, out_mime);
 	}
 
-	logger.SpecificLog(DEBUG, "MimeBuilder: built email from " + email_data.sender);
+	logger.Log(DEBUG, "MimeBuilder: built email from " + email_data.sender);
 	return true;
 }
 
-bool MimeBuilder::ValidateEmail(const Email& email_data, ILoggerStrategy& logger)
+bool MimeBuilder::ValidateEmail(const Email& email_data, Logger& logger)
 {
-	if (email_data.sender.empty())
+	if (StringUtils::Trim(email_data.sender).empty())
 	{
-		logger.SpecificLog(PROD, "MimeBuilder error: sender is empty.");
+		logger.Log(PROD, "MimeBuilder error: sender is empty.");
 		return false;
 	}
-	if (email_data.recipient.empty())
+	if (StringUtils::Trim(email_data.recipient).empty())
 	{
-		logger.SpecificLog(PROD, "MimeBuilder error: recipient is empty.");
+		logger.Log(PROD, "MimeBuilder error: recipient is empty.");
 		return false;
 	}
-	if (email_data.plain_text.empty() && email_data.html_text.empty())
+	if (StringUtils::Trim(email_data.plain_text).empty() && email_data.html_text.empty())
 	{
-		logger.SpecificLog(PROD, "MimeBuilder error: body is empty.");
+		logger.Log(PROD, "MimeBuilder error: body is empty.");
 		return false;
 	}
-	if (email_data.sender.find('@') == std::string::npos)
+	if (StringUtils::Trim(email_data.sender).find('@') == std::string::npos)
 	{
-		logger.SpecificLog(PROD, "MimeBuilder error: invalid sender address.");
+		logger.Log(PROD, "MimeBuilder error: invalid sender address.");
 		return false;
 	}
-	if (email_data.recipient.find('@') == std::string::npos)
+	if (StringUtils::Trim(email_data.recipient).find('@') == std::string::npos)
 	{
-		logger.SpecificLog(PROD, "MimeBuilder error: invalid recipient address.");
+		logger.Log(PROD, "MimeBuilder error: invalid recipient address.");
 		return false;
 	}
 	return true;

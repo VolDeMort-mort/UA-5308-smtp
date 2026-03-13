@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <exception>
 
 #include "../../base64/include/Base64Decoder.hpp"
 
@@ -81,12 +82,13 @@ std::string DecodeQEncoding(const std::string& text)
 
 } // anonymous namespace
 
-std::string MimeDecoder::DecodeEncodedWord(const std::string& input)
+
+std::string MimeDecoder::DecodeEncodedWord(const std::string& input, Logger* logger)
 {
 	std::string result;
 	size_t pos = 0;
 	bool found_any_encoded = false;
-
+		
 	// looking for pattern =?charset?encoding?data?= 
 
 	while (pos < input.length())
@@ -130,8 +132,16 @@ std::string MimeDecoder::DecodeEncodedWord(const std::string& input)
 				std::vector<uint8_t> bytes = Base64Decoder::DecodeBase64(text);
 				decoded_part = std::string(bytes.begin(), bytes.end());
 			}
+			catch (const std::exception& e)
+			{
+				if (logger)
+					logger->Log(PROD, std::string("MimeDecoder: Base64 decode error (EncodedWord): ") + e.what());
+				decoded_part = text;
+			}
 			catch (...)
 			{
+				if (logger)
+					logger->Log(PROD, "MimeDecoder: Unknown Base64 decode error (EncodedWord)");
 				decoded_part = text;
 			}
 		}

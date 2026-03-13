@@ -6,9 +6,8 @@
 
 namespace SmtpClient {
 
-class Email
+struct Email
 {
-public:
 	std::string sender;
 	std::string recipient;
 	std::string subject;
@@ -22,8 +21,6 @@ public:
 	std::string html_text;
 
 	std::vector<Attachment> attachments;
-
-	Email() = default;
 
 	void AddAttachment(const std::string& name, const std::string& mime_type,
 					   const std::string& base64_data)

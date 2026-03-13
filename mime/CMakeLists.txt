@@ -15,8 +15,10 @@ target_link_libraries(mime_lib
     PUBLIC
         base64_lib    
         common_utils_lib 
+        logger_lib
 )
 
 if(BUILD_TESTING)
     add_subdirectory(utests)
 endif()
+

@@ -1,13 +1,21 @@
 #include <gtest/gtest.h>
 
-#include "../include/MimeParser.h"
 #include "../include/MimeBuilder.h"
 #include "../include/MimeComposer.h"
+#include "../include/MimeParser.h"
+#include "../../logger/Logger.h"
 #include "MockLogger.h"
 
 using namespace SmtpClient;
 
+static Logger MakeLogger()
+{
+	return Logger(std::make_unique<MockStrategy>());
+}
+
+
 // Helpers
+
 static const std::string kSimpleRaw =
 	"MIME-Version: 1.0\r\n"
 	"Date: Mon, 01 Mar 2025 10:00:00 +0200\r\n"
@@ -19,18 +27,20 @@ static const std::string kSimpleRaw =
 	"\r\n"
 	"Body text here.";
 
+
 // Basic
+
 TEST(MimeParserTest, ParseEmail_EmptyInput_ReturnsFalse)
 {
-	MockLogger logger;
-	Email      email;
+	auto  logger = MakeLogger();
+	Email email;
 	EXPECT_FALSE(MimeParser::ParseEmail("", email, logger));
 }
 
 TEST(MimeParserTest, ParseEmail_SimpleTextEmail)
 {
-	MockLogger logger;
-	Email      email;
+	auto  logger = MakeLogger();
+	Email email;
 	ASSERT_TRUE(MimeParser::ParseEmail(kSimpleRaw, email, logger));
 	EXPECT_EQ(email.sender,     "alice@example.com");
 	EXPECT_EQ(email.recipient,  "bob@example.com");
@@ -40,10 +50,12 @@ TEST(MimeParserTest, ParseEmail_SimpleTextEmail)
 	EXPECT_NE(email.plain_text.find("Body text here."), std::string::npos);
 }
 
+
 // Threading headers
+
 TEST(MimeParserTest, ParseEmail_ParsesThreadingHeaders)
 {
-	MockLogger  logger;
+	auto        logger = MakeLogger();
 	Email       email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
@@ -63,10 +75,12 @@ TEST(MimeParserTest, ParseEmail_ParsesThreadingHeaders)
 	EXPECT_EQ(email.references,  "<original.001@example.com>");
 }
 
+
 // Case-insensitive headers
+
 TEST(MimeParserTest, ParseEmail_CaseInsensitiveHeaders)
 {
-	MockLogger  logger;
+	auto        logger = MakeLogger();
 	Email       email;
 	std::string raw =
 		"mime-version: 1.0\r\n"
@@ -83,11 +97,13 @@ TEST(MimeParserTest, ParseEmail_CaseInsensitiveHeaders)
 	EXPECT_EQ(email.subject,   "Test");
 }
 
+
 // Folded headers
+
 TEST(MimeParserTest, ParseEmail_FoldedSubject)
 {
-	MockLogger  logger;
-	Email       email;
+	auto logger = MakeLogger();
+	Email email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
 		"From: alice@example.com\r\n"
@@ -103,11 +119,13 @@ TEST(MimeParserTest, ParseEmail_FoldedSubject)
 	EXPECT_NE(email.subject.find("Part2"), std::string::npos);
 }
 
+
 // Body encoding (simple email)
+
 TEST(MimeParserTest, ParseEmail_QuotedPrintableBody)
 {
-	MockLogger  logger;
-	Email       email;
+	auto logger = MakeLogger();
+	Email email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
 		"From: a@a.com\r\n"
@@ -115,7 +133,7 @@ TEST(MimeParserTest, ParseEmail_QuotedPrintableBody)
 		"Content-Type: text/plain; charset=\"utf-8\"\r\n"
 		"Content-Transfer-Encoding: quoted-printable\r\n"
 		"\r\n"
-		"=41=42=43"; // ABC
+		"=41=42=43";
 
 	ASSERT_TRUE(MimeParser::ParseEmail(raw, email, logger));
 	EXPECT_NE(email.plain_text.find("ABC"), std::string::npos);
@@ -123,8 +141,8 @@ TEST(MimeParserTest, ParseEmail_QuotedPrintableBody)
 
 TEST(MimeParserTest, ParseEmail_Base64Body)
 {
-	MockLogger  logger;
-	Email       email;
+	auto logger = MakeLogger();
+	Email email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
 		"From: a@a.com\r\n"
@@ -132,17 +150,19 @@ TEST(MimeParserTest, ParseEmail_Base64Body)
 		"Content-Type: text/plain; charset=\"utf-8\"\r\n"
 		"Content-Transfer-Encoding: base64\r\n"
 		"\r\n"
-		"SGVsbG8gV29ybGQ="; // "Hello World"
+		"SGVsbG8gV29ybGQ=";
 
 	ASSERT_TRUE(MimeParser::ParseEmail(raw, email, logger));
 	EXPECT_NE(email.plain_text.find("Hello World"), std::string::npos);
 }
 
+
 // Multipart/alternative
+
 TEST(MimeParserTest, ParseEmail_MultipartAlternative)
 {
-	MockLogger  logger;
-	Email       email;
+	auto logger = MakeLogger();
+	Email email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
 		"From: a@a.com\r\n"
@@ -164,11 +184,13 @@ TEST(MimeParserTest, ParseEmail_MultipartAlternative)
 	EXPECT_NE(email.html_text.find("<p>HTML body</p>"), std::string::npos);
 }
 
+
 // Attachments
+
 TEST(MimeParserTest, ParseEmail_AttachmentDetectedViaDisposition)
 {
-	MockLogger  logger;
-	Email       email;
+	auto logger = MakeLogger();
+	Email email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
 		"From: a@a.com\r\n"
@@ -194,8 +216,8 @@ TEST(MimeParserTest, ParseEmail_AttachmentDetectedViaDisposition)
 
 TEST(MimeParserTest, ParseEmail_AttachmentDetectedViaName)
 {
-	MockLogger  logger;
-	Email       email;
+	auto logger = MakeLogger();
+	Email email;
 	std::string raw =
 		"MIME-Version: 1.0\r\n"
 		"From: a@a.com\r\n"
@@ -218,11 +240,13 @@ TEST(MimeParserTest, ParseEmail_AttachmentDetectedViaName)
 	EXPECT_EQ(email.attachments[0].file_name, "notes.txt");
 }
 
+
 // Round-trip integrity (MimeBuilder -> MimeParser)
+
 TEST(MimeParserTest, RoundTrip_PlainText)
 {
-	MockLogger  logger;
-	Email       original;
+	auto logger = MakeLogger();
+	Email original;
 	original.sender     = "alice@example.com";
 	original.recipient  = "bob@example.com";
 	original.subject    = "Round-trip test";
@@ -242,11 +266,11 @@ TEST(MimeParserTest, RoundTrip_PlainText)
 
 TEST(MimeParserTest, RoundTrip_CyrillicSubject)
 {
-	MockLogger  logger;
-	Email       original;
+	auto  logger   = MakeLogger();
+	Email original;
 	original.sender     = "alice@example.com";
 	original.recipient  = "bob@example.com";
-	original.subject    = "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82"; // Привіт
+	original.subject    = "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82";
 	original.plain_text = "Body text";
 
 	std::string mime;
@@ -254,14 +278,13 @@ TEST(MimeParserTest, RoundTrip_CyrillicSubject)
 
 	Email parsed;
 	ASSERT_TRUE(MimeParser::ParseEmail(mime, parsed, logger));
-
 	EXPECT_EQ(parsed.subject, original.subject);
 }
 
 TEST(MimeParserTest, RoundTrip_WithHtml)
 {
-	MockLogger  logger;
-	Email       original;
+	auto logger = MakeLogger();
+	Email original;
 	original.sender     = "alice@example.com";
 	original.recipient  = "bob@example.com";
 	original.subject    = "HTML test";
@@ -273,36 +296,34 @@ TEST(MimeParserTest, RoundTrip_WithHtml)
 
 	Email parsed;
 	ASSERT_TRUE(MimeParser::ParseEmail(mime, parsed, logger));
-
 	EXPECT_TRUE(parsed.HasHtml());
 	EXPECT_NE(parsed.html_text.find("<p>HTML text</p>"), std::string::npos);
 }
 
 TEST(MimeParserTest, RoundTrip_WithAttachment)
 {
-	MockLogger  logger;
-	Email       original;
+	auto logger = MakeLogger();
+	Email original;
 	original.sender     = "alice@example.com";
 	original.recipient  = "bob@example.com";
 	original.subject    = "Attachment test";
 	original.plain_text = "See attachment";
-	original.AddAttachment("hello.txt", "text/plain", "SGVsbG8gV29ybGQh"); // "Hello World!"
+	original.AddAttachment("hello.txt", "text/plain", "SGVsbG8gV29ybGQh");
 
 	std::string mime;
 	ASSERT_TRUE(MimeBuilder::BuildEmail(original, mime, logger));
 
 	Email parsed;
 	ASSERT_TRUE(MimeParser::ParseEmail(mime, parsed, logger));
-
 	ASSERT_EQ(parsed.attachments.size(), 1u);
 	EXPECT_EQ(parsed.attachments[0].file_name, "hello.txt");
-	EXPECT_EQ(parsed.attachments[0].file_size, 12u); // "Hello World!" = 12 bytes
+	EXPECT_EQ(parsed.attachments[0].file_size, 12u);
 }
 
 TEST(MimeParserTest, RoundTrip_ThreadingHeaders)
 {
-	MockLogger  logger;
-	Email       original;
+	auto logger = MakeLogger();
+	Email original;
 	original.sender       = "alice@example.com";
 	original.recipient    = "bob@example.com";
 	original.subject      = "Thread test";
@@ -316,7 +337,6 @@ TEST(MimeParserTest, RoundTrip_ThreadingHeaders)
 
 	Email parsed;
 	ASSERT_TRUE(MimeParser::ParseEmail(mime, parsed, logger));
-
 	EXPECT_EQ(parsed.in_reply_to, "<prev.001@test.com>");
 	EXPECT_EQ(parsed.references,  "<prev.001@test.com>");
 }

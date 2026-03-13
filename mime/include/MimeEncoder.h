@@ -1,7 +1,10 @@
 #pragma once
 #include <string>
+#include <cstddef>
 
 namespace SmtpClient {
+
+constexpr std::size_t MIME_HEADER_CHUNK_SIZE = 45;
 
 class MimeEncoder
 {

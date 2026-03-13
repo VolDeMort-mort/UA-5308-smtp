@@ -47,8 +47,8 @@ TEST(MimeEncoderTest, EncodeHeader_ContainsRfc2047Markers)
 TEST(MimeEncoderTest, EncodeHeader_SingleBlockForShortText)
 {
 	std::string encoded = MimeEncoder::EncodeHeader("\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82");
-	size_t      first   = encoded.find("=?UTF-8?B?");
-	size_t      last    = encoded.rfind("=?UTF-8?B?");
+	size_t first = encoded.find("=?UTF-8?B?");
+	size_t last = encoded.rfind("=?UTF-8?B?");
 	EXPECT_EQ(first, last) << "Short text should produce exactly one encoded block";
 }
 
@@ -59,8 +59,8 @@ TEST(MimeEncoderTest, EncodeHeader_MultipleBlocksForLongText)
 	for (int i = 0; i < 24; ++i) cyrillic += "\xD0\x90"; // "А" x 24 = 48 bytes
 	std::string encoded = MimeEncoder::EncodeHeader(cyrillic);
 
-	size_t pos   = 0;
-	int    count = 0;
+	size_t pos = 0;
+	int count = 0;
 	while ((pos = encoded.find("=?UTF-8?B?", pos)) != std::string::npos)
 	{
 		count++;

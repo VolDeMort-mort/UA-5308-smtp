@@ -18,9 +18,10 @@ TEST(MimeDecoderTest, DecodeEncodedWord_EmptyString)
 TEST(MimeDecoderTest, DecodeEncodedWord_Base64Cyrillic)
 {
 	// "Привіт" in Base64: 0KPRgNC40LLRltGC
-	std::string encoded = "=?UTF-8?B?0KPRgNC40LLRltGC?=";
+	std::string encoded = "=?UTF-8?B?0J/RgNC40LLRltGC?=";
 	std::string decoded = MimeDecoder::DecodeEncodedWord(encoded);
-	EXPECT_EQ(decoded, "\xD0\xA3\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82"); // "Уривіт"
+
+	EXPECT_EQ(decoded, "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82"); // "Привіт"
 }
 
 TEST(MimeDecoderTest, DecodeEncodedWord_QEncoding_Underscore)

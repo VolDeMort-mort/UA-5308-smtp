@@ -9,7 +9,7 @@ if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
-find_package(Boost REQUIRED)
+#find_package(Boost REQUIRED)
 
 # --- GTest ---
 include(FetchContent)
@@ -21,29 +21,29 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 enable_testing()
 
-option(BUILD_SERVER "Build the SMTP server" ON)
-option(BUILD_IMAP "Build the IMAP server" ON)
-option(BUILD_MUA "Build the Mail User Agent" ON)
-option(BUILD_DATABASE "Build the Database" ON)
+#option(BUILD_SERVER "Build the SMTP server" ON)
+#option(BUILD_IMAP "Build the IMAP server" ON)
+#option(BUILD_MUA "Build the Mail User Agent" ON)
+#option(BUILD_DATABASE "Build the Database" ON)
 
 add_subdirectory(common)
 add_subdirectory(base64)
 add_subdirectory(logger)
 add_subdirectory(mime)
-add_subdirectory(proto)
-
-if(BUILD_SERVER)
-    add_subdirectory(server)
-endif()
-
-if(BUILD_IMAP)
-    add_subdirectory(imap-server)
-endif()
-
-if(BUILD_MUA)
-    add_subdirectory(mua)
-endif()
-
-if(BUILD_DATABASE)
-    add_subdirectory(database)
-endif()
+#add_subdirectory(proto)
+#
+#if(BUILD_SERVER)
+#    add_subdirectory(server)
+#endif()
+#
+#if(BUILD_IMAP)
+#    add_subdirectory(imap-server)
+#endif()
+#
+#if(BUILD_MUA)
+#    add_subdirectory(mua)
+#endif()
+#
+#if(BUILD_DATABASE)
+#    add_subdirectory(database)
+#endif()

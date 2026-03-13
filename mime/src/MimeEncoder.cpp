@@ -28,12 +28,11 @@ std::string MimeEncoder::EncodeHeader(const std::string& text, const std::string
 		return text;
 
 	std::string result;
-	size_t      length     = text.length();
-	const size_t CHUNK_SIZE = 45;
+	size_t length = text.length();
 
 	for (size_t i = 0; i < length;)
 	{
-		size_t end   = StringUtils::FindUtf8SafeEnd(text, i, CHUNK_SIZE);
+		size_t end = StringUtils::FindUtf8SafeEnd(text, i, MIME_HEADER_CHUNK_SIZE);
 		std::string chunk      = text.substr(i, end - i);
 		std::string base64_chunk = ToBase64(chunk);
 

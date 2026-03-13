@@ -1,13 +1,14 @@
-#include "../include/MimeParser.h"
-
 #include <algorithm>
 #include <cctype>
 #include <sstream>
 #include <vector>
+#include <exception>
 
-#include "../../base64/include/Base64Decoder.hpp"
+#include "../../logger/Logger.h"
+#include "../../common/utils/StringUtils.h" 
+#include "../include/MimeParser.h"
 #include "../include/MimeDecoder.h"
-
+#include "../../base64/include/Base64Decoder.hpp"
 namespace SmtpClient {
 
 namespace {
@@ -30,18 +31,18 @@ std::string ToLower(std::string s)
 } // anonymous namespace
 
 bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
-							ILoggerStrategy& logger)
+							Logger& logger)
 {
 	if (raw_mime.empty())
 	{
-		logger.SpecificLog(PROD, "Parser error: Raw MIME string is empty.");
+		logger.Log(PROD, "Parser error: Raw MIME string is empty.");
 		return false;
 	}
 
 	std::string top_headers, body;
 	SplitHeadersAndBody(raw_mime, top_headers, body);
 
-	ParseMainHeaders(top_headers, out_email);
+	ParseMainHeaders(top_headers, out_email, logger);
 
 	std::string content_type = GetHeaderValue(top_headers, "Content-Type:");
 
@@ -51,12 +52,12 @@ bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
 
 		if (boundary.empty())
 		{
-			logger.SpecificLog(PROD, "Parser error: Multipart detected but no boundary found.");
+			logger.Log(PROD, "Parser error: Multipart detected but no boundary found.");
 			out_email.plain_text = body;
 			return false;
 		}
 
-		logger.SpecificLog(DEBUG, "MimeParser: boundary [" + boundary + "]");
+		logger.Log(DEBUG, "MimeParser: boundary [" + boundary + "]");
 		ParseMultipartBody(body, boundary, out_email, logger);
 	}
 	else
@@ -71,12 +72,18 @@ bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
 		{
 			try
 			{
-				auto decoded         = Base64Decoder::DecodeBase64(body);
+				auto decoded = Base64Decoder::DecodeBase64(body);
 				out_email.plain_text = std::string(decoded.begin(), decoded.end());
+			}
+			catch (const std::exception& e)
+			{
+				logger.Log(PROD, std::string("Base64 decode error: ") + e.what());
+				out_email.plain_text = body;
 			}
 			catch (...)
 			{
-				out_email.plain_text = body;
+				logger.Log(PROD, "Base64 decode critical error: Unknown exception!");
+				out_email.plain_text = body; 
 			}
 		}
 		else
@@ -85,38 +92,38 @@ bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
 		}
 	}
 
-	logger.SpecificLog(DEBUG, "MimeParser: parsed email from " + out_email.sender);
+	logger.Log(DEBUG, "MimeParser: parsed email from " + out_email.sender);
 	return true;
 }
 
 void MimeParser::SplitHeadersAndBody(const std::string& raw_block,
 									 std::string& out_headers, std::string& out_body)
 {
-	size_t pos           = raw_block.find("\r\n\r\n");
+	size_t pos = raw_block.find("\r\n\r\n");
 	size_t delimiter_len = 4;
 
 	if (pos == std::string::npos)
 	{
-		pos           = raw_block.find("\n\n");
+		pos = raw_block.find("\n\n");
 		delimiter_len = 2;
 	}
 
 	if (pos != std::string::npos)
 	{
 		out_headers = raw_block.substr(0, pos);
-		out_body    = raw_block.substr(pos + delimiter_len);
+		out_body = raw_block.substr(pos + delimiter_len);
 	}
 	else
 	{
 		out_headers = "";
-		out_body    = raw_block;
+		out_body = raw_block;
 	}
 }
 
 std::string MimeParser::ExtractBoundary(const std::string& content_type_header)
 {
 	std::string lower_header = ToLower(content_type_header);
-	size_t      pos          = lower_header.find("boundary=");
+	size_t pos = lower_header.find("boundary=");
 
 	if (pos == std::string::npos) return "";
 
@@ -140,14 +147,14 @@ std::string MimeParser::ExtractBoundary(const std::string& content_type_header)
 			boundary = content_type_header.substr(pos);
 	}
 
-	return boundary;
+	return StringUtils::Trim(boundary);
 }
 
-void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email)
+void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email, Logger& logger)
 {
-	out_email.sender     = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "From:"));
-	out_email.recipient  = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "To:"));
-	out_email.subject    = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "Subject:"));
+	out_email.sender     = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "From:"),    &logger);
+	out_email.recipient  = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "To:"),      &logger);
+	out_email.subject    = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "Subject:"), &logger);
 	out_email.date       = GetHeaderValue(top_headers, "Date:");
 	out_email.message_id = GetHeaderValue(top_headers, "Message-ID:");
 	out_email.in_reply_to = GetHeaderValue(top_headers, "In-Reply-To:");
@@ -155,7 +162,7 @@ void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_ema
 }
 
 void MimeParser::ParseMultipartBody(const std::string& body, const std::string& boundary,
-									Email& out_email, ILoggerStrategy& logger)
+									Email& out_email, Logger& logger)
 {
 	std::string delimiter = "--" + boundary;
 	size_t      start_pos = body.find(delimiter);
@@ -181,7 +188,7 @@ void MimeParser::ParseMultipartBody(const std::string& body, const std::string& 
 }
 
 void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
-								 ILoggerStrategy& logger)
+								 Logger& logger)
 {
 	std::string part_headers, part_body;
 	SplitHeadersAndBody(part_raw, part_headers, part_body);
@@ -199,7 +206,7 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 		std::string nested_boundary = ExtractBoundary(GetHeaderValue(part_headers, "Content-Type:"));
 		if (!nested_boundary.empty())
 		{
-			logger.SpecificLog(DEBUG, "MimeParser: nested multipart (" + content_type + ")");
+			logger.Log(DEBUG, "MimeParser: nested multipart (" + content_type + ")");
 			ParseMultipartBody(part_body, nested_boundary, out_email, logger);
 		}
 		return;
@@ -211,7 +218,7 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 
 	if (is_attachment)
 	{
-		std::string file_name = ExtractFileName(part_headers);
+		std::string file_name = ExtractFileName(part_headers, logger);
 
 		std::string pure_mime = content_type;
 		size_t      semi      = pure_mime.find(';');
@@ -224,7 +231,7 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 		}
 
 		out_email.AddAttachment(file_name, pure_mime, part_body);
-		logger.SpecificLog(DEBUG, "MimeParser: attachment added: " + file_name);
+		logger.Log(DEBUG, "MimeParser: attachment added: " + file_name);
 	}
 	else if (content_type.find("text/plain") != std::string::npos)
 	{
@@ -234,11 +241,17 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 			part_body.erase(std::remove(part_body.begin(), part_body.end(), '\n'), part_body.end());
 			try
 			{
-				auto decoded         = Base64Decoder::DecodeBase64(part_body);
+				auto decoded = Base64Decoder::DecodeBase64(part_body);
 				out_email.plain_text = std::string(decoded.begin(), decoded.end());
+			}
+			catch (const std::exception& e)
+			{
+				logger.Log(PROD, std::string("MimeParser: Base64 decode error (text/plain): ") + e.what());
+				out_email.plain_text = part_body;
 			}
 			catch (...)
 			{
+				logger.Log(PROD, "MimeParser: Unknown Base64 decode error (text/plain)");
 				out_email.plain_text = part_body;
 			}
 		}
@@ -255,11 +268,17 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 			part_body.erase(std::remove(part_body.begin(), part_body.end(), '\n'), part_body.end());
 			try
 			{
-				auto decoded        = Base64Decoder::DecodeBase64(part_body);
+				auto decoded = Base64Decoder::DecodeBase64(part_body);
 				out_email.html_text = std::string(decoded.begin(), decoded.end());
+			}
+			catch (const std::exception& e)
+			{
+				logger.Log(PROD, std::string("MimeParser: Base64 decode error (text/html): ") + e.what());
+				out_email.html_text = part_body;
 			}
 			catch (...)
 			{
+				logger.Log(PROD, "MimeParser: Unknown Base64 decode error (text/html)");
 				out_email.html_text = part_body;
 			}
 		}
@@ -270,7 +289,7 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 	}
 }
 
-std::string MimeParser::ExtractFileName(const std::string& part_headers)
+std::string MimeParser::ExtractFileName(const std::string& part_headers, Logger& logger)
 {
 	std::string file_name;
 
@@ -324,19 +343,18 @@ std::string MimeParser::ExtractFileName(const std::string& part_headers)
 	}
 
 	if (file_name.empty()) file_name = "unnamed_file";
-	return MimeDecoder::DecodeEncodedWord(file_name);
+	return MimeDecoder::DecodeEncodedWord(StringUtils::Trim(file_name), &logger);
 }
 
 std::string MimeParser::GetHeaderValue(const std::string& headers, const std::string& key)
 {
 	std::string lower_key = ToLower(key);
-	if (!lower_key.empty() && lower_key.back() == ':')
-		lower_key.pop_back();
+	if (!lower_key.empty() && lower_key.back() == ':') lower_key.pop_back();
 
 	std::istringstream stream(headers);
-	std::string        line;
-	std::string        result;
-	bool               found = false;
+	std::string line;
+	std::string result;
+	bool found = false;
 
 	while (std::getline(stream, line))
 	{
@@ -345,13 +363,9 @@ std::string MimeParser::GetHeaderValue(const std::string& headers, const std::st
 
 		if (found && (line[0] == ' ' || line[0] == '\t'))
 		{
-			size_t first_real = line.find_first_not_of(" \t");
-			if (first_real != std::string::npos)
+			std::string appended = StringUtils::Trim(line);
+			if (!appended.empty())
 			{
-				std::string appended  = line.substr(first_real);
-				size_t      last_real = appended.find_last_not_of(" \t");
-				if (last_real != std::string::npos)
-					appended = appended.substr(0, last_real + 1);
 				result += " " + appended;
 			}
 			continue;
@@ -365,15 +379,7 @@ std::string MimeParser::GetHeaderValue(const std::string& headers, const std::st
 		std::string current_key = line.substr(0, colon_pos);
 		if (IEquals(current_key, lower_key))
 		{
-			result = line.substr(colon_pos + 1);
-
-			size_t val_start = result.find_first_not_of(" \t");
-			result = (val_start != std::string::npos) ? result.substr(val_start) : "";
-
-			size_t val_end = result.find_last_not_of(" \t");
-			if (val_end != std::string::npos)
-				result = result.substr(0, val_end + 1);
-
+			result = StringUtils::Trim(line.substr(colon_pos + 1));
 			found = true;
 		}
 	}

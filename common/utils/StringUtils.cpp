@@ -2,8 +2,20 @@
 
 #include <algorithm>
 #include <sstream>
+#include <string>
 
 namespace SmtpClient {
+
+std::string StringUtils::Trim(const std::string& str)
+{
+	size_t start = str.find_first_not_of(" \t\r\n");
+
+	if (start == std::string::npos) return "";
+
+	size_t end = str.find_last_not_of(" \t\r\n");
+
+	return str.substr(start, end - start + 1);
+}
 
 size_t StringUtils::FindUtf8SafeEnd(const std::string& text, size_t start, size_t max_bytes)
 {
@@ -18,6 +30,7 @@ size_t StringUtils::FindUtf8SafeEnd(const std::string& text, size_t start, size_
 	}
 	return end;
 }
+
 std::string StringUtils::WrapText(const std::string& text, size_t line_length)
 {
 	// RFC 5322 says that one line can contain max 998 symbols

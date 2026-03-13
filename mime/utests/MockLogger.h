@@ -1,11 +1,11 @@
 #pragma once
 #include "../../logger/ILoggerStrategy.h"
 
-class MockLogger : public ILoggerStrategy
+class MockStrategy : public ILoggerStrategy
 {
 public:
-	std::string SpecificLog(LogLevel, const std::string&) override { return ""; }
-	bool IsValid() override { return true; }
-	bool Write(const std::string&) override { return true; }
-	void Flush() override {}
+	std::string SpecificLog(LogLevel, const std::string& msg) override { return msg; }
+	bool        IsValid() override { return true; }
+	bool        Write(const std::string&) override { return true; }
+	void        Flush() override {}
 };
