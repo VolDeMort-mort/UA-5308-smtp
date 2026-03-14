@@ -29,10 +29,6 @@ ApplicationWindow {
         id: composePopup
     }
 
-    ReadMessagePopup{
-        id: readMail
-    }
-
     // Elements
     ListModel {
         id: mockEmailModel
@@ -103,7 +99,7 @@ ApplicationWindow {
     FilterModel {
         id: filteredModel
         model: mockEmailModel
-        delegate: EmailDelegate {}
+        delegate: MailListDelegate {}
     }
 
     // Program layout
@@ -137,9 +133,8 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
 
-            EmailListView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+            MailArea {
+                id: areaContainer
             }
         }
     }
@@ -148,6 +143,10 @@ ApplicationWindow {
     QtObject{
         id: mainController
 
+        // FIX
+        function changeState(state){
+            areaContainer.state = state
+        }
 
         function filterNav(type) {
             filteredModel.resetFilters();
@@ -175,11 +174,16 @@ ApplicationWindow {
                 filteredModel.filterStatus = 3;
                 break;
             }
+
+            changeState("LISTSTATE")
         }
 
         function filterFold(fol_id) {
             filteredModel.resetFilters();
             filteredModel.filterFolder = fol_id;
+
+            changeState("LISTSTATE")
         }
+
     }
 }

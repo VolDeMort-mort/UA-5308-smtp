@@ -30,23 +30,21 @@ qt_add_qml_module(smtp_mua
         qml/Components/ActionBtn.qml
         qml/Components/SvgIcon.qml
         qml/Components/SidebarItem.qml
-
-        qml/Components/EmailDelegate.qml
+        qml/Components/MailListDelegate.qml
         qml/Components/StyledCheckBox.qml
+        qml/Components/FilterModel.qml
+        qml/Components/NavType.qml
+        qml/Components/MailListView.qml
+        qml/Components/MailView.qml
 
         qml/Views/Sidebar.qml
         qml/Views/TopSearchBar.qml
         qml/Views/Toolbar.qml
-        qml/Views/EmailListView.qml
+        qml/Views/MailArea.qml
         qml/Views/ComposePopup.qml
-        qml/Views/ReadMessagePopup.qml
         qml/Views/FilterPopup.qml
 
         qml/main.qml
-        QML_FILES qml/Components/FilterModel.qml
-        QML_FILES qml/Components/NavType.qml
-
-
 )
 
 target_link_libraries(smtp_mua

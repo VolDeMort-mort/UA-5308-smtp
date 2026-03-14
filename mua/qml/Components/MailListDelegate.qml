@@ -161,13 +161,8 @@ Rectangle {
         }
 
         function handleBodyClick() {
-            delegateRoot.ListView.view.currentIndex = index
-            readMail.msgData = mockEmailModel.get(index)
-            readMail.open()
-
-            if (!model.isSeen) {
-                mockEmailModel.setProperty(index, "isSeen", !model.isSeen)
-            }
+            delegateRoot.ListView.view.mailSelected(index);
+            mockEmailModel.setProperty(index, "isSeen", !model.isSeen)
         }
     }
 }
