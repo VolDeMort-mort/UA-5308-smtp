@@ -26,7 +26,7 @@ public:
 	 * @brief Logger ctor
 	 * @param strategy pointer to writing strategy(File,Console)
 	 */
-	Logger(std::unique_ptr<ILoggerStrategy> strategy);
+	Logger(std::shared_ptr<ILoggerStrategy> strategy);
 
 	/**
 	 * @brief Logger dtor
@@ -38,7 +38,7 @@ public:
 	 * @brief Set new strategy in runtime
 	 * @param strategy New strategy for logging. Logs are saving with switching
 	 */
-	void set_strategy(std::unique_ptr<ILoggerStrategy> strategy);
+	void set_strategy(std::shared_ptr<ILoggerStrategy> strategy);
 
 	/**
 	 * @brief Formatting message and push it into PushToQueue()
@@ -66,7 +66,7 @@ public:
 	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n);
 
 private:
-	std::unique_ptr<ILoggerStrategy> m_strategy; // pointer to abstract class
+	std::shared_ptr<ILoggerStrategy> m_strategy; // pointer to abstract class
 	LogLevel m_defaultLevel = LogLevel::PROD;	 // default lvl for logs
 
 	std::mutex m_queue_mtx;			  // mutex for queue & Read()
