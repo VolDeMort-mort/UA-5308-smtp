@@ -6,20 +6,20 @@
 #include <filesystem>
 class LoggerClass : public ::testing::Test {
 protected:
-	std::unique_ptr<Logger> logger;
+	std::shared_ptr<Logger> logger;
 	void SetUp() override
 	{
 		std::filesystem::remove("log.txt");
-		logger = std::make_unique<Logger>(std::make_unique<FileStrategy>(PROD));
+		logger = std::make_shared<Logger>(std::make_shared<FileStrategy>(PROD));
 	}
 };
 class FileStrategyClass : public ::testing::Test {
 protected:
-	std::unique_ptr<FileStrategy> strategy;
+	std::shared_ptr<FileStrategy> strategy;
 	void SetUp() override
 	{
 		std::filesystem::remove("log.txt");
-		strategy = std::make_unique<FileStrategy>(PROD);
+		strategy = std::make_shared<FileStrategy>(PROD);
 	}
 };
 
@@ -129,8 +129,8 @@ TEST_F(LoggerClass, OrderTest)
 }
 TEST_F(LoggerClass, StressTest)
 {
-	std::unique_ptr<Logger> stress_logger;
-	stress_logger = std::make_unique<Logger>(std::make_unique<FileStrategy>(DEBUG));
+	std::shared_ptr<Logger> stress_logger;
+	stress_logger = std::make_shared<Logger>(std::make_shared<FileStrategy>(DEBUG));
 	std::vector<std::thread> threads;
 	for (size_t i = 0; i < 10; ++i) {
 		threads.emplace_back(std::thread([this,&stress_logger]() {
