@@ -3,6 +3,9 @@
 #include <vector>
 #include <string>
 
+constexpr size_t MAX_SMTP_LINE = 1024;
+constexpr size_t MAX_DATA_SIZE = 10 * 1024 * 1024;
+
 enum CommandType {
 	HELO,
 	EHLO,

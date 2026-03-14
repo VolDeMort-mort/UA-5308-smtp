@@ -125,6 +125,7 @@ TEST(SMTP_Socket_Tests, ClientToServer_AllCommandsParsed)
 										   {CommandType::RCPT, "recipient@example.com"},
 										   {CommandType::DATA, ""},
 										   {CommandType::SEND_DATA, "Hello\r\n"},
+										   {CommandType::SEND_DATA, "Hello\r\n.\r\n"},
 										   {CommandType::QUIT, ""}};
 
 	for (const auto& cmd : commands)

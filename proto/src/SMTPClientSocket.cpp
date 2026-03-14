@@ -4,11 +4,12 @@
 
 using boost::asio::ip::tcp;
 
-SMTPClientSocket::SMTPClientSocket(boost::asio::io_context& ioc)
+SMTPClientSocket::SMTPClientSocket(boost::asio::io_context& ioc, std::size_t max_smtp_line)
 	: m_socket(std::make_unique<PlainStream>(boost::asio::ip::tcp::socket(ioc)))
 	, m_strand(m_socket->get_executor())
 	, m_timer(m_socket->get_executor())
 	, m_buf()
+	, M_MAX_SMTP_LINE(max_smtp_line)
 	, m_closing(false)
 {
 }
@@ -188,7 +189,9 @@ void SMTPClientSocket::ReadResponse(std::chrono::milliseconds timeout, ReadHandl
 			*read_one = [self, lines, expected_code, completed, handler, read_one, timeout]() mutable
 			{
 				self->m_socket->async_read_until(
-					self->m_buf, "\r\n",
+					self->m_buf,
+					self->M_MAX_SMTP_LINE,
+					"\r\n",
 					boost::asio::bind_executor(
 						self->m_strand,
 						[self, lines, expected_code, completed, handler, read_one,
@@ -202,22 +205,20 @@ void SMTPClientSocket::ReadResponse(std::chrono::milliseconds timeout, ReadHandl
 								return;
 							}
 
-							auto data = self->m_buf.data();
-
-							std::string line(boost::asio::buffers_begin(data),
-											 boost::asio::buffers_begin(data) + bytes_transferred);
-
-							self->m_buf.consume(bytes_transferred);
+							std::string line = self->m_buf.substr(0, bytes_transferred);
+							self->m_buf.erase(0, bytes_transferred);
 
 							if (!line.empty() && line.back() == '\n') line.pop_back();
 							if (!line.empty() && line.back() == '\r') line.pop_back();
 
-							lines->push_back(line);
+							lines->push_back(std::move(line));
+
+							const std::string& last = lines->back();
 
 							if (*expected_code == -1)
 							{
 								int code = 0;
-								if (SMTPResponseParser::TryParseCode(line, code))
+								if (SMTPResponseParser::TryParseCode(last, code))
 								{
 									*expected_code = code;
 								}
@@ -231,7 +232,7 @@ void SMTPClientSocket::ReadResponse(std::chrono::milliseconds timeout, ReadHandl
 								}
 							}
 
-							bool is_final = SMTPResponseParser::IsFinalSep(line);
+							bool is_final = SMTPResponseParser::IsFinalSep(last);
 
 							if (is_final)
 							{
@@ -273,7 +274,7 @@ void SMTPClientSocket::StartTls(boost::asio::ssl::context& ctx,
 
 			if (self->m_buf.size() > 0)
 			{
-				self->m_buf.consume(self->m_buf.size());
+				self->m_buf.clear();
 			}
 
 			tcp::socket raw_socket = self->m_socket->release_tcp_socket();

@@ -5,5 +5,7 @@
 class SMTPCommandParser
 {
 public:
-	static void ParseLine(std::string& line, ClientCommand& command);
+	static ClientCommand ParseLine(std::string_view line);
+
+	static ClientCommand ParseData(std::string_view data);
 };

@@ -14,7 +14,9 @@ class SMTPServerSession : public std::enable_shared_from_this<SMTPServerSession>
 public:
 	using Ptr = std::shared_ptr<SMTPServerSession>;
 
-	SMTPServerSession(SMTPServerSocket::Ptr socket, std::shared_ptr<boost::asio::ssl::context> ssl_ctx);
+	SMTPServerSession(SMTPServerSocket::Ptr socket, std::shared_ptr<boost::asio::ssl::context> ssl_ctx,
+					  std::chrono::seconds cmd_timeout = std::chrono::seconds(300),
+					  std::chrono::seconds data_timeout = std::chrono::seconds(600));
 
 	void run();
 
@@ -35,8 +37,8 @@ private:
 	std::vector<std::string> m_recipients;
 	std::string m_data_buffer;
 
-	const std::chrono::seconds M_CMD_TIMEOUT{std::chrono::seconds(300)};
-	const std::chrono::seconds M_DATA_TIMEOUT{std::chrono::seconds(600)};
+	const std::chrono::seconds M_CMD_TIMEOUT;
+	const std::chrono::seconds M_DATA_TIMEOUT;
 
 	void SendResponse(const ServerResponse& resp);
 	void DoReadCommand();

@@ -50,7 +50,7 @@ bool SMTPResponseParser::IsFinalSep(const std::string& line)
 	if (line.size() >= 4)
 	{
 		char sep = line[3];
-		return sep == ' ' || (sep != '-' && line.size() == 3);
+		return sep == ' ';
 	}
 	return true;
 }

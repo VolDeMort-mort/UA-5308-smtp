@@ -9,10 +9,10 @@ public:
 
 	boost::asio::any_io_executor get_executor() override { return m_socket.get_executor(); }
 
-	void async_read_until(boost::asio::streambuf& buf, const std::string& delim,
+	void async_read_until(std::string& buf, std::size_t max_size, const std::string& delim,
 						  std::function<void(const boost::system::error_code&, std::size_t)> handler) override
 	{
-		boost::asio::async_read_until(m_socket, buf, delim, std::move(handler));
+		boost::asio::async_read_until(m_socket, boost::asio::dynamic_buffer(buf, max_size), delim, std::move(handler));
 	}
 
 	void async_write(const boost::asio::const_buffer& buf,

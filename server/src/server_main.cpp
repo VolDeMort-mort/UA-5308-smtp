@@ -6,6 +6,16 @@
 
 int main()
 {
+	// variables that can be loaded with configuration loader
+	const short port = 25000;
+
+	const size_t MAX_SMTP_LINE_SERVER = MAX_SMTP_LINE;
+	const size_t MAX_DATA_SIZE_SERVER = MAX_DATA_SIZE;
+
+	const std::chrono::seconds CMD_TIMEOUT_SERVER = std::chrono::seconds(300);
+	const std::chrono::seconds DATA_TIMEOUT_SERVER = std::chrono::seconds(600);
+
+
 	try
 	{
 		boost::asio::io_context ioc;
@@ -25,7 +35,8 @@ int main()
 		std::filesystem::path cert_file = base_dir / "certs" / "server.crt";
 		std::filesystem::path key_file = base_dir / "certs" / "server.key";
 
-		SMTPServer server(ioc, 25000, cert_file.string(), key_file.string());
+		SMTPServer server(ioc, port, cert_file.string(), key_file.string(), CMD_TIMEOUT_SERVER, DATA_TIMEOUT_SERVER,
+						  MAX_SMTP_LINE_SERVER, MAX_DATA_SIZE_SERVER);
 		server.run(std::thread::hardware_concurrency());
 
 		std::cout << "SMTP server started on port 25000\n";

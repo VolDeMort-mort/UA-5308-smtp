@@ -8,8 +8,13 @@
 
 using boost::system::error_code;
 
-SMTPServerSession::SMTPServerSession(SMTPServerSocket::Ptr socket, std::shared_ptr<boost::asio::ssl::context> ssl_ctx)
-	: m_socket(std::move(socket)), m_ssl_ctx(std::move(ssl_ctx)), m_state(State::NEW)
+SMTPServerSession::SMTPServerSession(SMTPServerSocket::Ptr socket, std::shared_ptr<boost::asio::ssl::context> ssl_ctx,
+									 std::chrono::seconds cmd_timeout, std::chrono::seconds data_timeout)
+	: m_socket(std::move(socket))
+	, m_ssl_ctx(std::move(ssl_ctx))
+	, m_state(State::NEW)
+	, M_CMD_TIMEOUT(cmd_timeout)
+	, M_DATA_TIMEOUT(data_timeout)
 {
 }
 
@@ -106,6 +111,8 @@ void SMTPServerSession::HandleCommand(ClientCommand cmd, const error_code& ec)
 
 		if (cmd.command == CommandType::EHLO)
 		{
+			resp.lines.push_back("SIZE " + std::to_string(m_socket->getMaxDataSize()));
+
 			if (m_ssl_ctx && !m_socket->IsTls()) resp.lines.push_back("STARTTLS");
 		}
 
