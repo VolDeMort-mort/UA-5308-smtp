@@ -2,14 +2,13 @@
 #include <iostream>
 #include <memory>
 
-#include "ClientSecureChannel.hpp"
 #include "FileStrategy.h"
 #include "Logger.h"
+#include "DataBaseManager.h"
 #include "ServerSecureChannel.hpp"
 #include "SmtpSession.hpp"
 #include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
-#include "SocketConnector.hpp"
 
 int main()
 {
@@ -18,6 +17,16 @@ int main()
 
 	try
 	{
+		DataBaseManager db("mail.db", "../../database/scheme/001_init_scheme.sql");
+		if (!db.isConnected())
+		{
+			std::cerr << "Database connection failed\n";
+			return 1;
+		}
+		UserDAL user_dal(db.getDB());
+		UserRepository user_repo(user_dal);
+		MessageRepository message_repo(db);
+
 		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
 
 		boost::asio::io_context io_context;
@@ -41,7 +50,7 @@ int main()
 			ServerSecureChannel channel(*connection);
 			channel.setLogger(&logger);
 
-			SmtpSession session(SERVER_DOMAIN);
+			SmtpSession session(SERVER_DOMAIN, &message_repo, &user_repo);
 
 			if (!channel.Send(session.Greeting()))
 			{

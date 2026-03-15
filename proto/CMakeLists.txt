@@ -12,6 +12,10 @@ add_library(smtp_proto STATIC
 
 target_include_directories(smtp_proto PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+	${PROJECT_SOURCE_DIR}/database
+	${PROJECT_SOURCE_DIR}/database/Repository
+	${PROJECT_SOURCE_DIR}/database/DAL
+	${PROJECT_SOURCE_DIR}/database/Entity
     ${SODIUM_INCLUDE_DIR}
 )
 
