@@ -5,6 +5,7 @@
 #include "FileStrategy.h"
 #include "Logger.h"
 #include "DataBaseManager.h"
+#include "ThreadPool.h"
 #include "ServerSecureChannel.hpp"
 #include "SmtpSession.hpp"
 #include "SocketAcceptor.hpp"
@@ -41,55 +42,79 @@ int main()
 
 		std::cout << "SMTP Server running on port " << PORT << std::endl;
 
+		ThreadPool pool;
+
+        constexpr int WORKER_THREADS = 4;
+
+        pool.initialize(WORKER_THREADS);
+
 		while (true)
-		{
-			std::unique_ptr<SocketConnection> connection;
+        {
+            std::unique_ptr<SocketConnection> connection;
 
-			if (!acceptor.Accept(connection) || !connection) continue;
+            if (!acceptor.Accept(connection) || !connection)
+                continue;
 
-			ServerSecureChannel channel(*connection);
-			channel.setLogger(&logger);
+            std::shared_ptr<SocketConnection> shared_connection =
+                std::shared_ptr<SocketConnection>(std::move(connection));
 
-			SmtpSession session(SERVER_DOMAIN, &message_repo, &user_repo);
+            pool.add_task([shared_connection,
+                           SERVER_DOMAIN,
+                           &message_repo,
+                           &user_repo,
+                           &logger]()
+            {
+                ServerSecureChannel channel(*shared_connection);
+                channel.setLogger(&logger);
 
-			if (!channel.Send(session.Greeting()))
-			{
-				connection->Close();
-				continue;
-			}
+                SmtpSession session(SERVER_DOMAIN,
+                                    &message_repo,
+                                    &user_repo);
 
-			std::string input;
+                if (!channel.Send(session.Greeting()))
+                {
+                    shared_connection->Close();
+                    return;
+                }
 
-			while (channel.Receive(input))
-			{
-				std::string response = session.ProcessLine(input);
+                std::string input;
 
-				if (!response.empty())
-				{
-					if (!channel.Send(response)) break;
-				}
+                while (channel.Receive(input))
+                {
+                    std::string response =
+                        session.ProcessLine(input);
 
-				if (session.getState() == SmtpState::STARTTLS)
-				{
-					if (!channel.StartTLS())
-					{
-						std::cerr << "TLS handshake failed\n";
-						break;
-					}
+                    if (!response.empty())
+                    {
+                        if (!channel.Send(response))
+                            break;
+                    }
 
-					session.ResetToHelo();
-				}
+                    if (session.getState() == SmtpState::STARTTLS)
+                    {
+                        if (!channel.StartTLS())
+                        {
+                            std::cerr << "TLS handshake failed\n";
+                            break;
+                        }
 
-				if (session.IsClosed()) break;
-			}
+                        session.ResetToHelo();
+                    }
 
-			connection->Close();
-		}
-	}
-	catch (const std::exception& exception)
-	{
-		std::cerr << "Server error: " << exception.what() << std::endl;
-	}
+                    if (session.IsClosed())
+                        break;
+                }
 
-	return 0;
+                shared_connection->Close();
+            });
+        }
+    }
+    catch (const std::exception& exception)
+    {
+        std::cerr << "Server error: "
+                  << exception.what()
+                  << std::endl;
+    }
+
+    return 0;
 }

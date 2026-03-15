@@ -10,7 +10,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <type_traits>
-#include "../../logger/Logger.h"
+#include "Logger.h"
 
 enum class Priority { Low = 0, Normal = 1, High = 2 };
 
