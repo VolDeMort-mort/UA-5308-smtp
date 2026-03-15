@@ -51,6 +51,11 @@ inline std::string List(char separator, const std::string& mailbox, const std::s
 	return "* LIST (\\" + attributes + ") \"" + separator + "\" \"" + mailbox + "\"\r\n";
 }
 
+inline std::string Lsub(char separator, const std::string& mailbox, const std::string& attributes = "")
+{
+	return "* LSUB (\\" + attributes + ") \"" + separator + "\" \"" + mailbox + "\"\r\n";
+}
+
 inline std::string Status(const std::string& mailbox, const std::string& statusData)
 {
 	return "* STATUS " + mailbox + " (" + statusData + ")\r\n";

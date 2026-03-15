@@ -1,7 +1,5 @@
 #include "ImapServer.hpp"
 
-#include <sstream>
-
 #include "ImapSession.hpp"
 
 ImapServer::ImapServer(boost::asio::io_context& context, ILogger& logger, DataBaseManager& db, ThreadPool& pool)
@@ -36,9 +34,7 @@ void ImapServer::AcceptConnection()
 			}
 			else
 			{
-				std::stringstream ss;
-				ss << "Error: " << ec.message();
-				m_logger.Log(PROD, ss.str());
+				m_logger.Log(PROD, std::string("Error: ") + ec.message());
 			}
 			AcceptConnection();
 		});

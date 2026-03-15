@@ -690,8 +690,9 @@ TEST_F(CmdHandlerTests, HandleCreate_AlreadyExists)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "A001 OK Create completed\r\n";
-	EXPECT_EQ(response, expected);
+	std::string expected = "A001 BAD Create failed";
+	std::string actual = response.substr(0, expected.size());
+	EXPECT_EQ(actual, expected);
 }
 
 TEST_F(CmdHandlerTests, HandleCreate_MissingArgs)

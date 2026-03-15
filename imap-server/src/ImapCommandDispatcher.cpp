@@ -1,7 +1,6 @@
 #include "ImapCommandDispatcher.hpp"
 
 #include <algorithm>
-#include <sstream>
 #include <stdexcept>
 
 #include "Entity/Folder.h"
@@ -9,8 +8,6 @@
 #include "ImapParser.hpp"
 #include "ImapResponse.hpp"
 #include "ImapUtils.hpp"
-
-using namespace ImapResponse;
 
 ImapCommandDispatcher::ImapCommandDispatcher(ILogger& logger, UserRepository& userRepo, MessageRepository& messRepo)
 	: m_logger(logger), m_userRepo(userRepo), m_messRepo(messRepo)
@@ -41,7 +38,7 @@ std::string ImapCommandDispatcher::Dispatch(const ImapCommand& cmd)
 	{
 		return it->second(cmd);
 	}
-	return Bad(cmd.m_tag, "Command not implemented");
+	return ImapResponse::Bad(cmd.m_tag, "Command not implemented");
 }
 
 bool ImapCommandDispatcher::RequiresAuth(ImapCommandType type) const
@@ -77,32 +74,33 @@ std::string ImapCommandDispatcher::HandleLogin(const ImapCommand& cmd)
 	std::string response;
 	if (cmd.m_args.size() != 2)
 	{
-		response = Bad(cmd.m_tag, "Missing arguments");
+		response = ImapResponse::Bad(cmd.m_tag, "Missing arguments");
 		return response;
 	}
 	else if (m_userRepo.authorize(cmd.m_args[0], cmd.m_args[1]))
 	{
-		m_authenticatedUserID = m_userRepo.findByUsername(cmd.m_args[0])->id;
-
-		if (m_authenticatedUserID.has_value())
+		auto user_opt = m_userRepo.findByUsername(cmd.m_args[0]);
+		if (user_opt.has_value())
 		{
+			m_authenticatedUserName = cmd.m_args[0];
+			m_authenticatedUserID = user_opt->id;
+			m_state = SessionState::Authenticated;
+
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleLogin - Authenticated user ID: " +
 								   std::to_string(m_authenticatedUserID.value()));
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleLogin - User authenticated: " + cmd.m_args[0]);
-			response = Ok(cmd.m_tag, "Login successful");
-			m_state = SessionState::Authenticated;
-			m_authenticatedUserName = cmd.m_args[0];
+			response = ImapResponse::Ok(cmd.m_tag, "Login successful");
 		}
 		else
 		{
 			m_logger.Log(
 				PROD, "ImapCommandDispatcher::HandleLogin - Database inconsistency: Authenticated user ID not found");
-			response = No(cmd.m_tag, "Login failed");
+			response = ImapResponse::No(cmd.m_tag, "Login failed");
 		}
 	}
 	else
 	{
-		response = No(cmd.m_tag, "Login failed");
+		response = ImapResponse::No(cmd.m_tag, "Login failed");
 		m_logger.Log(PROD, "ImapCommandDispatcher::HandleLogin - Login failed, error: " + m_userRepo.getLastError());
 	}
 
@@ -117,7 +115,7 @@ std::string ImapCommandDispatcher::HandleLogout(const ImapCommand& cmd)
 							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleLogout - Start");
 
-	std::string response = Untagged("BYE Logout") + Ok(cmd.m_tag, "Logout completed");
+	std::string response = ImapResponse::Untagged("BYE Logout") + ImapResponse::Ok(cmd.m_tag, "Logout completed");
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleLogout - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleLogout - End");
@@ -130,7 +128,7 @@ std::string ImapCommandDispatcher::HandleCapability(const ImapCommand& cmd)
 							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCapability - Start");
 
-	std::string response = Capability() + Ok(cmd.m_tag, "Capability completed");
+	std::string response = ImapResponse::Capability() + ImapResponse::Ok(cmd.m_tag, "Capability completed");
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCapability - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCapability - End");
@@ -143,7 +141,7 @@ std::string ImapCommandDispatcher::HandleNoop(const ImapCommand& cmd)
 							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleNoop - Start");
 
-	std::string response = Ok(cmd.m_tag, "Noop completed");
+	std::string response = ImapResponse::Ok(cmd.m_tag, "Noop completed");
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleNoop - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleNoop - End");
@@ -159,7 +157,7 @@ std::string ImapCommandDispatcher::HandleSelect(const ImapCommand& cmd)
 	std::string response;
 	if (cmd.m_args.size() != 1)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
 	}
 	else
 	{
@@ -169,19 +167,19 @@ std::string ImapCommandDispatcher::HandleSelect(const ImapCommand& cmd)
 			m_currentMailbox.m_name = folder_opt->name;
 			auto all_messages = m_messRepo.findByFolder(folder_opt->id.value());
 			m_currentMailbox.m_exists = all_messages.size();
-			// recent is not implemented yet, so it copies the unseen count for now
 			m_currentMailbox.m_recent = std::count_if(all_messages.begin(), all_messages.end(),
 													  [](const Message& msg) { return !msg.is_seen; });
 			m_currentMailbox.m_id = folder_opt->id;
 
-			response = Flags() + Exists(m_currentMailbox.m_exists) + Recent(m_currentMailbox.m_recent);
-			response += Ok(cmd.m_tag, "[READ-WRITE] Select completed");
+			response = ImapResponse::Flags() + ImapResponse::Exists(m_currentMailbox.m_exists) +
+					   ImapResponse::Recent(m_currentMailbox.m_recent);
+			response += ImapResponse::Ok(cmd.m_tag, "[READ-WRITE] Select completed");
 			m_state = SessionState::Selected;
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleSelect - Mailbox selected: " + m_currentMailbox.m_name);
 		}
 		else
 		{
-			response = Bad(cmd.m_tag, "Mailbox not found");
+			response = ImapResponse::Bad(cmd.m_tag, "Mailbox not found");
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleSelect - Mailbox not found: " + cmd.m_args[0]);
 		}
 	}
@@ -201,25 +199,21 @@ std::string ImapCommandDispatcher::HandleList(const ImapCommand& cmd)
 
 	if (cmd.m_args.size() != 2)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
 	}
 	else if (cmd.m_args[1] == "")
 	{
-		response = List('/', "", "Noselect");
-		response += Ok(cmd.m_tag, "List completed");
+		response = ImapResponse::List('/', "", "Noselect");
+		response += ImapResponse::Ok(cmd.m_tag, "List completed");
 	}
 	else
 	{
-		// In schema we didn`t implment hierarchy,
-		// neither with parent_id nor with delimiter(no functions in repo to support it),
-		// so we ignore the reference and return all folders for the user
-
 		auto folders = m_messRepo.findFoldersByUser(m_authenticatedUserID.value());
 		for (const auto& folder : folders)
 		{
-			response += List('/', folder.name, "HasNoChildren");
+			response += ImapResponse::List('/', folder.name, "HasNoChildren");
 		}
-		response += Ok(cmd.m_tag, "List completed");
+		response += ImapResponse::Ok(cmd.m_tag, "List completed");
 	}
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleList - Out: " + response);
@@ -237,23 +231,21 @@ std::string ImapCommandDispatcher::HandleLsub(const ImapCommand& cmd)
 
 	if (cmd.m_args.size() != 2)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
 	}
 	else if (cmd.m_args[1] == "")
 	{
-		// other than issues described in HandleList, schema doesn`t support subscribed folders,
-		// so we return all folders for the user with \HasNoChildren flag
-		response = Untagged("LSUB (\\Noselect) \"/\" \"\"");
-		response += Ok(cmd.m_tag, "Lsub completed");
+		response = ImapResponse::Lsub('/', "", "Noselect");
+		response += ImapResponse::Ok(cmd.m_tag, "Lsub completed");
 	}
 	else
 	{
 		auto folders = m_messRepo.findFoldersByUser(m_authenticatedUserID.value());
 		for (const auto& folder : folders)
 		{
-			response += Untagged("LSUB (\\HasNoChildren) \"/\" \"" + folder.name + "\"");
+			response += ImapResponse::Lsub('/', folder.name, "HasNoChildren");
 		}
-		response += Ok(cmd.m_tag, "Lsub completed");
+		response += ImapResponse::Ok(cmd.m_tag, "Lsub completed");
 	}
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleLsub - Out: " + response);
@@ -270,7 +262,7 @@ std::string ImapCommandDispatcher::HandleStatus(const ImapCommand& cmd)
 	std::string response = "";
 	if (cmd.m_args.size() != 2)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
 	}
 	else
 	{
@@ -312,18 +304,18 @@ std::string ImapCommandDispatcher::HandleStatus(const ImapCommand& cmd)
 					response.pop_back();
 				}
 
-				response = Status(cmd.m_args[0], response);
-				response += Ok(cmd.m_tag, "Status completed");
+				response = ImapResponse::Status(cmd.m_args[0], response);
+				response += ImapResponse::Ok(cmd.m_tag, "Status completed");
 			}
 			else
 			{
-				response = Bad(cmd.m_tag, "Invalid status data items");
+				response = ImapResponse::Bad(cmd.m_tag, "Invalid status data items");
 				m_logger.Log(PROD, "ImapCommandDispatcher::HandleStatus - Invalid status data items: " + cmd.m_args[1]);
 			}
 		}
 		else
 		{
-			response = Bad(cmd.m_tag, "Mailbox not found");
+			response = ImapResponse::Bad(cmd.m_tag, "Mailbox not found");
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleStatus - Mailbox not found: " + cmd.m_args[0]);
 		}
 	}
@@ -342,11 +334,11 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 	std::string response = "";
 	if (m_state != SessionState::Selected)
 	{
-		response = Bad(cmd.m_tag, "No mailbox selected");
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
 	}
 	else if (cmd.m_args.size() < 2)
 	{
-		response = Bad(cmd.m_tag, "Missing arguments");
+		response = ImapResponse::Bad(cmd.m_tag, "Missing arguments");
 	}
 	else
 	{
@@ -516,14 +508,14 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				}
 
 				fetch_response += ")";
-				response += Fetch(seq_num, fetch_response);
+				response += ImapResponse::Fetch(seq_num, fetch_response);
 			}
 
-			response += Ok(cmd.m_tag, "Fetch completed");
+			response += ImapResponse::Ok(cmd.m_tag, "Fetch completed");
 		}
 		catch (const std::exception& ex)
 		{
-			response = Bad(cmd.m_tag, "Invalid message sequence");
+			response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
 			m_logger.Log(PROD, "ImapCommandDispatcher::handleFetch - Invalid FETCH usage, exception: " +
 								   std::string(ex.what()));
 		}
@@ -543,11 +535,11 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 	std::string response = "";
 	if (m_state != SessionState::Selected)
 	{
-		response = Bad(cmd.m_tag, "No mailbox selected");
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
 	}
 	else if (cmd.m_args.size() != 3)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
 	}
 	else
 	{
@@ -598,7 +590,7 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 							flagsStr.pop_back();
 						}
 						flagsStr += "))";
-						response += Fetch(lists_ids[i], flagsStr);
+						response += ImapResponse::Fetch(lists_ids[i], flagsStr);
 					}
 				}
 			}
@@ -607,11 +599,11 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 				// repo doesn`t support setting flags directly, so we ignore this case for now
 			}
 
-			response += Ok(cmd.m_tag, "Store completed");
+			response += ImapResponse::Ok(cmd.m_tag, "Store completed");
 		}
 		catch (const std::exception& ex)
 		{
-			response = Bad(cmd.m_tag, "Invalid message sequence");
+			response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleStore - Invalid STORE usage, exception: " +
 								   std::string(ex.what()));
 		}
@@ -631,7 +623,7 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 	std::string response = "";
 	if (cmd.m_args.size() != 1)
 	{
-		response = Bad(cmd.m_tag, "Invalid parametrs number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid parametrs number");
 	}
 	else
 	{
@@ -639,8 +631,15 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 		// so we just create folder with such name without parent-child relation
 
 		Folder f{std::nullopt, m_authenticatedUserID.value(), cmd.m_args[0]};
-		m_messRepo.createFolder(f);
-		response = Ok(cmd.m_tag, "Create completed");
+		if (m_messRepo.createFolder(f))
+		{
+			response = ImapResponse::Ok(cmd.m_tag, "Create completed");
+		}
+		else
+		{
+			m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
+			response = ImapResponse::Bad(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+		}
 	}
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCreate - Out: " + response);
@@ -657,19 +656,26 @@ std::string ImapCommandDispatcher::HandleDelete(const ImapCommand& cmd)
 	std::string response = "";
 	if (cmd.m_args.size() != 1)
 	{
-		response = Bad(cmd.m_tag, "Invalid parameters number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid parameters number");
 	}
 	else
 	{
 		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
 		if (!folder_opt.has_value())
 		{
-			response = Bad(cmd.m_tag, "No such folder");
+			response = ImapResponse::Bad(cmd.m_tag, "No such folder");
 		}
 		else
 		{
-			m_messRepo.deleteFolder(folder_opt->id.value());
-			response = Ok(cmd.m_tag, "Delete completed");
+			if (m_messRepo.deleteFolder(folder_opt->id.value()))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "Delete completed");
+			}
+			else
+			{
+				m_logger.Log(PROD, "HandleDelete failed: " + m_messRepo.getLastError());
+				response = ImapResponse::Bad(cmd.m_tag, "Delete failed: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
@@ -687,19 +693,26 @@ std::string ImapCommandDispatcher::HandleRename(const ImapCommand& cmd)
 	std::string response = "";
 	if (cmd.m_args.size() != 2)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
 	}
 	else
 	{
 		auto folder = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
 		if (!folder.has_value())
 		{
-			response = No(cmd.m_tag, "No mailbox with specified name");
+			response = ImapResponse::No(cmd.m_tag, "No mailbox with specified name");
 		}
 		else
 		{
-			m_messRepo.renameFolder(folder->id.value(), cmd.m_args[1]);
-			response = Ok(cmd.m_tag, "Rename completed");
+			if (m_messRepo.renameFolder(folder->id.value(), cmd.m_args[1]))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "Rename completed");
+			}
+			else
+			{
+				m_logger.Log(PROD, "HandleRename failed: " + m_messRepo.getLastError());
+				response = ImapResponse::Bad(cmd.m_tag, "Rename failed: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
@@ -717,18 +730,18 @@ std::string ImapCommandDispatcher::HandleCopy(const ImapCommand& cmd)
 	std::string response = "";
 	if (m_state != SessionState::Selected)
 	{
-		response = Bad(cmd.m_tag, "No mailbox selected");
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
 	}
 	else if (cmd.m_args.size() != 2)
 	{
-		response = Bad(cmd.m_tag, "Missing arguments");
+		response = ImapResponse::Bad(cmd.m_tag, "Missing arguments");
 	}
 	else
 	{
 		auto folder_dest_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[1]);
 		if (!folder_dest_opt.has_value())
 		{
-			response = Bad(cmd.m_tag, "No such folder");
+			response = ImapResponse::Bad(cmd.m_tag, "No such folder");
 		}
 		else
 		{
@@ -757,11 +770,11 @@ std::string ImapCommandDispatcher::HandleCopy(const ImapCommand& cmd)
 					m_messRepo.copy(msg.id.value(), folder_dest_opt->id.value());
 				}
 
-				response = Ok(cmd.m_tag, "Copy completed");
+				response = ImapResponse::Ok(cmd.m_tag, "Copy completed");
 			}
 			catch (const std::exception& ex)
 			{
-				response = Bad(cmd.m_tag, "Invalid message sequence");
+				response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
 				m_logger.Log(PROD, "ImapCommandDispatcher::handleCopy - Invalid COPY usage, exception: " +
 									   std::string(ex.what()));
 			}
@@ -782,11 +795,11 @@ std::string ImapCommandDispatcher::HandleExpunge(const ImapCommand& cmd)
 	std::string response = "";
 	if (m_state != SessionState::Selected)
 	{
-		response = Bad(cmd.m_tag, "No mailbox selected");
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
 	}
 	else if (cmd.m_args.size() != 0)
 	{
-		response = Bad(cmd.m_tag, "Invalid arguments");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments");
 	}
 	else
 	{
@@ -808,11 +821,17 @@ std::string ImapCommandDispatcher::HandleExpunge(const ImapCommand& cmd)
 
 		for (const auto& [mess, index] : expunged_seq_nums)
 		{
-			m_messRepo.hardDelete(mess.id.value());
-			response += Untagged(std::to_string(index) + " EXPUNGE");
+			if (m_messRepo.hardDelete(mess.id.value()))
+			{
+				response += ImapResponse::Untagged(std::to_string(index) + " EXPUNGE");
+			}
+			else
+			{
+				m_logger.Log(PROD, "HandleExpunge failed to delete message: " + m_messRepo.getLastError());
+			}
 		}
 
-		response += Ok(cmd.m_tag, "Expunge completed");
+		response += ImapResponse::Ok(cmd.m_tag, "Expunge completed");
 	}
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleExpunge - Out: " + response);

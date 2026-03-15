@@ -1,5 +1,7 @@
 #include "ImapSession.hpp"
 
+#include <istream>
+
 #include "ImapParser.hpp"
 #include "ImapResponse.hpp"
 
@@ -114,7 +116,16 @@ void ImapSession::HandleCommand(const std::string& line)
 	m_thread_pool.add_task(
 		[this, self, cmd]()
 		{
-			auto response = m_dispatcher->Dispatch(cmd);
+			std::string response;
+			try
+			{
+				response = m_dispatcher->Dispatch(cmd);
+			}
+			catch (const std::exception& ex)
+			{
+				m_logger.Log(PROD, std::string("Exception in command dispatch: ") + ex.what());
+				response = "BAD Internal server error\r\n";
+			}
 			boost::asio::post(m_strand,
 							  [this, self, response, cmd_type = cmd.m_type]()
 							  {
