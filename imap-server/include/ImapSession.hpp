@@ -1,6 +1,7 @@
 #pragma once
 
 #include <boost/asio.hpp>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -19,6 +20,8 @@
 #include "Repository/UserRepository.h"
 #include "ThreadPool.h"
 
+constexpr auto IMAP_TIMEOUT = std::chrono::minutes(30);
+
 class ImapSession : public std::enable_shared_from_this<ImapSession>
 {
 public:
@@ -36,6 +39,7 @@ private:
 	boost::asio::ip::tcp::socket m_socket;
 	boost::asio::streambuf m_buffer;
 	boost::asio::strand<boost::asio::any_io_executor> m_strand;
+	boost::asio::steady_timer m_timer;
 
 	std::queue<std::string> m_write_queue;
 	bool m_is_writing = false;

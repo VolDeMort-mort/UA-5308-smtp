@@ -23,7 +23,7 @@ int main(int argc, char** argv)
 		ImapServer imap(io, logger, db, pool);
 		imap.Start();
 	}
-	catch (std::exception e)
+	catch (const std::exception& e)
 	{
 		logger.Log(PROD, std::string("Couldn`t create IMAP server entity: ") + e.what());
 	}

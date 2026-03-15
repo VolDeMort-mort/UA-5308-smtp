@@ -1,11 +1,12 @@
 #include "ImapSession.hpp"
 
 #include "ImapParser.hpp"
+#include "ImapResponse.hpp"
 
 ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, UserDAL& u_dal,
 						 ThreadPool& pool)
 	: m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db.getDB(), u_dal),
-	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor()))
+	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(socket.get_executor())
 {
 	m_logger.Log(PROD, "New ImapSession created");
 	m_logger.Log(TRACE, "ImapSession::ImapSession - socket accepted");
@@ -32,14 +33,33 @@ void ImapSession::SendBanner()
 void ImapSession::ReadCommand()
 {
 	m_logger.Log(DEBUG, "ImapSession::ReadCommand - Start");
+
 	auto self = shared_from_this();
+
+	m_timer.expires_after(IMAP_TIMEOUT);
+	m_timer.async_wait(
+		boost::asio::bind_executor(m_strand,
+								   [this, self](boost::system::error_code ec)
+								   {
+									   // the timer was cancelled after session received new command
+									   if (ec == boost::asio::error::operation_aborted || !m_socket.is_open())
+									   {
+										   return;
+									   }
+									   WriteResponse(ImapResponse::Untagged("BYE Autologout; idle for too long"));
+									   m_logger.Log(DEBUG, "Closing socket due to timeout");
+									   m_socket.close();
+								   }));
+
 	boost::asio::async_read_until(
 		m_socket, m_buffer, "\r\n",
 		boost::asio::bind_executor(m_strand,
-								   [this, self](std::error_code ec, std::size_t)
+								   [this, self](boost::system::error_code ec, std::size_t)
 								   {
 									   if (!ec)
 									   {
+										   m_timer.cancel();
+
 										   std::istream is(&m_buffer);
 										   std::string line;
 										   std::getline(is, line);
@@ -135,7 +155,7 @@ void ImapSession::Write()
 	boost::asio::async_write(
 		m_socket, boost::asio::buffer(*payload),
 		boost::asio::bind_executor(m_strand,
-								   [this, self, payload](std::error_code ec, std::size_t bytes_transferred)
+								   [this, self, payload](boost::system::error_code ec, std::size_t bytes_transferred)
 								   {
 									   if (ec)
 									   {

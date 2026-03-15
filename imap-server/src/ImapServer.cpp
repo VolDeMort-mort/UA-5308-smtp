@@ -22,9 +22,9 @@ void ImapServer::AcceptConnection()
 {
 	m_logger.Log(DEBUG, "AcceptConnection called");
 	m_acceptor.async_accept(
-		[this](std::error_code ec, boost::asio::ip::tcp::socket socket)
+		[this](boost::system::error_code ec, boost::asio::ip::tcp::socket socket)
 		{
-			if (ec.value() == boost::asio::error::operation_aborted)
+			if (ec == boost::asio::error::operation_aborted)
 			{
 				m_logger.Log(DEBUG, "Acceptor stopped");
 				return;
