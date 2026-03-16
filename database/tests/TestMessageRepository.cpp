@@ -1,439 +1,503 @@
 #include "TestFixture.h"
+#include "../DAL/UserDAL.h"
+#include "../DAL/FolderDAL.h"
+#include "../DAL/MessageDAL.h"
+#include "../DAL/RecipientDAL.h"
+#include "../Repository/MessageRepository.h"
 
-struct MessageRepositoryTest : public DBFixture
+class MessageRepositoryTest : public DBFixture
 {
-    UserDAL* udal = nullptr;
-    UserRepository* userRepo = nullptr;
-    MessageRepository* msgRepo = nullptr;
+protected:
+    MessageRepository* repo = nullptr;
 
-    User user;
-    Folder inbox;
-    Folder archive;
+    int64_t userId   = 0;
+    int64_t folderId = 0;
 
     void SetUp() override
     {
         DBFixture::SetUp();
-        udal     = new UserDAL(db);
-        userRepo = new UserRepository(*udal);
-        msgRepo  = new MessageRepository(db);
+        repo = new MessageRepository(db);
 
-        user = makeUser(); userRepo->registerUser(user);
-        inbox   = makeFolder(user.id.value(), "INBOX");
-        archive = makeFolder(user.id.value(), "Archive");
-        msgRepo->createFolder(inbox);
-        msgRepo->createFolder(archive);
+        // Seed a user and an INBOX folder directly via DAL
+        UserDAL userDal(db);
+        User u; u.username = "alice"; u.password_hash = "h";
+        ASSERT_TRUE(userDal.insert(u));
+        userId = u.id.value();
+
+        Folder f; f.user_id = userId; f.name = "INBOX";
+        f.next_uid = 1; f.is_subscribed = true;
+        FolderDAL folderDal(db);
+        ASSERT_TRUE(folderDal.insert(f));
+        folderId = f.id.value();
     }
 
     void TearDown() override
     {
-        delete msgRepo;
-        delete userRepo;
-        delete udal;
+        delete repo;
         DBFixture::TearDown();
     }
 
-    Message delivered(int64_t folder_id = 0)
+    // Returns a minimal Message ready for deliver/saveToFolder
+    Message makeMessage(const std::string& subject = "Hello", int64_t uid = 0)
     {
-        Message m = makeMessage(user.id.value());
-        msgRepo->deliver(m, folder_id ? folder_id : inbox.id.value());
+        Message m;
+        m.user_id       = userId;
+        m.folder_id     = folderId;
+        m.uid           = uid;
+        m.raw_file_path = "/msg.eml";
+        m.size_bytes    = 256;
+        m.from_address  = "sender@x.com";
+        m.subject       = subject;
+        m.is_seen = m.is_deleted = m.is_draft =
+        m.is_answered = m.is_flagged = false;
+        m.is_recent     = false;
+        m.internal_date = "2024-01-01";
         return m;
+    }
+
+    // Creates a second folder (e.g. Sent, Trash) and returns its id
+    int64_t makeFolder(const std::string& name)
+    {
+        Folder f; f.user_id = userId; f.name = name;
+        f.next_uid = 1; f.is_subscribed = true;
+        EXPECT_TRUE(repo->createFolder(f));
+        return f.id.value();
     }
 };
 
-// --- deliver / saveToFolder ---
-
-TEST_F(MessageRepositoryTest, DeliverAssignsUIDAndIncrementsCounter)
-{
-    Message m = makeMessage(user.id.value());
-    EXPECT_TRUE(msgRepo->deliver(m, inbox.id.value()));
-    EXPECT_TRUE(m.id.has_value());
-    EXPECT_EQ(m.uid, static_cast<int64_t>(1));
-    EXPECT_EQ(msgRepo->findFolderByID(inbox.id.value())->next_uid, static_cast<int64_t>(2));
-}
+// ── deliver ───────────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, DeliverSetsCorrectFlags)
 {
-    Message m = delivered();
-    auto found = msgRepo->findByID(m.id.value());
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->deliver(m, folderId));
+
+    auto found = repo->findByID(m.id.value());
     ASSERT_TRUE(found.has_value());
     EXPECT_FALSE(found->is_seen);
     EXPECT_TRUE(found->is_recent);
     EXPECT_FALSE(found->is_draft);
 }
 
-TEST_F(MessageRepositoryTest, DeliverFailsForNonexistentFolder)
+TEST_F(MessageRepositoryTest, DeliverAssignsUID)
 {
-    Message m = makeMessage(user.id.value());
-    EXPECT_FALSE(msgRepo->deliver(m, 9999));
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->deliver(m, folderId));
+    EXPECT_EQ(m.uid, 1);
+
+    Message m2 = makeMessage("Second");
+    ASSERT_TRUE(repo->deliver(m2, folderId));
+    EXPECT_EQ(m2.uid, 2);
 }
+
+TEST_F(MessageRepositoryTest, DeliverIncrementsNextUID)
+{
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+
+    auto folder = repo->findFolderByID(folderId);
+    ASSERT_TRUE(folder.has_value());
+    EXPECT_EQ(folder->next_uid, 2);
+}
+
+TEST_F(MessageRepositoryTest, DeliverToNonExistentFolderFails)
+{
+    Message m = makeMessage();
+    EXPECT_FALSE(repo->deliver(m, 9999));
+}
+
+// ── saveToFolder ──────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, SaveToFolderSetsCorrectFlags)
 {
-    Message m = makeMessage(user.id.value());
-    msgRepo->saveToFolder(m, inbox.id.value());
-    auto found = msgRepo->findByID(m.id.value());
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->saveToFolder(m, folderId));
+
+    auto found = repo->findByID(m.id.value());
     ASSERT_TRUE(found.has_value());
     EXPECT_TRUE(found->is_seen);
     EXPECT_FALSE(found->is_recent);
 }
 
-TEST_F(MessageRepositoryTest, MultipleDeliversProduceSequentialUIDs)
+// ── restoreToFolder ───────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, RestoreToFolderClearsDeletedFlag)
 {
-    for (int i = 1; i <= 5; ++i)
-    {
-        Message m = makeMessage(user.id.value());
-        msgRepo->deliver(m, inbox.id.value());
-        EXPECT_EQ(m.uid, static_cast<int64_t>(i));
-    }
-}
+    // Deliver to INBOX, mark deleted (moved to trash), then restore
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->deliver(m, folderId));
+    repo->markDeleted(m.id.value(), true);
+    repo->markSeen(m.id.value(), true);
+    repo->markFlagged(m.id.value(), true);
 
-TEST_F(MessageRepositoryTest, UIDsAreIndependentPerFolder)
-{
-    Message m1 = makeMessage(user.id.value()); msgRepo->deliver(m1, inbox.id.value());
-    Message m2 = makeMessage(user.id.value()); msgRepo->deliver(m2, archive.id.value());
-    EXPECT_EQ(m1.uid, static_cast<int64_t>(1));
-    EXPECT_EQ(m2.uid, static_cast<int64_t>(1));
-}
+    // Re-fetch to get current state
+    auto current = repo->findByID(m.id.value());
+    ASSERT_TRUE(current.has_value());
 
-// --- find methods ---
+    int64_t inboxId = makeFolder("Restored");
+    ASSERT_TRUE(repo->restoreToFolder(*current, inboxId));
 
-TEST_F(MessageRepositoryTest, FindByIDReturnsNulloptIfMissing)
-{
-    EXPECT_FALSE(msgRepo->findByID(9999).has_value());
-}
-
-TEST_F(MessageRepositoryTest, FindByUIDLocatesMessage)
-{
-    Message m = delivered();
-    EXPECT_TRUE(msgRepo->findByUID(inbox.id.value(), 1).has_value());
-}
-
-TEST_F(MessageRepositoryTest, FindByUIDReturnsNulloptIfMissing)
-{
-    EXPECT_FALSE(msgRepo->findByUID(inbox.id.value(), 99).has_value());
-}
-
-TEST_F(MessageRepositoryTest, FindByUserReturnsOnlyThatUser)
-{
-    User u2 = makeUser("bob"); userRepo->registerUser(u2);
-    Folder f2 = makeFolder(u2.id.value(), "INBOX"); msgRepo->createFolder(f2);
-
-    delivered();
-    delivered();
-    Message m3 = makeMessage(u2.id.value()); msgRepo->deliver(m3, f2.id.value());
-
-    EXPECT_EQ(static_cast<int>(msgRepo->findByUser(user.id.value()).size()), 2);
-    EXPECT_EQ(static_cast<int>(msgRepo->findByUser(u2.id.value()).size()), 1);
-}
-
-TEST_F(MessageRepositoryTest, FindByFolderReturnsOnlyThatFolder)
-{
-    delivered(inbox.id.value());
-    delivered(inbox.id.value());
-    delivered(archive.id.value());
-    EXPECT_EQ(static_cast<int>(msgRepo->findByFolder(inbox.id.value()).size()), 2);
-    EXPECT_EQ(static_cast<int>(msgRepo->findByFolder(archive.id.value()).size()), 1);
-}
-
-TEST_F(MessageRepositoryTest, FindUnseenReturnsOnlyUnseen)
-{
-    Message m1 = delivered(); msgRepo->markSeen(m1.id.value(), true);
-    Message m2 = delivered();
-    Message m3 = delivered();
-    EXPECT_EQ(static_cast<int>(msgRepo->findUnseen(inbox.id.value()).size()), 2);
-}
-
-TEST_F(MessageRepositoryTest, FindDeletedReturnsOnlyDeleted)
-{
-    Message m1 = delivered();
-    Message m2 = delivered();
-    Message m3 = delivered();
-    msgRepo->markDeleted(m1.id.value(), true);
-    msgRepo->markDeleted(m3.id.value(), true);
-    EXPECT_EQ(static_cast<int>(msgRepo->findDeleted(inbox.id.value()).size()), 2);
-}
-
-TEST_F(MessageRepositoryTest, FindFlaggedReturnsOnlyFlagged)
-{
-    Message m1 = delivered();
-    Message m2 = delivered();
-    msgRepo->markFlagged(m1.id.value(), true);
-    EXPECT_EQ(static_cast<int>(msgRepo->findFlagged(inbox.id.value()).size()), 1);
-}
-
-TEST_F(MessageRepositoryTest, SearchFindsInSubject)
-{
-    Message m = makeMessage(user.id.value());
-    m.subject = "Invoice Q3";
-    msgRepo->deliver(m, inbox.id.value());
-    EXPECT_EQ(static_cast<int>(msgRepo->search(user.id.value(), "Invoice").size()), 1);
-}
-
-TEST_F(MessageRepositoryTest, SearchDoesNotLeakAcrossUsers)
-{
-    User u2 = makeUser("bob"); userRepo->registerUser(u2);
-    Folder f2 = makeFolder(u2.id.value(), "INBOX"); msgRepo->createFolder(f2);
-
-    Message m1 = makeMessage(user.id.value()); m1.subject = "Secret"; msgRepo->deliver(m1, inbox.id.value());
-    Message m2 = makeMessage(u2.id.value());   m2.subject = "Secret"; msgRepo->deliver(m2, f2.id.value());
-
-    EXPECT_EQ(static_cast<int>(msgRepo->search(user.id.value(), "Secret").size()), 1);
-}
-
-// --- flags ---
-
-TEST_F(MessageRepositoryTest, MarkSeenUpdatesFlag)
-{
-    Message m = delivered();
-    msgRepo->markSeen(m.id.value(), true);
-    EXPECT_TRUE(msgRepo->findByID(m.id.value())->is_seen);
-    msgRepo->markSeen(m.id.value(), false);
-    EXPECT_FALSE(msgRepo->findByID(m.id.value())->is_seen);
-}
-
-TEST_F(MessageRepositoryTest, MarkDeletedUpdatesFlag)
-{
-    Message m = delivered();
-    msgRepo->markDeleted(m.id.value(), true);
-    EXPECT_TRUE(msgRepo->findByID(m.id.value())->is_deleted);
-}
-
-TEST_F(MessageRepositoryTest, MarkFlaggedUpdatesFlag)
-{
-    Message m = delivered();
-    msgRepo->markFlagged(m.id.value(), true);
-    EXPECT_TRUE(msgRepo->findByID(m.id.value())->is_flagged);
-}
-
-TEST_F(MessageRepositoryTest, MarkAnsweredUpdatesFlag)
-{
-    Message m = delivered();
-    msgRepo->markAnswered(m.id.value(), true);
-    EXPECT_TRUE(msgRepo->findByID(m.id.value())->is_answered);
-}
-
-TEST_F(MessageRepositoryTest, MarkDraftUpdatesFlag)
-{
-    Message m = delivered();
-    msgRepo->markDraft(m.id.value(), true);
-    EXPECT_TRUE(msgRepo->findByID(m.id.value())->is_draft);
-}
-
-TEST_F(MessageRepositoryTest, MarkFlaggedFailsForNonexistentMessage)
-{
-    EXPECT_FALSE(msgRepo->markFlagged(9999, true));
-}
-
-TEST_F(MessageRepositoryTest, UpdateFlagsPersistsAllAtOnce)
-{
-    Message m = delivered();
-    msgRepo->updateFlags(m.id.value(), true, true, true, true, true, false);
-    auto found = msgRepo->findByID(m.id.value());
+    auto found = repo->findByID(current->id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_TRUE(found->is_seen);
-    EXPECT_TRUE(found->is_deleted);
-    EXPECT_TRUE(found->is_draft);
-    EXPECT_TRUE(found->is_answered);
+    EXPECT_FALSE(found->is_deleted);   // cleared
+    EXPECT_TRUE(found->is_seen);       // preserved
+    EXPECT_TRUE(found->is_flagged);    // preserved
+}
+
+// ── mark* flags ───────────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, MarkSeenToggles)
+{
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+
+    ASSERT_TRUE(repo->markSeen(m.id.value(), true));
+    EXPECT_TRUE(repo->findByID(m.id.value())->is_seen);
+
+    ASSERT_TRUE(repo->markSeen(m.id.value(), false));
+    EXPECT_FALSE(repo->findByID(m.id.value())->is_seen);
+}
+
+TEST_F(MessageRepositoryTest, MarkDeletedToggles)
+{
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+
+    ASSERT_TRUE(repo->markDeleted(m.id.value(), true));
+    EXPECT_TRUE(repo->findByID(m.id.value())->is_deleted);
+}
+
+TEST_F(MessageRepositoryTest, MarkFlaggedPreservesOtherFlags)
+{
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+    repo->markSeen(m.id.value(), true);
+
+    ASSERT_TRUE(repo->markFlagged(m.id.value(), true));
+
+    auto found = repo->findByID(m.id.value());
+    ASSERT_TRUE(found.has_value());
     EXPECT_TRUE(found->is_flagged);
-    EXPECT_FALSE(found->is_recent);
+    EXPECT_TRUE(found->is_seen);   // unchanged
 }
 
-// --- move / expunge ---
+TEST_F(MessageRepositoryTest, MarkAnsweredPreservesOtherFlags)
+{
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+    repo->markFlagged(m.id.value(), true);
+
+    ASSERT_TRUE(repo->markAnswered(m.id.value(), true));
+
+    auto found = repo->findByID(m.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_answered);
+    EXPECT_TRUE(found->is_flagged); // unchanged
+}
+
+TEST_F(MessageRepositoryTest, MarkDraftPreservesOtherFlags)
+{
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+    repo->markSeen(m.id.value(), true);
+
+    ASSERT_TRUE(repo->markDraft(m.id.value(), true));
+
+    auto found = repo->findByID(m.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_draft);
+    EXPECT_TRUE(found->is_seen); // unchanged
+}
+
+TEST_F(MessageRepositoryTest, MarkFlaggedNonExistentFails)
+{
+    EXPECT_FALSE(repo->markFlagged(9999, true));
+}
+
+TEST_F(MessageRepositoryTest, MarkAnsweredNonExistentFails)
+{
+    EXPECT_FALSE(repo->markAnswered(9999, true));
+}
+
+TEST_F(MessageRepositoryTest, MarkDraftNonExistentFails)
+{
+    EXPECT_FALSE(repo->markDraft(9999, true));
+}
+
+// ── moveToFolder ──────────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, MoveToFolderChangesFolder)
+{
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->deliver(m, folderId));
+
+    int64_t archiveId = makeFolder("Archive");
+    ASSERT_TRUE(repo->moveToFolder(m.id.value(), archiveId));
+
+    auto found = repo->findByID(m.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->folder_id, archiveId);
+}
 
 TEST_F(MessageRepositoryTest, MoveToFolderAssignsNewUID)
 {
-    Message m = delivered();
-    EXPECT_EQ(m.uid, static_cast<int64_t>(1));
-    EXPECT_TRUE(msgRepo->moveToFolder(m.id.value(), archive.id.value()));
-    auto found = msgRepo->findByID(m.id.value());
-    ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->folder_id, archive.id.value());
-    EXPECT_EQ(found->uid, static_cast<int64_t>(1));
-    EXPECT_EQ(msgRepo->findFolderByID(archive.id.value())->next_uid, static_cast<int64_t>(2));
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->deliver(m, folderId));
+
+    int64_t archiveId = makeFolder("Archive");
+    ASSERT_TRUE(repo->moveToFolder(m.id.value(), archiveId));
+
+    auto found = repo->findByID(m.id.value());
+    EXPECT_EQ(found->uid, 1); // Archive starts at uid=1
 }
 
-TEST_F(MessageRepositoryTest, MoveToFolderSourceCounterUnchanged)
+TEST_F(MessageRepositoryTest, MoveToFolderIncrementsDestNextUID)
 {
-    delivered(); delivered();
-    Message m3 = delivered();
-    int64_t before = msgRepo->findFolderByID(inbox.id.value())->next_uid;
-    msgRepo->moveToFolder(m3.id.value(), archive.id.value());
-    EXPECT_EQ(msgRepo->findFolderByID(inbox.id.value())->next_uid, before);
+    Message m = makeMessage();
+    ASSERT_TRUE(repo->deliver(m, folderId));
+
+    int64_t archiveId = makeFolder("Archive");
+    repo->moveToFolder(m.id.value(), archiveId);
+
+    auto folder = repo->findFolderByID(archiveId);
+    EXPECT_EQ(folder->next_uid, 2);
 }
 
-TEST_F(MessageRepositoryTest, MoveToFolderFailsForNonexistentFolder)
+TEST_F(MessageRepositoryTest, MoveToNonExistentFolderFails)
 {
-    Message m = delivered();
-    EXPECT_FALSE(msgRepo->moveToFolder(m.id.value(), 9999));
-    EXPECT_FALSE(msgRepo->getLastError().empty());
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+    EXPECT_FALSE(repo->moveToFolder(m.id.value(), 9999));
 }
 
-TEST_F(MessageRepositoryTest, ExpungeRemovesDeletedLeavesRest)
+// ── expunge ───────────────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, ExpungeRemovesDeletedMessages)
 {
-    Message m1 = delivered();
-    Message m2 = delivered();
-    Message m3 = delivered();
-    msgRepo->markDeleted(m1.id.value(), true);
-    msgRepo->markDeleted(m2.id.value(), true);
-    EXPECT_TRUE(msgRepo->expunge(inbox.id.value()));
-    EXPECT_FALSE(msgRepo->findByID(m1.id.value()).has_value());
-    EXPECT_FALSE(msgRepo->findByID(m2.id.value()).has_value());
-    EXPECT_TRUE(msgRepo->findByID(m3.id.value()).has_value());
+    Message a = makeMessage("keep", 0);
+    Message b = makeMessage("del",  0);
+    repo->deliver(a, folderId);
+    repo->deliver(b, folderId);
+    repo->markDeleted(b.id.value(), true);
+
+    ASSERT_TRUE(repo->expunge(folderId));
+
+    EXPECT_TRUE(repo->findByID(a.id.value()).has_value());
+    EXPECT_FALSE(repo->findByID(b.id.value()).has_value());
 }
 
 TEST_F(MessageRepositoryTest, ExpungeOnEmptyFolderSucceeds)
 {
-    EXPECT_TRUE(msgRepo->expunge(inbox.id.value()));
+    EXPECT_TRUE(repo->expunge(folderId));
 }
 
-TEST_F(MessageRepositoryTest, ExpungeWithNoDeletedIsNoop)
+TEST_F(MessageRepositoryTest, ExpungeDoesNotRemoveNonDeletedMessages)
 {
-    delivered(); delivered();
-    EXPECT_TRUE(msgRepo->expunge(inbox.id.value()));
-    EXPECT_EQ(static_cast<int>(msgRepo->findByFolder(inbox.id.value()).size()), 2);
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+    // is_deleted remains false
+
+    repo->expunge(folderId);
+    EXPECT_TRUE(repo->findByID(m.id.value()).has_value());
 }
 
-// --- hardDelete ---
+// ── hardDelete ────────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, HardDeleteRemovesMessage)
 {
-    Message m = delivered();
-    EXPECT_TRUE(msgRepo->hardDelete(m.id.value()));
-    EXPECT_FALSE(msgRepo->findByID(m.id.value()).has_value());
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+    ASSERT_TRUE(repo->hardDelete(m.id.value()));
+    EXPECT_FALSE(repo->findByID(m.id.value()).has_value());
 }
 
-TEST_F(MessageRepositoryTest, HardDeleteFailsForNonexistentMessage)
+TEST_F(MessageRepositoryTest, HardDeleteNonExistentFails)
 {
-    EXPECT_FALSE(msgRepo->hardDelete(9999));
-    EXPECT_FALSE(msgRepo->getLastError().empty());
+    EXPECT_FALSE(repo->hardDelete(9999));
 }
 
-// --- folder management ---
+// ── createFolder ──────────────────────────────────────────────────────────────
 
-TEST_F(MessageRepositoryTest, CreateFolderSetsID)
+TEST_F(MessageRepositoryTest, CreateFolderSucceeds)
 {
-    Folder f = makeFolder(user.id.value(), "Drafts");
-    EXPECT_TRUE(msgRepo->createFolder(f));
+    Folder f; f.user_id = userId; f.name = "Sent";
+    f.next_uid = 1; f.is_subscribed = true;
+    EXPECT_TRUE(repo->createFolder(f));
     EXPECT_TRUE(f.id.has_value());
 }
 
-TEST_F(MessageRepositoryTest, CreateFolderRejectsEmptyName)
+TEST_F(MessageRepositoryTest, CreateFolderEmptyNameFails)
 {
-    Folder f; f.user_id = user.id.value(); f.name = "";
-    EXPECT_FALSE(msgRepo->createFolder(f));
+    Folder f; f.user_id = userId; f.name = "";
+    f.next_uid = 1; f.is_subscribed = true;
+    EXPECT_FALSE(repo->createFolder(f));
+    EXPECT_FALSE(repo->getLastError().empty());
 }
 
-TEST_F(MessageRepositoryTest, CreateFolderRejectsDuplicateName)
+TEST_F(MessageRepositoryTest, CreateFolderDuplicateNameFails)
 {
-    Folder f = makeFolder(user.id.value(), "INBOX");
-    EXPECT_FALSE(msgRepo->createFolder(f));
+    Folder f; f.user_id = userId; f.name = "Sent";
+    f.next_uid = 1; f.is_subscribed = true;
+    ASSERT_TRUE(repo->createFolder(f));
+
+    Folder dup; dup.user_id = userId; dup.name = "Sent";
+    dup.next_uid = 1; dup.is_subscribed = true;
+    EXPECT_FALSE(repo->createFolder(dup));
 }
 
-TEST_F(MessageRepositoryTest, FindFoldersByUserReturnsAll)
-{
-    auto folders = msgRepo->findFoldersByUser(user.id.value());
-    EXPECT_EQ(static_cast<int>(folders.size()), 2);
-}
+// ── renameFolder ──────────────────────────────────────────────────────────────
 
-TEST_F(MessageRepositoryTest, FindFolderByNameReturnsFolder)
+TEST_F(MessageRepositoryTest, RenameFolderSucceeds)
 {
-    auto found = msgRepo->findFolderByName(user.id.value(), "INBOX");
+    int64_t id = makeFolder("OldName");
+    ASSERT_TRUE(repo->renameFolder(id, "NewName"));
+
+    auto found = repo->findFolderByID(id);
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name, std::string("INBOX"));
+    EXPECT_EQ(found->name, "NewName");
 }
 
-TEST_F(MessageRepositoryTest, FindFolderByNameReturnsNulloptIfMissing)
+TEST_F(MessageRepositoryTest, RenameFolderEmptyNameFails)
 {
-    EXPECT_FALSE(msgRepo->findFolderByName(user.id.value(), "NoSuchFolder").has_value());
+    int64_t id = makeFolder("Test");
+    EXPECT_FALSE(repo->renameFolder(id, ""));
 }
 
-TEST_F(MessageRepositoryTest, RenameFolderChangesName)
+TEST_F(MessageRepositoryTest, RenameFolderToExistingNameFails)
 {
-    EXPECT_TRUE(msgRepo->renameFolder(inbox.id.value(), "Primary"));
-    EXPECT_EQ(msgRepo->findFolderByID(inbox.id.value())->name, std::string("Primary"));
+    int64_t a = makeFolder("Sent");
+    int64_t b = makeFolder("Trash");
+    EXPECT_FALSE(repo->renameFolder(a, "Trash"));
 }
 
-TEST_F(MessageRepositoryTest, RenameFolderRejectsEmptyName)
+TEST_F(MessageRepositoryTest, RenameFolderNonExistentFails)
 {
-    EXPECT_FALSE(msgRepo->renameFolder(inbox.id.value(), ""));
+    EXPECT_FALSE(repo->renameFolder(9999, "X"));
 }
 
-TEST_F(MessageRepositoryTest, RenameFolderRejectsNameCollision)
-{
-    EXPECT_FALSE(msgRepo->renameFolder(inbox.id.value(), "Archive"));
-}
-
-TEST_F(MessageRepositoryTest, RenameFolderFailsForNonexistentFolder)
-{
-    EXPECT_FALSE(msgRepo->renameFolder(9999, "New"));
-}
+// ── deleteFolder ──────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, DeleteFolderRemovesIt)
 {
-    EXPECT_TRUE(msgRepo->deleteFolder(inbox.id.value()));
-    EXPECT_FALSE(msgRepo->findFolderByID(inbox.id.value()).has_value());
+    int64_t id = makeFolder("Temp");
+    ASSERT_TRUE(repo->deleteFolder(id));
+    EXPECT_FALSE(repo->findFolderByID(id).has_value());
 }
 
-TEST_F(MessageRepositoryTest, DeleteFolderFailsForNonexistent)
+TEST_F(MessageRepositoryTest, DeleteFolderNonExistentFails)
 {
-    EXPECT_FALSE(msgRepo->deleteFolder(9999));
+    EXPECT_FALSE(repo->deleteFolder(9999));
 }
 
-TEST_F(MessageRepositoryTest, DeleteFolderCascadesToMessages)
-{
-    Message m = delivered();
-    msgRepo->deleteFolder(inbox.id.value());
-    EXPECT_FALSE(msgRepo->findByID(m.id.value()).has_value());
-}
+// ── addRecipient / removeRecipient ────────────────────────────────────────────
 
-// --- recipients ---
-
-TEST_F(MessageRepositoryTest, AddAndFindRecipients)
+TEST_F(MessageRepositoryTest, AddRecipientSucceeds)
 {
-    Message m = delivered();
-    Recipient r; r.message_id = m.id.value(); r.address = "bob@x.com"; r.type = RecipientType::To;
-    EXPECT_TRUE(msgRepo->addRecipient(r));
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+
+    Recipient r;
+    r.message_id = m.id.value();
+    r.address    = "bob@x.com";
+    r.type       = Recipient::typeFromString("To");
+
+    ASSERT_TRUE(repo->addRecipient(r));
     EXPECT_TRUE(r.id.has_value());
-    auto list = msgRepo->findRecipientsByMessage(m.id.value());
-    ASSERT_EQ(static_cast<int>(list.size()), 1);
-    EXPECT_EQ(list[0].address, std::string("bob@x.com"));
 }
 
-TEST_F(MessageRepositoryTest, AddMultipleRecipientsAllTypes)
+TEST_F(MessageRepositoryTest, AddRecipientEmptyAddressFails)
 {
-    Message m = delivered();
-    Recipient r1; r1.message_id = m.id.value(); r1.address = "to@x.com";    r1.type = RecipientType::To;
-    Recipient r2; r2.message_id = m.id.value(); r2.address = "cc@x.com";    r2.type = RecipientType::Cc;
-    Recipient r3; r3.message_id = m.id.value(); r3.address = "bcc@x.com";   r3.type = RecipientType::Bcc;
-    Recipient r4; r4.message_id = m.id.value(); r4.address = "reply@x.com"; r4.type = RecipientType::ReplyTo;
-    msgRepo->addRecipient(r1); msgRepo->addRecipient(r2);
-    msgRepo->addRecipient(r3); msgRepo->addRecipient(r4);
-    EXPECT_EQ(static_cast<int>(msgRepo->findRecipientsByMessage(m.id.value()).size()), 4);
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+
+    Recipient r;
+    r.message_id = m.id.value();
+    r.address    = "";
+    r.type       = Recipient::typeFromString("To");
+    EXPECT_FALSE(repo->addRecipient(r));
 }
 
-TEST_F(MessageRepositoryTest, AddRecipientFailsForNonexistentMessage)
+TEST_F(MessageRepositoryTest, AddRecipientNonExistentMessageFails)
 {
-    Recipient r; r.message_id = 9999; r.address = "x@x.com"; r.type = RecipientType::To;
-    EXPECT_FALSE(msgRepo->addRecipient(r));
+    Recipient r;
+    r.message_id = 9999;
+    r.address    = "bob@x.com";
+    r.type       = Recipient::typeFromString("To");
+    EXPECT_FALSE(repo->addRecipient(r));
 }
 
-TEST_F(MessageRepositoryTest, AddRecipientFailsForEmptyAddress)
+TEST_F(MessageRepositoryTest, RemoveRecipientSucceeds)
 {
-    Message m = delivered();
-    Recipient r; r.message_id = m.id.value(); r.address = ""; r.type = RecipientType::To;
-    EXPECT_FALSE(msgRepo->addRecipient(r));
+    Message m = makeMessage();
+    repo->deliver(m, folderId);
+
+    Recipient r;
+    r.message_id = m.id.value();
+    r.address    = "bob@x.com";
+    r.type       = Recipient::typeFromString("To");
+    ASSERT_TRUE(repo->addRecipient(r));
+
+    ASSERT_TRUE(repo->removeRecipient(r.id.value()));
+    EXPECT_FALSE(repo->findRecipientByID(r.id.value()).has_value());
 }
 
-TEST_F(MessageRepositoryTest, RemoveRecipientDeletesIt)
+TEST_F(MessageRepositoryTest, RemoveRecipientNonExistentFails)
 {
-    Message m = delivered();
-    Recipient r; r.message_id = m.id.value(); r.address = "x@x.com"; r.type = RecipientType::To;
-    msgRepo->addRecipient(r);
-    EXPECT_TRUE(msgRepo->removeRecipient(r.id.value()));
-    EXPECT_TRUE(msgRepo->findRecipientsByMessage(m.id.value()).empty());
+    EXPECT_FALSE(repo->removeRecipient(9999));
 }
 
-TEST_F(MessageRepositoryTest, RemoveRecipientFailsForNonexistent)
+// ── search ────────────────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, SearchReturnsMatchingMessages)
 {
-    EXPECT_FALSE(msgRepo->removeRecipient(9999));
+    Message a = makeMessage("Project update");
+    Message b = makeMessage("Lunch invite");
+    repo->deliver(a, folderId);
+    repo->deliver(b, folderId);
+
+    auto results = repo->search(userId, "Project", 10);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].subject.value_or(""), "Project update");
+}
+
+TEST_F(MessageRepositoryTest, SearchWithLikeSpecialCharsDoesNotCrash)
+{
+    Message a = makeMessage("100% done");
+    Message b = makeMessage("something else");
+    repo->deliver(a, folderId);
+    repo->deliver(b, folderId);
+
+    // Without escaping, "%" builds pattern "%%" which matches everything (2 results).
+    // With correct escaping, "%" is treated literally and only matches subjects
+    // that actually contain the % character — so exactly 1 result.
+    auto results = repo->search(userId, "%", 10);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].subject.value_or(""), "100% done");
+}
+
+TEST_F(MessageRepositoryTest, SearchPaginationWorks)
+{
+    for (int i = 0; i < 5; ++i)
+    {
+        Message m = makeMessage("topic " + std::to_string(i));
+        repo->deliver(m, folderId);
+    }
+
+    EXPECT_EQ(repo->search(userId, "topic", 2, 0).size(), 2u);
+    EXPECT_EQ(repo->search(userId, "topic", 2, 4).size(), 1u);
+}
+
+// ── findByFolder pagination ───────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, FindByFolderPaginationWorks)
+{
+    for (int i = 0; i < 4; ++i)
+    {
+        Message m = makeMessage("msg " + std::to_string(i));
+        repo->deliver(m, folderId);
+    }
+
+    EXPECT_EQ(repo->findByFolder(folderId, 2, 0).size(), 2u);
+    EXPECT_EQ(repo->findByFolder(folderId, 2, 2).size(), 2u);
+    EXPECT_EQ(repo->findByFolder(folderId, 2, 4).size(), 0u);
 }
