@@ -6,6 +6,12 @@ MessageRepository::MessageRepository(DataBaseManager& db)
     , m_recipient_dal(db.getDB())
 {}
 
+MessageRepository::MessageRepository(sqlite3* db)
+    : m_message_dal(db)
+    , m_folder_dal(db)
+    , m_recipient_dal(db)
+{}
+
 bool MessageRepository::setError(const std::string& msg) const
 {
     m_last_error = msg;

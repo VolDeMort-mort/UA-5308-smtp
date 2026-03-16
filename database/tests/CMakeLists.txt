@@ -39,5 +39,5 @@ target_compile_definitions(smtp_tests PRIVATE
 
 gtest_discover_tests(smtp_tests
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    DISCOVERY_MODE PRE_TEST
+    DISCOVERY_MODE POST_BUILD
 )

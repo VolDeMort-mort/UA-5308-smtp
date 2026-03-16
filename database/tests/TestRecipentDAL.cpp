@@ -1,76 +1,126 @@
 #include "TestFixture.h"
 
-struct FolderDALTest : public DBFixture
+struct RecipientDALTest : public DBFixture
 {
-    UserDAL   udal{nullptr};
+    UserDAL udal{nullptr};
     FolderDAL fdal{nullptr};
-    User      user;
+    MessageDAL mdal{nullptr};
+    RecipientDAL rdal{nullptr};
+    User user;
+    Message msg;
 
     void SetUp() override
     {
         DBFixture::SetUp();
         udal = UserDAL(db);
         fdal = FolderDAL(db);
-        user = makeUser();
-        udal.insert(user);
+        mdal = MessageDAL(db);
+        rdal = RecipientDAL(db);
+        user = makeUser(); udal.insert(user);
+        Folder f = makeFolder(user.id.value()); fdal.insert(f);
+        msg = makeMessage(user.id.value());
+        msg.folder_id = f.id.value(); msg.uid = 1;
+        mdal.insert(msg);
+    }
+
+    Recipient makeR(const std::string& address, RecipientType type = RecipientType::To)
+    {
+        Recipient r;
+        r.message_id = msg.id.value();
+        r.address    = address;
+        r.type       = type;
+        return r;
     }
 };
 
-TEST_F(FolderDALTest, InsertSetsIDAndDefaults)
+TEST_F(RecipientDALTest, InsertSetsID)
 {
-    Folder f = makeFolder(user.id.value());
-    EXPECT_TRUE(fdal.insert(f));
-    EXPECT_TRUE(f.id.has_value());
-    EXPECT_EQ(f.next_uid, static_cast<int64_t>(1));
-    EXPECT_FALSE(f.is_subscribed);
+    Recipient r = makeR("to@x.com");
+    EXPECT_TRUE(rdal.insert(r));
+    EXPECT_TRUE(r.id.has_value());
 }
 
-TEST_F(FolderDALTest, FindByNameReturnsFolder)
+TEST_F(RecipientDALTest, InsertPersistsFields)
 {
-    Folder f = makeFolder(user.id.value(), "Sent");
-    fdal.insert(f);
-    auto found = fdal.findByName(user.id.value(), "Sent");
+    Recipient r = makeR("to@x.com", RecipientType::Cc);
+    rdal.insert(r);
+    auto found = rdal.findByID(r.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name, std::string("Sent"));
+    EXPECT_EQ(found->address, std::string("to@x.com"));
+    EXPECT_EQ(found->type, RecipientType::Cc);
+    EXPECT_EQ(found->message_id, msg.id.value());
 }
 
-TEST_F(FolderDALTest, FindByUserReturnsOnlyThatUsersFolder)
+TEST_F(RecipientDALTest, FindByIDReturnsNulloptIfMissing)
 {
-    User u2 = makeUser("bob"); udal.insert(u2);
-
-    Folder f1 = makeFolder(user.id.value(), "INBOX");   fdal.insert(f1);
-    Folder f2 = makeFolder(user.id.value(), "Sent");    fdal.insert(f2);
-    Folder f3 = makeFolder(u2.id.value(),   "INBOX");   fdal.insert(f3);
-
-    EXPECT_EQ(static_cast<int>(fdal.findByUser(user.id.value()).size()), 2);
-    EXPECT_EQ(static_cast<int>(fdal.findByUser(u2.id.value()).size()),   1);
+    EXPECT_FALSE(rdal.findByID(9999).has_value());
 }
 
-TEST_F(FolderDALTest, IncrementNextUIDAdvancesCounter)
+TEST_F(RecipientDALTest, FindByMessageReturnsAll)
 {
-    Folder f = makeFolder(user.id.value()); fdal.insert(f);
-    fdal.incrementNextUID(f.id.value());
-    fdal.incrementNextUID(f.id.value());
-    auto found = fdal.findByID(f.id.value());
+    rdal.insert(makeR("a@x.com", RecipientType::To));
+    rdal.insert(makeR("b@x.com", RecipientType::Cc));
+    rdal.insert(makeR("c@x.com", RecipientType::Bcc));
+    EXPECT_EQ(static_cast<int>(rdal.findByMessage(msg.id.value()).size()), 3);
+}
+
+TEST_F(RecipientDALTest, FindByMessageEmptyWhenNone)
+{
+    EXPECT_TRUE(rdal.findByMessage(msg.id.value()).empty());
+}
+
+TEST_F(RecipientDALTest, AllTypeVariantsRoundTrip)
+{
+    rdal.insert(makeR("to@x.com",    RecipientType::To));
+    rdal.insert(makeR("cc@x.com",    RecipientType::Cc));
+    rdal.insert(makeR("bcc@x.com",   RecipientType::Bcc));
+    rdal.insert(makeR("reply@x.com", RecipientType::ReplyTo));
+    auto list = rdal.findByMessage(msg.id.value());
+    ASSERT_EQ(static_cast<int>(list.size()), 4);
+    EXPECT_EQ(list[0].type, RecipientType::To);
+    EXPECT_EQ(list[1].type, RecipientType::Cc);
+    EXPECT_EQ(list[2].type, RecipientType::Bcc);
+    EXPECT_EQ(list[3].type, RecipientType::ReplyTo);
+}
+
+TEST_F(RecipientDALTest, UpdatePersistsChanges)
+{
+    Recipient r = makeR("old@x.com", RecipientType::To); rdal.insert(r);
+    r.address = "new@x.com";
+    r.type    = RecipientType::Cc;
+    EXPECT_TRUE(rdal.update(r));
+    auto found = rdal.findByID(r.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->next_uid, static_cast<int64_t>(3));
+    EXPECT_EQ(found->address, std::string("new@x.com"));
+    EXPECT_EQ(found->type, RecipientType::Cc);
 }
 
-TEST_F(FolderDALTest, UpdatePersistsChanges)
+TEST_F(RecipientDALTest, UpdateFailsWithNoID)
 {
-    Folder f = makeFolder(user.id.value(), "Old"); fdal.insert(f);
-    f.name          = "New";
-    f.is_subscribed = true;
-    EXPECT_TRUE(fdal.update(f));
-    auto found = fdal.findByID(f.id.value());
-    ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name, std::string("New"));
-    EXPECT_TRUE(found->is_subscribed);
+    Recipient r = makeR("x@x.com");
+    EXPECT_FALSE(rdal.update(r));
 }
 
-TEST_F(FolderDALTest, HardDeleteRemovesFolder)
+TEST_F(RecipientDALTest, HardDeleteRemovesRecipient)
 {
-    Folder f = makeFolder(user.id.value()); fdal.insert(f);
-    fdal.hardDelete(f.id.value());
-    EXPECT_FALSE(fdal.findByID(f.id.value()).has_value());
+    Recipient r = makeR("x@x.com"); rdal.insert(r);
+    EXPECT_TRUE(rdal.hardDelete(r.id.value()));
+    EXPECT_FALSE(rdal.findByID(r.id.value()).has_value());
+}
+
+TEST_F(RecipientDALTest, HardDeleteOnlyRemovesTarget)
+{
+    Recipient r1 = makeR("a@x.com"); rdal.insert(r1);
+    Recipient r2 = makeR("b@x.com"); rdal.insert(r2);
+    rdal.hardDelete(r1.id.value());
+    EXPECT_FALSE(rdal.findByID(r1.id.value()).has_value());
+    EXPECT_TRUE(rdal.findByID(r2.id.value()).has_value());
+}
+
+TEST_F(RecipientDALTest, CascadeDeleteWithMessage)
+{
+    Recipient r = makeR("x@x.com"); rdal.insert(r);
+    int64_t rid = r.id.value();
+    mdal.hardDelete(msg.id.value());
+    EXPECT_FALSE(rdal.findByID(rid).has_value());
 }

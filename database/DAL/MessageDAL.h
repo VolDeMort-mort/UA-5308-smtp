@@ -15,12 +15,12 @@ public:
 
     std::optional<Message> findByID(int64_t id) const;
     std::optional<Message> findByUID(int64_t folder_id, int64_t uid) const;
-    std::vector<Message>   findByUser(int64_t user_id) const;
-    std::vector<Message>   findByFolder(int64_t folder_id) const;
-    std::vector<Message>   findUnseen(int64_t folder_id) const;
-    std::vector<Message>   findDeleted(int64_t folder_id) const;
-    std::vector<Message>   findFlagged(int64_t folder_id) const;
-    std::vector<Message>   search(int64_t user_id, const std::string& query) const;
+    std::vector<Message> findByUser(int64_t user_id) const;
+    std::vector<Message> findByFolder(int64_t folder_id) const;
+    std::vector<Message> findUnseen(int64_t folder_id) const;
+    std::vector<Message> findDeleted(int64_t folder_id) const;
+    std::vector<Message> findFlagged(int64_t folder_id) const;
+    std::vector<Message> search(int64_t user_id, const std::string& query) const;
 
     bool insert(Message& msg);
     bool update(const Message& msg);
@@ -34,10 +34,10 @@ public:
     const std::string& getLastError() const;
 
 private:
-    sqlite3*    m_db;
+    sqlite3* m_db;
     std::string m_last_error;
 
-    bool                 setError(const char* sqlite_errmsg);
+    bool setError(const char* sqlite_errmsg);
     std::vector<Message> fetchRows(sqlite3_stmt* stmt) const;
-    static Message       rowToMessage(sqlite3_stmt* stmt);
+    static Message rowToMessage(sqlite3_stmt* stmt);
 };
