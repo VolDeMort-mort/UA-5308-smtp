@@ -7,10 +7,6 @@
 #include "ILoggerStrategy.h"
 #include "IReadable.h"
 
-const unsigned int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10mb || ~260k logs
-const std::string FILE_PATH = "log.txt";
-const std::string OLD_FILE_PATH = "old_log.txt";
-
 /**
  * @class FileStrategy class (Strategy pattern)
  * @extends ILoggerStrategy, IReadable

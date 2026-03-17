@@ -1,9 +1,13 @@
+#include <memory>
+#include <filesystem>
+
 #include <gtest/gtest.h>
+
 #include "Logger.h"
 #include "FileStrategy.h"
 #include "ConsoleStrategy.h"
-#include <memory>
-#include <filesystem>
+#include "LoggerConfig.h"
+
 class LoggerClass : public ::testing::Test {
 protected:
 	std::shared_ptr<Logger> logger;
@@ -78,7 +82,7 @@ TEST_F(LoggerClass, FiftyLogsTest)
 	{
 		logger->Log(PROD, "Log #" + std::to_string(i + 1));
 	}
-	EXPECT_EQ(std::filesystem::file_size(FILE_PATH), 0);
+	EXPECT_EQ(std::filesystem::file_size(ISXLoggerConfig::FilePath), 0);
 	logger->Log(PROD, "Log #50");
 
 	auto logs = logger->Read(50);
@@ -90,9 +94,9 @@ TEST_F(LoggerClass, TimeoutLogTest)
 {
 	logger->Log(PROD, "First Log");
 	logger->Log(PROD, "Second Log");
-	EXPECT_EQ(std::filesystem::file_size(FILE_PATH), 0);
+	EXPECT_EQ(std::filesystem::file_size(ISXLoggerConfig::FilePath), 0);
 	std::this_thread::sleep_for(std::chrono::milliseconds(2100));
-	EXPECT_GT(std::filesystem::file_size(FILE_PATH), 0);
+	EXPECT_GT(std::filesystem::file_size(ISXLoggerConfig::FilePath), 0);
 }
 TEST_F(LoggerClass, OrderTest)
 {

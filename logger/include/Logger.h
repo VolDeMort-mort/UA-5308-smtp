@@ -67,7 +67,6 @@ public:
 
 private:
 	std::shared_ptr<ILoggerStrategy> m_strategy; // pointer to abstract class
-	LogLevel m_defaultLevel = LogLevel::PROD;	 // default lvl for logs
 
 	std::mutex m_queue_mtx;			  // mutex for queue & Read()
 	std::mutex m_strategy_mtx;		  // mutex for safety runtime strategy switching

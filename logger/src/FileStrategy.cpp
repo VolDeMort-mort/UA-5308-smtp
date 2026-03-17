@@ -1,16 +1,19 @@
-#include "FileStrategy.h"
-#include <algorithm>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
-#include <memory>
-#include <sstream>
 #include <string>
+#include <memory>
+#include <iostream>
+#include <cstring>
+#include <sstream>
+#include <algorithm>
 #include <thread>
 
+#include "FileStrategy.h"
+#include "LoggerConfig.h"
+
 FileStrategy::FileStrategy(LogLevel defaultLevel)
-	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
+	: m_current_path(ISXLoggerConfig::FilePath), m_old_path(ISXLoggerConfig::OldFilePath),
+	  m_default_log_level(defaultLevel)
 {
 	if (std::filesystem::exists(m_current_path))
 		m_current_file_size = std::filesystem::file_size(m_current_path);
@@ -48,7 +51,7 @@ void FileStrategy::Rotate()
 }
 bool FileStrategy::CanWrite(int message_size)
 {
-	return (m_current_file_size + message_size) <= MAX_FILE_SIZE;
+	return (m_current_file_size + message_size) <= ISXLoggerConfig::MaxFileSize;
 }
 bool FileStrategy::OpenFile()
 {

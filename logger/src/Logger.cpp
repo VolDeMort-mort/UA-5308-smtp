@@ -1,8 +1,10 @@
-#include "Logger.h"
-#include "ConsoleStrategy.h"
-#include "FileStrategy.h"
 #include <iostream>
 #include <thread>
+
+#include "Logger.h"
+#include "FileStrategy.h"
+#include "ConsoleStrategy.h"
+#include "LoggerConfig.h"
 
 Logger::Logger(std::shared_ptr<ILoggerStrategy> strategy)
 {
@@ -26,7 +28,7 @@ void Logger::PushToQueue(const std::string& message)
 {
 	std::lock_guard<std::mutex> lock(m_queue_mtx);
 	m_queue.push(message);
-	if (m_queue.size() >= 50) 
+	if (m_queue.size() >= ISXLoggerConfig::LogsForBatch)
 		m_cv.notify_one();
 };
 
@@ -38,8 +40,8 @@ void Logger::WorkQueue()
 		{
 			std::unique_lock<std::mutex> lock(m_queue_mtx);
 			// wait for batch size, flush request from Read(), or timeout
-			m_cv.wait_for(lock, std::chrono::seconds(2),[this] { 
-				return m_queue.size() >= 50 || m_flush || !m_running_flag; });
+			m_cv.wait_for(lock, ISXLoggerConfig::Timeout,[this] {
+				return m_queue.size() >= ISXLoggerConfig::LogsForBatch || m_flush || !m_running_flag; });
 
 			// trigger on Read(), when logs are flushed
 			if (m_flush && m_queue.empty())
@@ -64,9 +66,8 @@ void Logger::WorkQueue()
 				std::lock_guard<std::mutex> strategy_lock(m_strategy_mtx);
 				local_strategy = m_strategy;
 			}
-			if (!local_strategy) continue;
 
-			if (!local_strategy->IsValid()) // if path is invalid,logs can`t be pushed into file
+			if (!local_strategy || !local_strategy->IsValid()) // if path is invalid,logs can`t be pushed into file
 			{
 				std::lock_guard<std::mutex> strategy_lock(m_strategy_mtx);
 				std::cerr << "Log strategy failure.\n";
