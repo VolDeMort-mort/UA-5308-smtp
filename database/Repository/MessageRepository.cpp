@@ -264,3 +264,80 @@ bool MessageRepository::removeRecipient(int64_t id)
 
     return m_recipient_dal.hardDelete(id);
 }
+
+bool MessageRepository::setFlags(int64_t id, const std::vector<std::string>& flags)
+{
+    auto msg = m_message_dal.findByID(id);
+    if (!msg.has_value())
+        return setError("setFlags: message not found");
+
+    bool is_seen = msg->is_seen;
+    bool is_deleted = msg->is_deleted;
+    bool is_draft = msg->is_draft;
+    bool is_answered = msg->is_answered;
+    bool is_flagged = msg->is_flagged;
+    bool is_recent = msg->is_recent;
+
+    for (const auto& flag : flags)
+    {
+        bool value = true;
+        std::string name = flag;
+
+        if (!flag.empty() && flag[0] == '-')
+        {
+            value = false;
+            name  = flag.substr(1);
+        }
+
+        if      (name == "\\Seen")     is_seen     = value;
+        else if (name == "\\Deleted")  is_deleted  = value;
+        else if (name == "\\Draft")    is_draft    = value;
+        else if (name == "\\Answered") is_answered = value;
+        else if (name == "\\Flagged")  is_flagged  = value;
+        else if (name == "\\Recent")   is_recent   = value;
+        else return setError("setFlags: unknown flag '" + name + "'");
+    }
+
+    return m_message_dal.updateFlags(id, is_seen, is_deleted, is_draft, is_answered, is_flagged, is_recent);
+}
+
+bool MessageRepository::append(Message& msg, int64_t folder_id)
+{
+    return assignUID(msg, folder_id);
+}
+
+bool MessageRepository::incrementNextUID(int64_t folder_id)
+{
+    if (!m_folder_dal.findByID(folder_id).has_value())
+        return setError("incrementNextUID: folder not found");
+
+    if (!m_folder_dal.incrementNextUID(folder_id))
+        return setError(m_folder_dal.getLastError());
+
+    return true;
+}
+
+std::optional<Message> MessageRepository::copy(int64_t id, int64_t target_folder_id)
+{
+    auto msg = m_message_dal.findByID(id);
+    if (!msg.has_value())
+    {
+        setError("copy: message not found");
+        return std::nullopt;
+    }
+
+    if (!m_folder_dal.findByID(target_folder_id).has_value())
+    {
+        setError("copy: target folder not found");
+        return std::nullopt;
+    }
+
+    Message copy = msg.value();
+    copy.id  = std::nullopt;
+    copy.uid = 0;
+
+    if (!assignUID(copy, target_folder_id))
+        return std::nullopt;
+
+    return copy;
+}

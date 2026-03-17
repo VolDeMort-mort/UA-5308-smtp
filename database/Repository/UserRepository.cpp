@@ -38,10 +38,12 @@ std::vector<User> UserRepository::findAll() const
     return result;
 }
 
-bool UserRepository::registerUser(User& user)
+bool UserRepository::registerUser(User& user, const std::string& password)
 {
     if (m_user_dal.findByUsername(user.username).has_value())
         return setError("registerUser: username already exists");
+
+    user.password_hash = hashPassword(password);
 
     if (!m_user_dal.insert(user))
         return setError(m_user_dal.getLastError());
@@ -49,27 +51,25 @@ bool UserRepository::registerUser(User& user)
     return true;
 }
 
-bool UserRepository::authorize(const std::string& username,
-                                const std::string& password_hash)
+bool UserRepository::authorize(const std::string& username, const std::string& password)
 {
     auto user = m_user_dal.findByUsername(username);
 
     if (!user.has_value())
         return setError("authorize: user not found");
 
-    if (user->password_hash != password_hash)
+    if (user->password_hash != hashPassword(password))
         return setError("authorize: invalid credentials");
 
     return true;
 }
 
-bool UserRepository::changePassword(int64_t id,
-                                     const std::string& new_password_hash)
+bool UserRepository::changePassword(int64_t id, const std::string& new_password)
 {
     if (!m_user_dal.findByID(id).has_value())
         return setError("changePassword: user not found");
 
-    if (!m_user_dal.updatePassword(id, new_password_hash))
+    if (!m_user_dal.updatePassword(id, hashPassword(new_password)))
         return setError(m_user_dal.getLastError());
 
     return true;
@@ -91,4 +91,10 @@ bool UserRepository::hardDelete(int64_t id)
         return setError(m_user_dal.getLastError());
 
     return true;
+}
+
+std::string UserRepository::hashPassword(const std::string& password) const
+{
+    // TODO: hash the raw password (e.g. SHA-256) and return the hash string
+    return password;
 }

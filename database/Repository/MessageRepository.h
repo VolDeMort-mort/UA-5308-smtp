@@ -59,6 +59,11 @@ public:
 
     const std::string& getLastError() const;
 
+    bool setFlags(int64_t id, const std::vector<std::string>& flags);
+    bool append(Message& msg, int64_t folder_id);
+    bool incrementNextUID(int64_t folder_id);
+    std::optional<Message> copy(int64_t id, int64_t target_folder_id);
+
 private:
     MessageDAL m_message_dal;
     FolderDAL m_folder_dal;
