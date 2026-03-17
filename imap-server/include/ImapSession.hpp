@@ -14,19 +14,18 @@
 #include "DataBaseManager.h"
 #include "ImapCommand.hpp"
 #include "ImapCommandDispatcher.hpp"
+#include "ImapConfig.hpp"
 #include "ImapSessionTypes.hpp"
 #include "Logger.h"
 #include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
 #include "ThreadPool.h"
 
-constexpr auto IMAP_TIMEOUT = std::chrono::minutes(30);
-
 class ImapSession : public std::enable_shared_from_this<ImapSession>
 {
 public:
 	ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, UserDAL& u_dal,
-				ThreadPool& pool);
+				ThreadPool& pool, ImapConfig& config);
 	void Start();
 
 private:
@@ -36,6 +35,7 @@ private:
 	void WriteResponse(const std::string& msg); // adds message to the queue
 	void Write();								// writes to the client from queue
 
+	ImapConfig& m_config;
 	boost::asio::ip::tcp::socket m_socket;
 	boost::asio::streambuf m_buffer;
 	boost::asio::strand<boost::asio::any_io_executor> m_strand;

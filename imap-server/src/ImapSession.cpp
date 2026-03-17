@@ -6,8 +6,8 @@
 #include "ImapResponse.hpp"
 
 ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, UserDAL& u_dal,
-						 ThreadPool& pool)
-	: m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db.getDB(), u_dal),
+						 ThreadPool& pool, ImapConfig& config)
+	: m_config(config), m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db.getDB(), u_dal),
 	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(socket.get_executor())
 {
 	m_logger.Log(PROD, "New ImapSession created");
@@ -38,7 +38,7 @@ void ImapSession::ReadCommand()
 
 	auto self = shared_from_this();
 
-	m_timer.expires_after(IMAP_TIMEOUT);
+	m_timer.expires_after(std::chrono::minutes(m_config.TIMEOUT_MINS));
 	m_timer.async_wait(
 		boost::asio::bind_executor(m_strand,
 								   [this, self](boost::system::error_code ec)
