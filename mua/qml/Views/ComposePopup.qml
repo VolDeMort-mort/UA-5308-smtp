@@ -156,46 +156,4 @@ Popup {
         }
     }
 
-
-    component StyledInput : RowLayout {
-        property string label
-        property string placeholder
-        property alias textValue: input.text
-
-        spacing: 10
-        Text {
-            text: label
-            color: Theme.mutedTextColor
-            font.pixelSize: Theme.fontSizeMedium
-            Layout.preferredWidth: 60
-        }
-        Rectangle {
-            Layout.fillWidth: true
-            height: 35
-            color: "transparent"
-            border.color: Theme.itemBorderColor
-            border.width: 0;
-
-            Rectangle {
-                anchors.bottom: parent.bottom; width: parent.width; height: 1;
-                color: Theme.itemBorderColor
-            }
-
-            TextInput {
-                id: input
-                anchors.fill: parent
-                verticalAlignment: TextInput.AlignVCenter
-                color: Theme.textColor
-                font.pixelSize: Theme.fontSizeMedium
-                clip: true
-
-                Text {
-                    text: placeholder
-                    color: Theme.mutedTextColor
-                    visible: !parent.text && !parent.activeFocus
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-        }
-    }
 }

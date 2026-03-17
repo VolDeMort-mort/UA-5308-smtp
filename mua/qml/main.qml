@@ -9,17 +9,76 @@ import "Components"
 ApplicationWindow {
     id: rootWindow
     visible: true
-
     width: Screen.width
     height: Screen.height
-    minimumWidth: 800
+    minimumWidth: 500
     minimumHeight: 600
-
     visibility: Window.Maximized
     title: "Email Client"
 
-    color: Theme.windowBg;
+    Rectangle {
+        id: mainContent
+        anchors.fill: parent
+        color: Theme.windowBg
 
+        state: "LOGIN"
+
+        states: [
+            State {
+                name: "LOGIN"
+                PropertyChanges { target: loginView; visible: true }
+                PropertyChanges { target: mainAppLayout; visible: false }
+            },
+            State {
+                name: "APP"
+                PropertyChanges { target: loginView; visible: false }
+                PropertyChanges { target: mainAppLayout; visible: true }
+            }
+        ]
+        LoginView {
+            id: loginView
+            onLoginRequest: mainController.handleLogin()
+        }
+
+        // Program layout
+        RowLayout {
+            id: mainAppLayout
+            anchors.fill: parent
+            spacing: 0
+
+            Sidebar {
+                id: mainSidebar
+                folderModel: folModel
+                onFolderSelected: (fol_id) => mainController.filterFold(fol_id)
+                onNavSelected: (type) => mainController.filterNav(type)
+            }
+
+            ColumnLayout {
+                Layout.leftMargin: 20
+                Layout.rightMargin: 20
+                Layout.topMargin: 15
+                Layout.bottomMargin: 15
+
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                spacing: 20
+
+                TopSearchBar {
+                    Layout.fillWidth: true
+                }
+
+                Toolbar {
+                    Layout.fillWidth: true
+                }
+
+                MailArea {
+                    id: areaContainer
+                }
+            }
+        }
+
+    }
     // Pop up windows
     FilterPopup {
         id: mainFilterPopup
@@ -95,49 +154,12 @@ ApplicationWindow {
 
     }
 
-
     FilterModel {
         id: filteredModel
         model: mockEmailModel
         delegate: MailListDelegate {}
     }
 
-    // Program layout
-    RowLayout {
-        anchors.fill: parent
-        spacing: 0
-
-        Sidebar {
-            id: mainSidebar
-            folderModel: folModel
-            onFolderSelected: (fol_id) => mainController.filterFold(fol_id)
-            onNavSelected: (type) => mainController.filterNav(type)
-        }
-
-        ColumnLayout {
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            Layout.topMargin: 15
-            Layout.bottomMargin: 15
-
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-
-            spacing: 20
-
-            TopSearchBar {
-                Layout.fillWidth: true
-            }
-
-            Toolbar {
-                Layout.fillWidth: true
-            }
-
-            MailArea {
-                id: areaContainer
-            }
-        }
-    }
 
     // Binding with logic
     QtObject{
@@ -183,6 +205,10 @@ ApplicationWindow {
             filteredModel.filterFolder = fol_id;
 
             changeState("LISTSTATE")
+        }
+
+        function handleLogin(){
+            mainContent.state = "APP"
         }
 
     }

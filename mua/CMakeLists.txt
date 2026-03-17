@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 4.0)
 
-# project(EmailClientApp VERSION 0.1 LANGUAGES CXX)
-
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_AUTOMOC ON)
 
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
 
 qt_add_executable(smtp_mua main.cpp)
 
@@ -36,6 +33,8 @@ qt_add_qml_module(smtp_mua
         qml/Components/NavType.qml
         qml/Components/MailListView.qml
         qml/Components/MailView.qml
+        qml/Components/StyledInput.qml
+
 
         qml/Views/Sidebar.qml
         qml/Views/TopSearchBar.qml
@@ -43,6 +42,7 @@ qt_add_qml_module(smtp_mua
         qml/Views/MailArea.qml
         qml/Views/ComposePopup.qml
         qml/Views/FilterPopup.qml
+        qml/Views/LoginView.qml
 
         qml/main.qml
 )
