@@ -114,71 +114,82 @@ std::optional<Message> MessageDAL::findByUID(int64_t folder_id, int64_t uid) con
     return result;
 }
 
-std::vector<Message> MessageDAL::findByUser(int64_t user_id) const
+std::vector<Message> MessageDAL::findByUser(int64_t user_id, int limit, int offset) const
 {
-    const char* sql = MESSAGE_SELECT "WHERE user_id = ? ORDER BY internal_date DESC;";
+    const char* sql = MESSAGE_SELECT "WHERE user_id = ? ORDER BY internal_date DESC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
 
     sqlite3_bind_int64(stmt, 1, user_id);
+    sqlite3_bind_int  (stmt, 2, limit);
+    sqlite3_bind_int  (stmt, 3, offset);
+
     return fetchRows(stmt);
 }
 
-std::vector<Message> MessageDAL::findByFolder(int64_t folder_id) const
+std::vector<Message> MessageDAL::findByFolder(int64_t folder_id, int limit, int offset) const
 {
-    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? ORDER BY uid ASC;";
+    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? ORDER BY uid ASC LIMIT ? OFFSET ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return {};
+    sqlite3_bind_int64(stmt, 1, folder_id);
+    sqlite3_bind_int  (stmt, 2, limit);
+    sqlite3_bind_int  (stmt, 3, offset);
+    return fetchRows(stmt);
+}
+
+std::vector<Message> MessageDAL::findUnseen(int64_t folder_id, int limit, int offset) const
+{
+    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? AND is_seen = 0 ORDER BY uid ASC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
 
     sqlite3_bind_int64(stmt, 1, folder_id);
+    sqlite3_bind_int  (stmt, 2, limit);
+    sqlite3_bind_int  (stmt, 3, offset);
+
     return fetchRows(stmt);
 }
 
-std::vector<Message> MessageDAL::findUnseen(int64_t folder_id) const
+std::vector<Message> MessageDAL::findDeleted(int64_t folder_id, int limit, int offset) const
 {
-    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? AND is_seen = 0 ORDER BY uid ASC;";
+    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? AND is_deleted = 1 ORDER BY uid ASC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
 
     sqlite3_bind_int64(stmt, 1, folder_id);
+    sqlite3_bind_int  (stmt, 2, limit);
+    sqlite3_bind_int  (stmt, 3, offset);
+
     return fetchRows(stmt);
 }
 
-std::vector<Message> MessageDAL::findDeleted(int64_t folder_id) const
+std::vector<Message> MessageDAL::findFlagged(int64_t folder_id, int limit, int offset) const
 {
-    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? AND is_deleted = 1 ORDER BY uid ASC;";
+    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? AND is_flagged = 1 ORDER BY uid ASC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
 
     sqlite3_bind_int64(stmt, 1, folder_id);
+    sqlite3_bind_int  (stmt, 2, limit);
+    sqlite3_bind_int  (stmt, 3, offset);
+
     return fetchRows(stmt);
 }
 
-std::vector<Message> MessageDAL::findFlagged(int64_t folder_id) const
-{
-    const char* sql = MESSAGE_SELECT "WHERE folder_id = ? AND is_flagged = 1 ORDER BY uid ASC;";
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-        return {};
-
-    sqlite3_bind_int64(stmt, 1, folder_id);
-    return fetchRows(stmt);
-}
-
-std::vector<Message> MessageDAL::search(int64_t user_id, const std::string& query) const
+std::vector<Message> MessageDAL::search(int64_t user_id, const std::string& query, int limit, int offset) const
 {
     const char* sql = MESSAGE_SELECT
         "WHERE user_id = ? AND subject LIKE ? "
-        "ORDER BY internal_date DESC;";
+        "ORDER BY internal_date DESC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -187,6 +198,8 @@ std::vector<Message> MessageDAL::search(int64_t user_id, const std::string& quer
     std::string pattern = "%" + query + "%";
     sqlite3_bind_int64(stmt, 1, user_id);
     sqlite3_bind_text(stmt, 2, pattern.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int  (stmt, 3, limit);
+    sqlite3_bind_int  (stmt, 4, offset);
     return fetchRows(stmt);
 }
 

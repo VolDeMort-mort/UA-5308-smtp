@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 
 option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)

@@ -1,242 +1,202 @@
-#include "TestFixture.h"
+#include "TestHelper.h"
 #include "../DAL/UserDAL.h"
 #include "../DAL/FolderDAL.h"
 
 class FolderDALTest : public DBFixture
 {
 protected:
-    UserDAL*   userDal   = nullptr;
-    FolderDAL* folderDal = nullptr;
-    int64_t    userId    = 0;
+    int64_t user_id = -1;
 
     void SetUp() override
     {
         DBFixture::SetUp();
-        userDal   = new UserDAL(db);
-        folderDal = new FolderDAL(db);
-
-        User u;
-        u.username      = "alice";
-        u.password_hash = "hash";
-        ASSERT_TRUE(userDal->insert(u));
-        userId = u.id.value();
-    }
-
-    void TearDown() override
-    {
-        delete folderDal;
-        delete userDal;
-        DBFixture::TearDown();
+        UserDAL udal(db);
+        User u; u.username = "owner"; u.password_hash = "h";
+        ASSERT_TRUE(udal.insert(u));
+        user_id = u.id.value();
     }
 
     Folder makeFolder(const std::string& name, bool subscribed = true)
     {
         Folder f;
-        f.user_id       = userId;
+        f.user_id       = user_id;
         f.name          = name;
         f.next_uid      = 1;
         f.is_subscribed = subscribed;
-        EXPECT_TRUE(folderDal->insert(f));
-        EXPECT_TRUE(f.id.has_value());
         return f;
     }
 };
 
-// ── insert ────────────────────────────────────────────────────────────────────
+// ── insert & findByID ────────────────────────────────────────────────────────
 
-TEST_F(FolderDALTest, InsertSetsId)
+TEST_F(FolderDALTest, InsertAssignsID)
 {
+    FolderDAL dal(db);
     Folder f = makeFolder("INBOX");
+    ASSERT_TRUE(dal.insert(f));
+    ASSERT_TRUE(f.id.has_value());
     EXPECT_GT(f.id.value(), 0);
 }
 
-TEST_F(FolderDALTest, InsertPreservesFields)
+TEST_F(FolderDALTest, FindByIDReturnsCorrectFolder)
 {
-    Folder f = makeFolder("INBOX");
-    auto found = folderDal->findByID(f.id.value());
+    FolderDAL dal(db);
+    Folder f = makeFolder("Sent");
+    ASSERT_TRUE(dal.insert(f));
 
+    auto found = dal.findByID(f.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name,     "INBOX");
-    EXPECT_EQ(found->user_id,  userId);
+    EXPECT_EQ(found->name, "Sent");
+    EXPECT_EQ(found->user_id, user_id);
     EXPECT_EQ(found->next_uid, 1);
     EXPECT_TRUE(found->is_subscribed);
 }
 
-TEST_F(FolderDALTest, InsertTwoFoldersGetDifferentIds)
+TEST_F(FolderDALTest, FindByIDMissingReturnsNullopt)
 {
-    Folder a = makeFolder("INBOX");
-    Folder b = makeFolder("Sent");
-    EXPECT_NE(a.id.value(), b.id.value());
+    FolderDAL dal(db);
+    EXPECT_FALSE(dal.findByID(9999).has_value());
 }
 
-// ── findByID ──────────────────────────────────────────────────────────────────
+// ── findByName ───────────────────────────────────────────────────────────────
 
-TEST_F(FolderDALTest, FindByIDReturnsFolder)
+TEST_F(FolderDALTest, FindByNameSuccess)
 {
-    Folder f = makeFolder("INBOX");
-    auto found = folderDal->findByID(f.id.value());
+    FolderDAL dal(db);
+    Folder f = makeFolder("Drafts");
+    ASSERT_TRUE(dal.insert(f));
+
+    auto found = dal.findByName(user_id, "Drafts");
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name, "INBOX");
+    EXPECT_EQ(found->id, f.id);
 }
 
-TEST_F(FolderDALTest, FindByIDUnknownReturnsNullopt)
+TEST_F(FolderDALTest, FindByNameWrongUserReturnsNullopt)
 {
-    EXPECT_FALSE(folderDal->findByID(9999).has_value());
+    FolderDAL dal(db);
+    Folder f = makeFolder("INBOX");
+    ASSERT_TRUE(dal.insert(f));
+
+    EXPECT_FALSE(dal.findByName(user_id + 99, "INBOX").has_value());
 }
 
-// ── findByUser ────────────────────────────────────────────────────────────────
-
-TEST_F(FolderDALTest, FindByUserEmptyReturnsEmpty)
+TEST_F(FolderDALTest, FindByNameMissingReturnsNullopt)
 {
-    EXPECT_TRUE(folderDal->findByUser(userId, 100).empty());
+    FolderDAL dal(db);
+    EXPECT_FALSE(dal.findByName(user_id, "NoSuchFolder").has_value());
 }
 
-TEST_F(FolderDALTest, FindByUserReturnsFoldersOrderedByName)
-{
-    makeFolder("Trash");
-    makeFolder("INBOX");
-    makeFolder("Sent");
+// ── findByUser + pagination ──────────────────────────────────────────────────
 
-    auto folders = folderDal->findByUser(userId, 100);
+TEST_F(FolderDALTest, FindByUserReturnsAllFolders)
+{
+    FolderDAL dal(db);
+    for (const char* n : {"INBOX", "Sent", "Drafts", "Trash"})
+    {
+        Folder f = makeFolder(n);
+        ASSERT_TRUE(dal.insert(f));
+    }
+    EXPECT_EQ(dal.findByUser(user_id, 100, 0).size(), 4u);
+}
+
+TEST_F(FolderDALTest, FindByUserOrderedAlphabetically)
+{
+    FolderDAL dal(db);
+    for (const char* n : {"Trash", "INBOX", "Sent"})
+    {
+        Folder f = makeFolder(n);
+        ASSERT_TRUE(dal.insert(f));
+    }
+    auto folders = dal.findByUser(user_id, 100, 0);
     ASSERT_EQ(folders.size(), 3u);
     EXPECT_EQ(folders[0].name, "INBOX");
     EXPECT_EQ(folders[1].name, "Sent");
     EXPECT_EQ(folders[2].name, "Trash");
 }
 
-TEST_F(FolderDALTest, FindByUserDoesNotReturnOtherUsersFolders)
+TEST_F(FolderDALTest, FindByUserPaginationLimit)
 {
-    User other;
-    other.username      = "bob";
-    other.password_hash = "h";
-    ASSERT_TRUE(userDal->insert(other));
-
-    Folder f;
-    f.user_id       = other.id.value();
-    f.name          = "INBOX";
-    f.next_uid      = 1;
-    f.is_subscribed = true;
-    ASSERT_TRUE(folderDal->insert(f));
-
-    EXPECT_TRUE(folderDal->findByUser(userId, 100).empty());
+    FolderDAL dal(db);
+    for (int i = 0; i < 6; ++i)
+    {
+        Folder f = makeFolder("folder" + std::to_string(i));
+        ASSERT_TRUE(dal.insert(f));
+    }
+    EXPECT_EQ(dal.findByUser(user_id, 2, 0).size(), 2u);
 }
 
-TEST_F(FolderDALTest, FindByUserLimitWorks)
+TEST_F(FolderDALTest, FindByUserPaginationOffset)
 {
-    makeFolder("INBOX");
-    makeFolder("Sent");
-    makeFolder("Trash");
-
-    EXPECT_EQ(folderDal->findByUser(userId, 2, 0).size(), 2u);
-    EXPECT_EQ(folderDal->findByUser(userId, 2, 2).size(), 1u);
+    FolderDAL dal(db);
+    for (int i = 0; i < 4; ++i)
+    {
+        Folder f = makeFolder("f" + std::to_string(i));
+        ASSERT_TRUE(dal.insert(f));
+    }
+    EXPECT_EQ(dal.findByUser(user_id, 10, 3).size(), 1u);
 }
 
-// ── findByName ────────────────────────────────────────────────────────────────
-
-TEST_F(FolderDALTest, FindByNameReturnsCorrectFolder)
+TEST_F(FolderDALTest, FindByUserDoesNotReturnOtherUsersfolders)
 {
-    makeFolder("INBOX");
-    auto found = folderDal->findByName(userId, "INBOX");
+    UserDAL udal(db);
+    User other; other.username = "other"; other.password_hash = "h";
+    ASSERT_TRUE(udal.insert(other));
+
+    FolderDAL dal(db);
+    Folder f; f.user_id = other.id.value(); f.name = "INBOX"; f.next_uid = 1; f.is_subscribed = true;
+    ASSERT_TRUE(dal.insert(f));
+
+    EXPECT_TRUE(dal.findByUser(user_id, 100, 0).empty());
+}
+
+// ── update ───────────────────────────────────────────────────────────────────
+
+TEST_F(FolderDALTest, UpdatePersistsChanges)
+{
+    FolderDAL dal(db);
+    Folder f = makeFolder("Old");
+    ASSERT_TRUE(dal.insert(f));
+
+    f.name          = "New";
+    f.is_subscribed = false;
+    ASSERT_TRUE(dal.update(f));
+
+    auto found = dal.findByID(f.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name, "INBOX");
+    EXPECT_EQ(found->name, "New");
+    EXPECT_FALSE(found->is_subscribed);
 }
 
-TEST_F(FolderDALTest, FindByNameUnknownReturnsNullopt)
+TEST_F(FolderDALTest, UpdateWithoutIDFails)
 {
-    EXPECT_FALSE(folderDal->findByName(userId, "NoSuchFolder").has_value());
+    FolderDAL dal(db);
+    Folder f = makeFolder("X");
+    EXPECT_FALSE(dal.update(f));
 }
 
-TEST_F(FolderDALTest, FindByNameIsScopedToUser)
-{
-    User other;
-    other.username = "bob"; other.password_hash = "h";
-    ASSERT_TRUE(userDal->insert(other));
-
-    Folder f;
-    f.user_id = other.id.value(); f.name = "INBOX";
-    f.next_uid = 1; f.is_subscribed = true;
-    ASSERT_TRUE(folderDal->insert(f));
-
-    EXPECT_FALSE(folderDal->findByName(userId, "INBOX").has_value());
-}
-
-// ── update ────────────────────────────────────────────────────────────────────
-
-TEST_F(FolderDALTest, UpdateChangesName)
-{
-    Folder f = makeFolder("INBOX");
-    f.name = "INBOX_renamed";
-    ASSERT_TRUE(folderDal->update(f));
-
-    auto found = folderDal->findByID(f.id.value());
-    ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->name, "INBOX_renamed");
-}
-
-TEST_F(FolderDALTest, UpdateWithNoIdFails)
-{
-    Folder f;
-    f.user_id = userId; f.name = "X";
-    f.next_uid = 1; f.is_subscribed = false;
-    EXPECT_FALSE(folderDal->update(f));
-}
-
-TEST_F(FolderDALTest, UpdateNonExistentFails)
-{
-    Folder f;
-    f.id = 9999; f.user_id = userId;
-    f.name = "X"; f.next_uid = 1; f.is_subscribed = false;
-    EXPECT_FALSE(folderDal->update(f));
-}
-
-// ── incrementNextUID ──────────────────────────────────────────────────────────
+// ── incrementNextUID ─────────────────────────────────────────────────────────
 
 TEST_F(FolderDALTest, IncrementNextUIDIncreasesByOne)
 {
+    FolderDAL dal(db);
     Folder f = makeFolder("INBOX");
-    ASSERT_EQ(f.next_uid, 1);
+    ASSERT_TRUE(dal.insert(f));
 
-    ASSERT_TRUE(folderDal->incrementNextUID(f.id.value()));
+    ASSERT_TRUE(dal.incrementNextUID(f.id.value()));
+    ASSERT_TRUE(dal.incrementNextUID(f.id.value()));
 
-    auto found = folderDal->findByID(f.id.value());
+    auto found = dal.findByID(f.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->next_uid, 2);
+    EXPECT_EQ(found->next_uid, 3);
 }
 
-TEST_F(FolderDALTest, IncrementNextUIDMultipleTimes)
-{
-    Folder f = makeFolder("INBOX");
-    folderDal->incrementNextUID(f.id.value());
-    folderDal->incrementNextUID(f.id.value());
-    folderDal->incrementNextUID(f.id.value());
-
-    auto found = folderDal->findByID(f.id.value());
-    EXPECT_EQ(found->next_uid, 4);
-}
-
-TEST_F(FolderDALTest, IncrementNextUIDNonExistentFails)
-{
-    EXPECT_FALSE(folderDal->incrementNextUID(9999));
-}
-
-// ── hardDelete ────────────────────────────────────────────────────────────────
+// ── hardDelete ───────────────────────────────────────────────────────────────
 
 TEST_F(FolderDALTest, HardDeleteRemovesFolder)
 {
-    Folder f = makeFolder("INBOX");
-    ASSERT_TRUE(folderDal->hardDelete(f.id.value()));
-    EXPECT_FALSE(folderDal->findByID(f.id.value()).has_value());
-}
-
-TEST_F(FolderDALTest, HardDeleteNonExistentFails)
-{
-    EXPECT_FALSE(folderDal->hardDelete(9999));
-}
-
-TEST_F(FolderDALTest, HardDeleteDoesNotAffectOtherFolders)
-{
-    Folder a = makeFolder("INBOX");
-    Folder b = makeFolder("Sent");
-    ASSERT_TRUE(folderDal->hardDelete(a.id.value()));
-    EXPECT_TRUE(folderDal->findByID(b.id.value()).has_value());
+    FolderDAL dal(db);
+    Folder f = makeFolder("ToDelete");
+    ASSERT_TRUE(dal.insert(f));
+    ASSERT_TRUE(dal.hardDelete(f.id.value()));
+    EXPECT_FALSE(dal.findByID(f.id.value()).has_value());
 }

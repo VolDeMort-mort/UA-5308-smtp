@@ -14,7 +14,7 @@ public:
 
     std::optional<User>  findByID(int64_t id) const;
     std::optional<User> findByUsername(const std::string& username) const;
-    std::vector<User> findAll() const;
+    std::vector<User> findAll(int limit = 50, int offset = 0) const;
 
     bool insert(User& user);
     bool update(const User& user);

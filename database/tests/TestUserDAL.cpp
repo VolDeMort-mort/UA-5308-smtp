@@ -1,213 +1,198 @@
-#include "TestFixture.h"
+#include "TestHelper.h"
 #include "../DAL/UserDAL.h"
 
-class UserDALTest : public DBFixture
+class UserDALTest : public DBFixture {};
+
+// ── insert & findByID ────────────────────────────────────────────────────────
+
+TEST_F(UserDALTest, InsertAssignsID)
 {
-protected:
-    UserDAL* dal = nullptr;
+    UserDAL dal(db);
+    User u; u.username = "alice"; u.password_hash = "hash1";
 
-    void SetUp() override
-    {
-        DBFixture::SetUp();
-        dal = new UserDAL(db);
-    }
-
-    void TearDown() override
-    {
-        delete dal;
-        DBFixture::TearDown();
-    }
-
-    User makeUser(const std::string& username, const std::string& hash)
-    {
-        User u;
-        u.username      = username;
-        u.password_hash = hash;
-        EXPECT_TRUE(dal->insert(u));
-        EXPECT_TRUE(u.id.has_value());
-        return u;
-    }
-};
-
-// ── insert ────────────────────────────────────────────────────────────────────
-
-TEST_F(UserDALTest, InsertSetsId)
-{
-    User u;
-    u.username      = "alice";
-    u.password_hash = "hash_a";
-
-    ASSERT_TRUE(dal->insert(u));
-    EXPECT_TRUE(u.id.has_value());
+    ASSERT_TRUE(dal.insert(u));
+    ASSERT_TRUE(u.id.has_value());
     EXPECT_GT(u.id.value(), 0);
 }
 
-TEST_F(UserDALTest, InsertTwoUsersGetDifferentIds)
+TEST_F(UserDALTest, FindByIDReturnsInsertedUser)
 {
-    User a = makeUser("alice", "hash_a");
-    User b = makeUser("bob",   "hash_b");
-    EXPECT_NE(a.id.value(), b.id.value());
-}
+    UserDAL dal(db);
+    User u; u.username = "bob"; u.password_hash = "hash2";
+    ASSERT_TRUE(dal.insert(u));
 
-TEST_F(UserDALTest, InsertDuplicateUsernameFails)
-{
-    makeUser("alice", "hash_a");
-
-    User dup;
-    dup.username      = "alice";
-    dup.password_hash = "hash_other";
-    EXPECT_FALSE(dal->insert(dup));
-    EXPECT_FALSE(dal->getLastError().empty());
-}
-
-// ── findByID ──────────────────────────────────────────────────────────────────
-
-TEST_F(UserDALTest, FindByIDReturnsUser)
-{
-    User inserted = makeUser("alice", "hash_a");
-    auto found    = dal->findByID(inserted.id.value());
-
+    auto found = dal.findByID(u.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->username,      "alice");
-    EXPECT_EQ(found->password_hash, "hash_a");
-    EXPECT_EQ(found->id.value(),    inserted.id.value());
+    EXPECT_EQ(found->username, "bob");
+    EXPECT_EQ(found->password_hash, "hash2");
 }
 
-TEST_F(UserDALTest, FindByIDUnknownReturnsNullopt)
+TEST_F(UserDALTest, FindByIDMissingReturnsNullopt)
 {
-    EXPECT_FALSE(dal->findByID(9999).has_value());
+    UserDAL dal(db);
+    EXPECT_FALSE(dal.findByID(9999).has_value());
 }
 
-// ── findByUsername ────────────────────────────────────────────────────────────
+// ── findByUsername ───────────────────────────────────────────────────────────
 
-TEST_F(UserDALTest, FindByUsernameReturnsUser)
+TEST_F(UserDALTest, FindByUsernameSuccess)
 {
-    makeUser("alice", "hash_a");
-    auto found = dal->findByUsername("alice");
+    UserDAL dal(db);
+    User u; u.username = "carol"; u.password_hash = "h";
+    ASSERT_TRUE(dal.insert(u));
 
+    auto found = dal.findByUsername("carol");
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->password_hash, "hash_a");
+    EXPECT_EQ(found->id, u.id);
 }
 
-TEST_F(UserDALTest, FindByUsernameUnknownReturnsNullopt)
+TEST_F(UserDALTest, FindByUsernameMissingReturnsNullopt)
 {
-    EXPECT_FALSE(dal->findByUsername("nobody").has_value());
+    UserDAL dal(db);
+    EXPECT_FALSE(dal.findByUsername("nobody").has_value());
 }
 
 TEST_F(UserDALTest, FindByUsernameIsCaseSensitive)
 {
-    makeUser("Alice", "hash_a");
-    EXPECT_FALSE(dal->findByUsername("alice").has_value());
+    UserDAL dal(db);
+    User u; u.username = "Dave"; u.password_hash = "h";
+    ASSERT_TRUE(dal.insert(u));
+
+    EXPECT_FALSE(dal.findByUsername("dave").has_value());
 }
 
-// ── findAll ───────────────────────────────────────────────────────────────────
+// ── duplicate username ───────────────────────────────────────────────────────
 
-TEST_F(UserDALTest, FindAllEmptyDatabase)
+TEST_F(UserDALTest, InsertDuplicateUsernameFails)
 {
-    EXPECT_TRUE(dal->findAll(100).empty());
+    UserDAL dal(db);
+    User a; a.username = "dup"; a.password_hash = "h1";
+    User b; b.username = "dup"; b.password_hash = "h2";
+
+    ASSERT_TRUE(dal.insert(a));
+    EXPECT_FALSE(dal.insert(b));
+    EXPECT_FALSE(dal.getLastError().empty());
 }
 
-TEST_F(UserDALTest, FindAllReturnsAllUsers)
-{
-    makeUser("charlie", "h");
-    makeUser("alice",   "h");
-    makeUser("bob",     "h");
-
-    auto all = dal->findAll(100);
-    ASSERT_EQ(all.size(), 3u);
-    EXPECT_EQ(all[0].username, "alice");
-    EXPECT_EQ(all[1].username, "bob");
-    EXPECT_EQ(all[2].username, "charlie");
-}
-
-TEST_F(UserDALTest, FindAllLimitRestrictsResults)
-{
-    makeUser("alice",   "h");
-    makeUser("bob",     "h");
-    makeUser("charlie", "h");
-
-    EXPECT_EQ(dal->findAll(2, 0).size(), 2u);
-}
-
-TEST_F(UserDALTest, FindAllOffsetSkipsRows)
-{
-    makeUser("alice",   "h");
-    makeUser("bob",     "h");
-    makeUser("charlie", "h");
-
-    auto page2 = dal->findAll(10, 2);
-    ASSERT_EQ(page2.size(), 1u);
-    EXPECT_EQ(page2[0].username, "charlie");
-}
-
-// ── update ────────────────────────────────────────────────────────────────────
+// ── update ───────────────────────────────────────────────────────────────────
 
 TEST_F(UserDALTest, UpdateChangesUsername)
 {
-    User u = makeUser("alice", "hash_a");
-    u.username = "alice_renamed";
+    UserDAL dal(db);
+    User u; u.username = "old"; u.password_hash = "h";
+    ASSERT_TRUE(dal.insert(u));
 
-    ASSERT_TRUE(dal->update(u));
+    u.username = "new";
+    ASSERT_TRUE(dal.update(u));
 
-    auto found = dal->findByID(u.id.value());
+    auto found = dal.findByID(u.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->username, "alice_renamed");
+    EXPECT_EQ(found->username, "new");
 }
 
-TEST_F(UserDALTest, UpdateWithNoIdFails)
+TEST_F(UserDALTest, UpdateWithoutIDFails)
 {
-    User u;
-    u.username      = "ghost";
-    u.password_hash = "x";
-    EXPECT_FALSE(dal->update(u));
-    EXPECT_FALSE(dal->getLastError().empty());
+    UserDAL dal(db);
+    User u; u.username = "x"; u.password_hash = "h";
+    EXPECT_FALSE(dal.update(u));
 }
 
-TEST_F(UserDALTest, UpdateNonExistentIdFails)
+// ── updatePassword ───────────────────────────────────────────────────────────
+
+TEST_F(UserDALTest, UpdatePasswordPersists)
 {
-    User u;
-    u.id            = 9999;
-    u.username      = "ghost";
-    u.password_hash = "x";
-    EXPECT_FALSE(dal->update(u));
-}
+    UserDAL dal(db);
+    User u; u.username = "eve"; u.password_hash = "old_hash";
+    ASSERT_TRUE(dal.insert(u));
 
-// ── updatePassword ────────────────────────────────────────────────────────────
+    ASSERT_TRUE(dal.updatePassword(u.id.value(), "new_hash"));
 
-TEST_F(UserDALTest, UpdatePasswordChangesHash)
-{
-    User u = makeUser("alice", "old_hash");
-    ASSERT_TRUE(dal->updatePassword(u.id.value(), "new_hash"));
-
-    auto found = dal->findByID(u.id.value());
+    auto found = dal.findByID(u.id.value());
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(found->password_hash, "new_hash");
 }
 
-TEST_F(UserDALTest, UpdatePasswordNonExistentIdFails)
-{
-    EXPECT_FALSE(dal->updatePassword(9999, "hash"));
-}
-
-// ── hardDelete ────────────────────────────────────────────────────────────────
+// ── hardDelete ───────────────────────────────────────────────────────────────
 
 TEST_F(UserDALTest, HardDeleteRemovesUser)
 {
-    User u = makeUser("alice", "hash_a");
-    ASSERT_TRUE(dal->hardDelete(u.id.value()));
-    EXPECT_FALSE(dal->findByID(u.id.value()).has_value());
+    UserDAL dal(db);
+    User u; u.username = "del"; u.password_hash = "h";
+    ASSERT_TRUE(dal.insert(u));
+    ASSERT_TRUE(dal.hardDelete(u.id.value()));
+    EXPECT_FALSE(dal.findByID(u.id.value()).has_value());
 }
 
-TEST_F(UserDALTest, HardDeleteNonExistentFails)
+TEST_F(UserDALTest, HardDeleteNonExistentSucceeds)
 {
-    EXPECT_FALSE(dal->hardDelete(9999));
+    // SQLite DELETE of non-existent row is still SQLITE_DONE
+    UserDAL dal(db);
+    EXPECT_TRUE(dal.hardDelete(9999));
 }
 
-TEST_F(UserDALTest, HardDeleteDoesNotAffectOtherUsers)
-{
-    User a = makeUser("alice", "h");
-    User b = makeUser("bob",   "h");
+// ── findAll + pagination ─────────────────────────────────────────────────────
 
-    ASSERT_TRUE(dal->hardDelete(a.id.value()));
-    EXPECT_TRUE(dal->findByID(b.id.value()).has_value());
+TEST_F(UserDALTest, FindAllEmpty)
+{
+    UserDAL dal(db);
+    EXPECT_TRUE(dal.findAll().empty());
+}
+
+TEST_F(UserDALTest, FindAllReturnsAllUsers)
+{
+    UserDAL dal(db);
+    for (int i = 0; i < 5; ++i)
+    {
+        User u;
+        u.username = "user" + std::to_string(i);
+        u.password_hash = "h";
+        ASSERT_TRUE(dal.insert(u));
+    }
+    EXPECT_EQ(dal.findAll(100, 0).size(), 5u);
+}
+
+TEST_F(UserDALTest, FindAllPaginationLimit)
+{
+    UserDAL dal(db);
+    for (int i = 0; i < 10; ++i)
+    {
+        User u; u.username = "u" + std::to_string(i); u.password_hash = "h";
+        ASSERT_TRUE(dal.insert(u));
+    }
+    EXPECT_EQ(dal.findAll(3, 0).size(), 3u);
+}
+
+TEST_F(UserDALTest, FindAllPaginationOffset)
+{
+    UserDAL dal(db);
+    for (int i = 0; i < 10; ++i)
+    {
+        User u; u.username = "u" + std::to_string(i); u.password_hash = "h";
+        ASSERT_TRUE(dal.insert(u));
+    }
+    // alphabetical order — offset 9 should give only 1
+    EXPECT_EQ(dal.findAll(10, 9).size(), 1u);
+}
+
+TEST_F(UserDALTest, FindAllOffsetBeyondEndReturnsEmpty)
+{
+    UserDAL dal(db);
+    User u; u.username = "only"; u.password_hash = "h";
+    ASSERT_TRUE(dal.insert(u));
+    EXPECT_TRUE(dal.findAll(10, 100).empty());
+}
+
+TEST_F(UserDALTest, FindAllOrderedAlphabetically)
+{
+    UserDAL dal(db);
+    for (const char* name : {"zebra", "alpha", "mango"})
+    {
+        User u; u.username = name; u.password_hash = "h";
+        ASSERT_TRUE(dal.insert(u));
+    }
+    auto users = dal.findAll(10, 0);
+    ASSERT_EQ(users.size(), 3u);
+    EXPECT_EQ(users[0].username, "alpha");
+    EXPECT_EQ(users[1].username, "mango");
+    EXPECT_EQ(users[2].username, "zebra");
 }

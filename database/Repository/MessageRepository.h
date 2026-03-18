@@ -13,6 +13,7 @@
 #include "../DAL/FolderDAL.h"
 #include "../DAL/RecipientDAL.h"
 
+#include "../Transaction.h"
 #include "../DataBaseManager.h"
 
 class MessageRepository
@@ -23,12 +24,12 @@ public:
 
     std::optional<Message> findByID(int64_t id) const;
     std::optional<Message> findByUID(int64_t folder_id, int64_t uid) const;
-    std::vector<Message> findByUser(int64_t user_id) const;
-    std::vector<Message> findByFolder(int64_t folder_id) const;
-    std::vector<Message> findUnseen(int64_t folder_id) const;
-    std::vector<Message> findDeleted(int64_t folder_id) const;
-    std::vector<Message> findFlagged(int64_t folder_id) const;
-    std::vector<Message> search(int64_t user_id, const std::string& query) const;
+    std::vector<Message> findByUser(int64_t user_id, int limit = 50, int offset = 0) const;
+    std::vector<Message> findByFolder(int64_t folder_id, int limit = 50, int offset = 0) const;
+    std::vector<Message> findUnseen(int64_t folder_id, int limit = 50, int offset = 0) const;
+    std::vector<Message> findDeleted(int64_t folder_id, int limit = 50, int offset = 0) const;
+    std::vector<Message> findFlagged(int64_t folder_id, int limit = 50, int offset = 0) const;
+    std::vector<Message> search(int64_t user_id, const std::string& query, int limit = 50, int offset = 0) const;
 
     bool deliver(Message& msg, int64_t folder_id);
     bool saveToFolder(Message& msg, int64_t folder_id);
@@ -38,15 +39,14 @@ public:
     bool markFlagged(int64_t id, bool flagged);
     bool markAnswered(int64_t id, bool answered);
     bool markDraft(int64_t id, bool draft);
-    bool updateFlags(int64_t id, bool is_seen, bool is_deleted, bool is_draft,
-                     bool is_answered, bool is_flagged, bool is_recent);
+    bool updateFlags(int64_t id, bool is_seen, bool is_deleted, bool is_draft, bool is_answered, bool is_flagged, bool is_recent);
 
     bool moveToFolder(int64_t id, int64_t folder_id);
     bool expunge(int64_t folder_id);
     bool hardDelete(int64_t id);
 
     std::optional<Folder> findFolderByID(int64_t id) const;
-    std::vector<Folder> findFoldersByUser(int64_t user_id) const;
+    std::vector<Folder> findFoldersByUser(int64_t user_id, int limit = 50, int offset = 0) const;
     std::optional<Folder> findFolderByName(int64_t user_id, const std::string& name) const;
     bool createFolder(Folder& folder);
     bool renameFolder(int64_t id, const std::string& new_name);
@@ -65,6 +65,8 @@ public:
     std::optional<Message> copy(int64_t id, int64_t target_folder_id);
 
 private:
+    sqlite3* m_db;
+
     MessageDAL m_message_dal;
     FolderDAL m_folder_dal;
     RecipientDAL m_recipient_dal;

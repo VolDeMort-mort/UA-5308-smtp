@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <sodium.h>
 
 #include "../Entity/User.h"
 #include "../DAL/UserDAL.h"
@@ -15,7 +16,7 @@ public:
 
     std::optional<User> findByID(int64_t id) const;
     std::optional<User> findByUsername(const std::string& username) const;
-    std::vector<User> findAll() const;
+    std::vector<User> findAll(int limit = 50, int offset = 0) const;
 
     bool registerUser(User& user, const std::string& password);
     bool authorize(const std::string& username, const std::string& password);

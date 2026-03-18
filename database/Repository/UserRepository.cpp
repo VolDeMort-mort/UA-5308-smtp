@@ -31,9 +31,9 @@ std::optional<User> UserRepository::findByUsername(const std::string& username) 
     return result;
 }
 
-std::vector<User> UserRepository::findAll() const
+std::vector<User> UserRepository::findAll(int limit, int offset) const
 {
-    auto result = m_user_dal.findAll();
+    auto result = m_user_dal.findAll(limit, offset);
     m_last_error = m_user_dal.getLastError();
     return result;
 }
@@ -44,6 +44,8 @@ bool UserRepository::registerUser(User& user, const std::string& password)
         return setError("registerUser: username already exists");
 
     user.password_hash = hashPassword(password);
+    if (user.password_hash.empty())
+        return setError("registerUser: password hashing failed");
 
     if (!m_user_dal.insert(user))
         return setError(m_user_dal.getLastError());
@@ -58,7 +60,9 @@ bool UserRepository::authorize(const std::string& username, const std::string& p
     if (!user.has_value())
         return setError("authorize: user not found");
 
-    if (user->password_hash != hashPassword(password))
+    if (crypto_pwhash_str_verify(
+            user->password_hash.c_str(),
+            password.c_str(), password.size()) != 0)
         return setError("authorize: invalid credentials");
 
     return true;
@@ -95,6 +99,16 @@ bool UserRepository::hardDelete(int64_t id)
 
 std::string UserRepository::hashPassword(const std::string& password) const
 {
-    // TODO: hash the raw password (e.g. SHA-256) and return the hash string
-    return password;
+    char hash[crypto_pwhash_STRBYTES];
+
+    if (crypto_pwhash_str(
+            hash,
+            password.c_str(), password.size(),
+            crypto_pwhash_OPSLIMIT_INTERACTIVE,
+            crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0)
+    {
+        return "";
+    }
+
+    return std::string(hash);
 }

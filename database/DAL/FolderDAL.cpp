@@ -62,15 +62,15 @@ std::optional<Folder> FolderDAL::findByID(int64_t id) const
     return result;
 }
 
-std::vector<Folder> FolderDAL::findByUser(int64_t user_id) const
+std::vector<Folder> FolderDAL::findByUser(int64_t user_id, int limit, int offset) const
 {
-    const char* sql = FOLDER_SELECT "WHERE user_id = ? ORDER BY name ASC;";
-
+    const char* sql = FOLDER_SELECT "WHERE user_id = ? ORDER BY name ASC LIMIT ? OFFSET ?;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
-
     sqlite3_bind_int64(stmt, 1, user_id);
+    sqlite3_bind_int  (stmt, 2, limit);
+    sqlite3_bind_int  (stmt, 3, offset);
     return fetchRows(stmt);
 }
 

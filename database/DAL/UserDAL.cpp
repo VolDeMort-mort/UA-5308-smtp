@@ -81,14 +81,14 @@ std::optional<User> UserDAL::findByUsername(const std::string& username) const
     return result;
 }
 
-std::vector<User> UserDAL::findAll() const
+std::vector<User> UserDAL::findAll(int limit, int offset) const
 {
-    const char* sql = USER_SELECT "ORDER BY username ASC;";
-
+    const char* sql = USER_SELECT "ORDER BY username ASC LIMIT ? OFFSET ?;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
-
+    sqlite3_bind_int(stmt, 1, limit);
+    sqlite3_bind_int(stmt, 2, offset);
     return fetchRows(stmt);
 }
 

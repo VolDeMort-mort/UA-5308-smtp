@@ -14,7 +14,7 @@ public:
     explicit FolderDAL(sqlite3* db);
 
     std::optional<Folder> findByID(int64_t id) const;
-    std::vector<Folder> findByUser(int64_t user_id) const;
+    std::vector<Folder> findByUser(int64_t user_id, int limit = 50, int offset = 0) const;
     std::optional<Folder> findByName(int64_t user_id, const std::string& name) const;
 
     bool insert(Folder& folder);

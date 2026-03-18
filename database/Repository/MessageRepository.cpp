@@ -1,13 +1,15 @@
 #include "MessageRepository.h"
 
 MessageRepository::MessageRepository(DataBaseManager& db)
-    : m_message_dal(db.getDB())
+    : m_db(db.getDB())
+    , m_message_dal(db.getDB())
     , m_folder_dal(db.getDB())
     , m_recipient_dal(db.getDB())
 {}
 
 MessageRepository::MessageRepository(sqlite3* db)
-    : m_message_dal(db)
+    : m_db(db)
+    , m_message_dal(db)
     , m_folder_dal(db)
     , m_recipient_dal(db)
 {}
@@ -32,11 +34,18 @@ bool MessageRepository::assignUID(Message& msg, int64_t folder_id)
     msg.folder_id = folder_id;
     msg.uid       = folder->next_uid;
 
+    Transaction tx(m_db);
+
+    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
+
     if (!m_message_dal.insert(msg))
         return setError(m_message_dal.getLastError());
 
     if (!m_folder_dal.incrementNextUID(folder_id))
         return setError(m_folder_dal.getLastError());
+
+    if (!tx.commit())
+        return setError("assignUID: commit failed");
 
     return true;
 }
@@ -51,34 +60,34 @@ std::optional<Message> MessageRepository::findByUID(int64_t folder_id, int64_t u
     return m_message_dal.findByUID(folder_id, uid);
 }
 
-std::vector<Message> MessageRepository::findByUser(int64_t user_id) const
+std::vector<Message> MessageRepository::findByUser(int64_t user_id, int limit, int offset) const
 {
-    return m_message_dal.findByUser(user_id);
+    return m_message_dal.findByUser(user_id, limit, offset);
 }
 
-std::vector<Message> MessageRepository::findByFolder(int64_t folder_id) const
+std::vector<Message> MessageRepository::findByFolder(int64_t folder_id, int limit, int offset) const
 {
-    return m_message_dal.findByFolder(folder_id);
+    return m_message_dal.findByFolder(folder_id, limit, offset);
 }
 
-std::vector<Message> MessageRepository::findUnseen(int64_t folder_id) const
+std::vector<Message> MessageRepository::findUnseen(int64_t folder_id, int limit, int offset) const
 {
-    return m_message_dal.findUnseen(folder_id);
+    return m_message_dal.findUnseen(folder_id, limit, offset);
 }
 
-std::vector<Message> MessageRepository::findDeleted(int64_t folder_id) const
+std::vector<Message> MessageRepository::findDeleted(int64_t folder_id, int limit, int offset) const
 {
-    return m_message_dal.findDeleted(folder_id);
+    return m_message_dal.findDeleted(folder_id, limit, offset);
 }
 
-std::vector<Message> MessageRepository::findFlagged(int64_t folder_id) const
+std::vector<Message> MessageRepository::findFlagged(int64_t folder_id, int limit, int offset) const
 {
-    return m_message_dal.findFlagged(folder_id);
+    return m_message_dal.findFlagged(folder_id, limit, offset);
 }
 
-std::vector<Message> MessageRepository::search(int64_t user_id, const std::string& query) const
+std::vector<Message> MessageRepository::search(int64_t user_id, const std::string& query, int limit, int offset) const
 {
-    return m_message_dal.search(user_id, query);
+    return m_message_dal.search(user_id, query, limit, offset);
 }
 
 bool MessageRepository::deliver(Message& msg, int64_t folder_id)
@@ -143,26 +152,35 @@ bool MessageRepository::updateFlags(int64_t id, bool is_seen, bool is_deleted, b
                                      is_answered, is_flagged, is_recent);
 }
 
+
 bool MessageRepository::moveToFolder(int64_t id, int64_t folder_id)
 {
-    auto folder = m_folder_dal.findByID(folder_id);
+    Transaction tx(m_db);
+    if (!tx.valid()) return setError("moveToFolder: failed to begin transaction");
+
+    auto folder = m_folder_dal.findByID(folder_id);  // inside tx
     if (!folder.has_value())
         return setError("moveToFolder: folder not found");
 
-    int64_t new_uid = folder->next_uid;
-
-    if (!m_message_dal.moveToFolder(id, folder_id, new_uid))
+    if (!m_message_dal.moveToFolder(id, folder_id, folder->next_uid))
         return setError(m_message_dal.getLastError());
 
     if (!m_folder_dal.incrementNextUID(folder_id))
         return setError(m_folder_dal.getLastError());
+
+    if (!tx.commit())
+        return setError("moveToFolder: commit failed");
 
     return true;
 }
 
 bool MessageRepository::expunge(int64_t folder_id)
 {
-    auto deleted = m_message_dal.findDeleted(folder_id);
+    auto deleted = m_message_dal.findDeleted(folder_id, INT_MAX, 0);
+
+    Transaction tx(m_db);
+
+    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
 
     for (const auto& msg : deleted)
     {
@@ -172,6 +190,9 @@ bool MessageRepository::expunge(int64_t folder_id)
         if (!m_message_dal.hardDelete(msg.id.value()))
             return setError(m_message_dal.getLastError());
     }
+
+    if (!tx.commit())
+        return setError("expunge: commit failed");
 
     return true;
 }
@@ -189,13 +210,12 @@ std::optional<Folder> MessageRepository::findFolderByID(int64_t id) const
     return m_folder_dal.findByID(id);
 }
 
-std::vector<Folder> MessageRepository::findFoldersByUser(int64_t user_id) const
+std::vector<Folder> MessageRepository::findFoldersByUser(int64_t user_id, int limit, int offset) const
 {
-    return m_folder_dal.findByUser(user_id);
+    return m_folder_dal.findByUser(user_id, limit, offset);
 }
 
-std::optional<Folder> MessageRepository::findFolderByName(int64_t user_id,
-                                                           const std::string& name) const
+std::optional<Folder> MessageRepository::findFolderByName(int64_t user_id, const std::string& name) const
 {
     return m_folder_dal.findByName(user_id, name);
 }

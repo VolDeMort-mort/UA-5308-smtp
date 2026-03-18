@@ -2,17 +2,22 @@
 
 #include <gtest/gtest.h>
 #include <sqlite3.h>
-#include <string>
 #include <fstream>
 #include <sstream>
+#include <string>
 #include <stdexcept>
 
-// Reads the schema SQL from the path injected by CMake and applies it to db.
+#ifndef SCHEMA_PATH
+#  define SCHEMA_PATH "./scheme/001_init_scheme.sql"
+#endif
+
+// Reads the SQL schema from SCHEMA_PATH (defined by CMake) and applies it
+// to an already-open SQLite handle. Throws on failure so tests fail loudly.
 inline void applySchema(sqlite3* db)
 {
     std::ifstream f(SCHEMA_PATH);
     if (!f.is_open())
-        throw std::runtime_error("Cannot open schema: " SCHEMA_PATH);
+        throw std::runtime_error(std::string("Cannot open schema: ") + SCHEMA_PATH);
 
     std::stringstream ss;
     ss << f.rdbuf();
@@ -27,7 +32,7 @@ inline void applySchema(sqlite3* db)
     }
 }
 
-// Base fixture — each test gets a fresh in-memory database with the schema applied.
+// Base fixture: in-memory DB with schema + foreign keys
 class DBFixture : public ::testing::Test
 {
 protected:
@@ -36,8 +41,9 @@ protected:
     void SetUp() override
     {
         ASSERT_EQ(sqlite3_open(":memory:", &db), SQLITE_OK);
-        sqlite3_exec(db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
-        applySchema(db);
+        ASSERT_EQ(sqlite3_exec(db, "PRAGMA foreign_keys = ON;",
+                               nullptr, nullptr, nullptr), SQLITE_OK);
+        ASSERT_NO_THROW(applySchema(db));
     }
 
     void TearDown() override

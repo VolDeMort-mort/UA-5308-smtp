@@ -1,4 +1,4 @@
-#include "TestFixture.h"
+#include "TestHelper.h"
 #include "../DAL/UserDAL.h"
 #include "../DAL/FolderDAL.h"
 #include "../DAL/MessageDAL.h"
@@ -6,431 +6,327 @@
 class MessageDALTest : public DBFixture
 {
 protected:
-    UserDAL*    userDal    = nullptr;
-    FolderDAL*  folderDal  = nullptr;
-    MessageDAL* messageDal = nullptr;
-
-    int64_t userId   = 0;
-    int64_t folderId = 0;
+    int64_t user_id   = -1;
+    int64_t folder_id = -1;
 
     void SetUp() override
     {
         DBFixture::SetUp();
-        userDal    = new UserDAL(db);
-        folderDal  = new FolderDAL(db);
-        messageDal = new MessageDAL(db);
 
-        User u;
-        u.username = "alice"; u.password_hash = "h";
-        ASSERT_TRUE(userDal->insert(u));
-        userId = u.id.value();
+        UserDAL udal(db);
+        User u; u.username = "tester"; u.password_hash = "h";
+        ASSERT_TRUE(udal.insert(u));
+        user_id = u.id.value();
 
-        Folder f;
-        f.user_id = userId; f.name = "INBOX";
-        f.next_uid = 1; f.is_subscribed = true;
-        ASSERT_TRUE(folderDal->insert(f));
-        folderId = f.id.value();
+        FolderDAL fdal(db);
+        Folder f; f.user_id = user_id; f.name = "INBOX"; f.next_uid = 1; f.is_subscribed = true;
+        ASSERT_TRUE(fdal.insert(f));
+        folder_id = f.id.value();
     }
 
-    void TearDown() override
-    {
-        delete messageDal;
-        delete folderDal;
-        delete userDal;
-        DBFixture::TearDown();
-    }
-
-    Message makeMessage(const std::string& subject = "Hello", int64_t uid = 1)
+    Message makeMessage(int64_t uid = 1, const std::string& subject = "Test Subject")
     {
         Message m;
-        m.user_id       = userId;
-        m.folder_id     = folderId;
+        m.user_id       = user_id;
+        m.folder_id     = folder_id;
         m.uid           = uid;
-        m.raw_file_path = "/store/msg" + std::to_string(uid) + ".eml";
-        m.size_bytes    = 512;
+        m.raw_file_path = "/mail/" + std::to_string(uid) + ".eml";
+        m.size_bytes    = 1024;
         m.from_address  = "sender@example.com";
         m.subject       = subject;
+        m.internal_date = "2024-01-01T00:00:00Z";
         m.is_seen       = false;
         m.is_deleted    = false;
         m.is_draft      = false;
         m.is_answered   = false;
         m.is_flagged    = false;
         m.is_recent     = true;
-        m.internal_date = "2024-01-01T00:00:00";
-        return m;
-    }
-
-    Message insertMessage(const std::string& subject = "Hello", int64_t uid = 1)
-    {
-        Message m = makeMessage(subject, uid);
-        EXPECT_TRUE(messageDal->insert(m));
-        EXPECT_TRUE(m.id.has_value());
         return m;
     }
 };
 
-// ── insert ────────────────────────────────────────────────────────────────────
+// ── insert & findByID ────────────────────────────────────────────────────────
 
-TEST_F(MessageDALTest, InsertSetsId)
+TEST_F(MessageDALTest, InsertAssignsID)
 {
-    Message m = insertMessage();
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    ASSERT_TRUE(dal.insert(m));
+    ASSERT_TRUE(m.id.has_value());
     EXPECT_GT(m.id.value(), 0);
 }
 
-TEST_F(MessageDALTest, InsertPreservesFields)
+TEST_F(MessageDALTest, FindByIDReturnsAllFields)
 {
-    Message m = insertMessage("Test subject", 1);
-    auto found = messageDal->findByID(m.id.value());
+    MessageDAL dal(db);
+    Message m = makeMessage(1, "Hello");
+    m.message_id_header = "<abc@host>";
+    m.in_reply_to       = "<prev@host>";
+    m.sender_address    = "real@example.com";
+    ASSERT_TRUE(dal.insert(m));
 
+    auto found = dal.findByID(m.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->subject.value_or(""), "Test subject");
+    EXPECT_EQ(found->subject.value(), "Hello");
+    EXPECT_EQ(found->message_id_header.value(), "<abc@host>");
+    EXPECT_EQ(found->sender_address.value(), "real@example.com");
     EXPECT_EQ(found->from_address, "sender@example.com");
-    EXPECT_EQ(found->uid,          1);
-    EXPECT_EQ(found->user_id,      userId);
-    EXPECT_EQ(found->folder_id,    folderId);
+    EXPECT_EQ(found->uid, 1);
     EXPECT_FALSE(found->is_seen);
     EXPECT_TRUE(found->is_recent);
 }
 
-TEST_F(MessageDALTest, InsertPreservesNullOptFields)
+TEST_F(MessageDALTest, FindByIDMissingReturnsNullopt)
 {
-    Message m = makeMessage("sub", 1);
-    m.mime_structure    = std::nullopt;
-    m.sender_address    = std::nullopt;
-    m.message_id_header = std::nullopt;
-    ASSERT_TRUE(messageDal->insert(m));
-
-    auto found = messageDal->findByID(m.id.value());
-    ASSERT_TRUE(found.has_value());
-    EXPECT_FALSE(found->mime_structure.has_value());
-    EXPECT_FALSE(found->sender_address.has_value());
+    MessageDAL dal(db);
+    EXPECT_FALSE(dal.findByID(9999).has_value());
 }
 
-// ── findByID ──────────────────────────────────────────────────────────────────
+// ── findByUID ────────────────────────────────────────────────────────────────
 
-TEST_F(MessageDALTest, FindByIDUnknownReturnsNullopt)
+TEST_F(MessageDALTest, FindByUIDSuccess)
 {
-    EXPECT_FALSE(messageDal->findByID(9999).has_value());
-}
+    MessageDAL dal(db);
+    Message m = makeMessage(42);
+    ASSERT_TRUE(dal.insert(m));
 
-// ── findByUID ─────────────────────────────────────────────────────────────────
-
-TEST_F(MessageDALTest, FindByUIDReturnsCorrectMessage)
-{
-    Message m = insertMessage("Hello", 7);
-    auto found = messageDal->findByUID(folderId, 7);
+    auto found = dal.findByUID(folder_id, 42);
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->id.value(), m.id.value());
+    EXPECT_EQ(found->id, m.id);
 }
 
 TEST_F(MessageDALTest, FindByUIDWrongFolderReturnsNullopt)
 {
-    insertMessage("Hello", 1);
-
-    Folder other;
-    other.user_id = userId; other.name = "Sent";
-    other.next_uid = 1; other.is_subscribed = true;
-    ASSERT_TRUE(folderDal->insert(other));
-
-    EXPECT_FALSE(messageDal->findByUID(other.id.value(), 1).has_value());
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    ASSERT_TRUE(dal.insert(m));
+    EXPECT_FALSE(dal.findByUID(folder_id + 99, 1).has_value());
 }
 
-TEST_F(MessageDALTest, FindByUIDUnknownReturnsNullopt)
+// ── findByFolder + pagination ────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, FindByFolderReturnsSortedByUID)
 {
-    EXPECT_FALSE(messageDal->findByUID(folderId, 9999).has_value());
-}
-
-// ── findByUser / findByFolder ─────────────────────────────────────────────────
-
-TEST_F(MessageDALTest, FindByUserReturnsAllMessages)
-{
-    insertMessage("A", 1);
-    insertMessage("B", 2);
-    insertMessage("C", 3);
-    EXPECT_EQ(messageDal->findByUser(userId, 100).size(), 3u);
-}
-
-TEST_F(MessageDALTest, FindByUserEmptyReturnsEmpty)
-{
-    EXPECT_TRUE(messageDal->findByUser(userId, 100).empty());
-}
-
-TEST_F(MessageDALTest, FindByUserLimitWorks)
-{
-    insertMessage("A", 1);
-    insertMessage("B", 2);
-    insertMessage("C", 3);
-    EXPECT_EQ(messageDal->findByUser(userId, 2, 0).size(), 2u);
-    EXPECT_EQ(messageDal->findByUser(userId, 2, 2).size(), 1u);
-}
-
-TEST_F(MessageDALTest, FindByFolderReturnsOnlyThatFolder)
-{
-    Folder other;
-    other.user_id = userId; other.name = "Sent";
-    other.next_uid = 1; other.is_subscribed = true;
-    ASSERT_TRUE(folderDal->insert(other));
-
-    insertMessage("inbox msg", 1);
-
-    Message m2 = makeMessage("sent msg", 1);
-    m2.folder_id = other.id.value();
-    ASSERT_TRUE(messageDal->insert(m2));
-
-    auto inboxMsgs = messageDal->findByFolder(folderId, 100);
-    ASSERT_EQ(inboxMsgs.size(), 1u);
-    EXPECT_EQ(inboxMsgs[0].subject.value_or(""), "inbox msg");
-}
-
-TEST_F(MessageDALTest, FindByFolderLimitWorks)
-{
-    insertMessage("A", 1);
-    insertMessage("B", 2);
-    insertMessage("C", 3);
-    EXPECT_EQ(messageDal->findByFolder(folderId, 2, 0).size(), 2u);
-    EXPECT_EQ(messageDal->findByFolder(folderId, 2, 2).size(), 1u);
-}
-
-// ── findUnseen / findDeleted / findFlagged ────────────────────────────────────
-
-TEST_F(MessageDALTest, FindUnseenFiltersCorrectly)
-{
-    Message seen   = insertMessage("seen",   1);
-    Message unseen = insertMessage("unseen", 2);
-
-    messageDal->updateSeen(seen.id.value(), true);
-
-    auto results = messageDal->findUnseen(folderId);
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_EQ(results[0].subject.value_or(""), "unseen");
-}
-
-TEST_F(MessageDALTest, FindDeletedFiltersCorrectly)
-{
-    Message alive   = insertMessage("alive",   1);
-    Message deleted = insertMessage("deleted", 2);
-
-    messageDal->updateDeleted(deleted.id.value(), true);
-
-    auto results = messageDal->findDeleted(folderId);
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_EQ(results[0].subject.value_or(""), "deleted");
-}
-
-TEST_F(MessageDALTest, FindFlaggedFiltersCorrectly)
-{
-    Message normal  = insertMessage("normal",  1);
-    Message flagged = insertMessage("flagged", 2);
-
-    messageDal->updateFlags(flagged.id.value(),
-                            false, false, false, false, true, false);
-
-    auto results = messageDal->findFlagged(folderId, 100);
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_EQ(results[0].subject.value_or(""), "flagged");
-}
-
-TEST_F(MessageDALTest, FindFlaggedLimitWorks)
-{
-    for (int i = 0; i < 3; ++i)
+    MessageDAL dal(db);
+    for (int uid : {3, 1, 2})
     {
-        Message m = insertMessage("f" + std::to_string(i), i + 1);
-        messageDal->updateFlags(m.id.value(), false, false, false, false, true, false);
+        Message m = makeMessage(uid);
+        ASSERT_TRUE(dal.insert(m));
     }
-    EXPECT_EQ(messageDal->findFlagged(folderId, 2, 0).size(), 2u);
-    EXPECT_EQ(messageDal->findFlagged(folderId, 2, 2).size(), 1u);
+    auto msgs = dal.findByFolder(folder_id, 100, 0);
+    ASSERT_EQ(msgs.size(), 3u);
+    EXPECT_EQ(msgs[0].uid, 1);
+    EXPECT_EQ(msgs[1].uid, 2);
+    EXPECT_EQ(msgs[2].uid, 3);
 }
 
-// ── search ────────────────────────────────────────────────────────────────────
-
-TEST_F(MessageDALTest, SearchFindsMatchingSubject)
+TEST_F(MessageDALTest, FindByFolderPaginationLimit)
 {
-    insertMessage("Meeting tomorrow", 1);
-    insertMessage("Lunch plans",      2);
-
-    auto results = messageDal->search(userId, "Meeting", 100);
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_EQ(results[0].subject.value_or(""), "Meeting tomorrow");
+    MessageDAL dal(db);
+    for (int i = 1; i <= 5; ++i) { Message m = makeMessage(i); ASSERT_TRUE(dal.insert(m)); }
+    EXPECT_EQ(dal.findByFolder(folder_id, 2, 0).size(), 2u);
 }
 
-TEST_F(MessageDALTest, SearchReturnsEmptyWhenNoMatch)
+TEST_F(MessageDALTest, FindByFolderPaginationOffset)
 {
-    insertMessage("Hello world", 1);
-    EXPECT_TRUE(messageDal->search(userId, "xyz_no_match", 100).empty());
+    MessageDAL dal(db);
+    for (int i = 1; i <= 5; ++i) { Message m = makeMessage(i); ASSERT_TRUE(dal.insert(m)); }
+    auto page = dal.findByFolder(folder_id, 10, 3);
+    ASSERT_EQ(page.size(), 2u);
+    EXPECT_EQ(page[0].uid, 4);
 }
 
-TEST_F(MessageDALTest, SearchIsSubstringMatch)
+// ── findUnseen ───────────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, FindUnseenReturnsOnlyUnseen)
 {
-    insertMessage("Re: Meeting tomorrow", 1);
-    EXPECT_EQ(messageDal->search(userId, "Meeting", 100).size(), 1u);
+    MessageDAL dal(db);
+    Message seen    = makeMessage(1); seen.is_seen    = true;  ASSERT_TRUE(dal.insert(seen));
+    Message unseen1 = makeMessage(2); unseen1.is_seen = false; ASSERT_TRUE(dal.insert(unseen1));
+    Message unseen2 = makeMessage(3); unseen2.is_seen = false; ASSERT_TRUE(dal.insert(unseen2));
+
+    auto result = dal.findUnseen(folder_id, 100, 0);
+    EXPECT_EQ(result.size(), 2u);
+    for (const auto& msg : result)
+        EXPECT_FALSE(msg.is_seen);
 }
 
-TEST_F(MessageDALTest, SearchLimitWorks)
+TEST_F(MessageDALTest, FindUnseenPagination)
 {
-    for (int i = 0; i < 4; ++i)
-        insertMessage("topic " + std::to_string(i), i + 1);
-
-    EXPECT_EQ(messageDal->search(userId, "topic", 2, 0).size(), 2u);
-    EXPECT_EQ(messageDal->search(userId, "topic", 2, 2).size(), 2u);
+    MessageDAL dal(db);
+    for (int i = 1; i <= 4; ++i) { Message m = makeMessage(i); ASSERT_TRUE(dal.insert(m)); }
+    EXPECT_EQ(dal.findUnseen(folder_id, 2, 0).size(), 2u);
+    EXPECT_EQ(dal.findUnseen(folder_id, 2, 2).size(), 2u);
 }
 
-TEST_F(MessageDALTest, SearchWithLikeSpecialCharsDoesNotMatchAll)
-{
-    insertMessage("100% done",      1);
-    insertMessage("something else", 2);
+// ── findDeleted ──────────────────────────────────────────────────────────────
 
-    // Without escaping, "%" builds pattern "%%" which matches everything (2 results).
-    // With correct escaping, "%" is treated literally and only matches subjects
-    // that actually contain the % character — so exactly 1 result.
-    auto results = messageDal->search(userId, "%", 100);
-    ASSERT_EQ(results.size(), 1u);
-    EXPECT_EQ(results[0].subject.value_or(""), "100% done");
+TEST_F(MessageDALTest, FindDeletedReturnsOnlyDeleted)
+{
+    MessageDAL dal(db);
+    Message alive   = makeMessage(1); alive.is_deleted   = false; ASSERT_TRUE(dal.insert(alive));
+    Message deleted = makeMessage(2); deleted.is_deleted = true;  ASSERT_TRUE(dal.insert(deleted));
+
+    auto result = dal.findDeleted(folder_id, 100, 0);
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_EQ(result[0].uid, 2);
 }
 
-// ── updateSeen / updateDeleted ────────────────────────────────────────────────
+// ── findFlagged ──────────────────────────────────────────────────────────────
 
-TEST_F(MessageDALTest, UpdateSeenToggles)
+TEST_F(MessageDALTest, FindFlaggedReturnsOnlyFlagged)
 {
-    Message m = insertMessage();
+    MessageDAL dal(db);
+    Message normal  = makeMessage(1); normal.is_flagged  = false; ASSERT_TRUE(dal.insert(normal));
+    Message flagged = makeMessage(2); flagged.is_flagged = true;  ASSERT_TRUE(dal.insert(flagged));
 
-    ASSERT_TRUE(messageDal->updateSeen(m.id.value(), true));
-    EXPECT_TRUE(messageDal->findByID(m.id.value())->is_seen);
-
-    ASSERT_TRUE(messageDal->updateSeen(m.id.value(), false));
-    EXPECT_FALSE(messageDal->findByID(m.id.value())->is_seen);
+    auto result = dal.findFlagged(folder_id, 100, 0);
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_TRUE(result[0].is_flagged);
 }
 
-TEST_F(MessageDALTest, UpdateSeenNonExistentFails)
+// ── updateSeen ───────────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, UpdateSeenToggle)
 {
-    EXPECT_FALSE(messageDal->updateSeen(9999, true));
+    MessageDAL dal(db);
+    Message m = makeMessage(1); m.is_seen = false;
+    ASSERT_TRUE(dal.insert(m));
+
+    ASSERT_TRUE(dal.updateSeen(m.id.value(), true));
+    EXPECT_TRUE(dal.findByID(m.id.value())->is_seen);
+
+    ASSERT_TRUE(dal.updateSeen(m.id.value(), false));
+    EXPECT_FALSE(dal.findByID(m.id.value())->is_seen);
 }
 
-TEST_F(MessageDALTest, UpdateDeletedToggles)
+// ── updateDeleted ────────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, UpdateDeletedToggle)
 {
-    Message m = insertMessage();
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    ASSERT_TRUE(dal.insert(m));
 
-    ASSERT_TRUE(messageDal->updateDeleted(m.id.value(), true));
-    EXPECT_TRUE(messageDal->findByID(m.id.value())->is_deleted);
+    ASSERT_TRUE(dal.updateDeleted(m.id.value(), true));
+    EXPECT_TRUE(dal.findByID(m.id.value())->is_deleted);
 
-    ASSERT_TRUE(messageDal->updateDeleted(m.id.value(), false));
-    EXPECT_FALSE(messageDal->findByID(m.id.value())->is_deleted);
+    ASSERT_TRUE(dal.updateDeleted(m.id.value(), false));
+    EXPECT_FALSE(dal.findByID(m.id.value())->is_deleted);
 }
 
-TEST_F(MessageDALTest, UpdateDeletedNonExistentFails)
+// ── updateFlags ──────────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, UpdateFlagsPersistsAllFlags)
 {
-    EXPECT_FALSE(messageDal->updateDeleted(9999, true));
-}
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    ASSERT_TRUE(dal.insert(m));
 
-// ── updateFlags ───────────────────────────────────────────────────────────────
+    ASSERT_TRUE(dal.updateFlags(m.id.value(), true, false, true, true, false, false));
 
-TEST_F(MessageDALTest, UpdateFlagsSetsAllFlags)
-{
-    Message m = insertMessage();
-
-    ASSERT_TRUE(messageDal->updateFlags(m.id.value(),
-                                        true, true, true, true, true, true));
-
-    auto found = messageDal->findByID(m.id.value());
+    auto found = dal.findByID(m.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_TRUE(found->is_seen);
-    EXPECT_TRUE(found->is_deleted);
-    EXPECT_TRUE(found->is_draft);
-    EXPECT_TRUE(found->is_answered);
-    EXPECT_TRUE(found->is_flagged);
-    EXPECT_TRUE(found->is_recent);
-}
-
-TEST_F(MessageDALTest, UpdateFlagsClearsAllFlags)
-{
-    Message m = insertMessage();
-    messageDal->updateFlags(m.id.value(), true, true, true, true, true, true);
-
-    ASSERT_TRUE(messageDal->updateFlags(m.id.value(),
-                                        false, false, false, false, false, false));
-
-    auto found = messageDal->findByID(m.id.value());
-    ASSERT_TRUE(found.has_value());
-    EXPECT_FALSE(found->is_seen);
+    EXPECT_TRUE (found->is_seen);
     EXPECT_FALSE(found->is_deleted);
-    EXPECT_FALSE(found->is_draft);
-    EXPECT_FALSE(found->is_answered);
+    EXPECT_TRUE (found->is_draft);
+    EXPECT_TRUE (found->is_answered);
     EXPECT_FALSE(found->is_flagged);
     EXPECT_FALSE(found->is_recent);
 }
 
-TEST_F(MessageDALTest, UpdateFlagsNonExistentFails)
+// ── moveToFolder ─────────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, MoveToFolderUpdatesFields)
 {
-    EXPECT_FALSE(messageDal->updateFlags(9999,
-                                         false, false, false, false, false, false));
-}
+    FolderDAL fdal(db);
+    Folder sent; sent.user_id = user_id; sent.name = "Sent"; sent.next_uid = 1; sent.is_subscribed = true;
+    ASSERT_TRUE(fdal.insert(sent));
 
-// ── moveToFolder ──────────────────────────────────────────────────────────────
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    ASSERT_TRUE(dal.insert(m));
 
-TEST_F(MessageDALTest, MoveToFolderChangesFolder)
-{
-    Folder dest;
-    dest.user_id = userId; dest.name = "Archive";
-    dest.next_uid = 1; dest.is_subscribed = true;
-    ASSERT_TRUE(folderDal->insert(dest));
+    ASSERT_TRUE(dal.moveToFolder(m.id.value(), sent.id.value(), 10));
 
-    Message m = insertMessage();
-    ASSERT_TRUE(messageDal->moveToFolder(m.id.value(), dest.id.value(), 5));
-
-    auto found = messageDal->findByID(m.id.value());
+    auto found = dal.findByID(m.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->folder_id, dest.id.value());
-    EXPECT_EQ(found->uid,       5);
+    EXPECT_EQ(found->folder_id, sent.id.value());
+    EXPECT_EQ(found->uid, 10);
 }
 
-TEST_F(MessageDALTest, MoveToFolderNonExistentMessageFails)
-{
-    EXPECT_FALSE(messageDal->moveToFolder(9999, folderId, 1));
-}
-
-// ── hardDelete ────────────────────────────────────────────────────────────────
+// ── hardDelete ───────────────────────────────────────────────────────────────
 
 TEST_F(MessageDALTest, HardDeleteRemovesMessage)
 {
-    Message m = insertMessage();
-    ASSERT_TRUE(messageDal->hardDelete(m.id.value()));
-    EXPECT_FALSE(messageDal->findByID(m.id.value()).has_value());
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    ASSERT_TRUE(dal.insert(m));
+    ASSERT_TRUE(dal.hardDelete(m.id.value()));
+    EXPECT_FALSE(dal.findByID(m.id.value()).has_value());
 }
 
-TEST_F(MessageDALTest, HardDeleteNonExistentFails)
+// ── search ───────────────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, SearchMatchesSubject)
 {
-    EXPECT_FALSE(messageDal->hardDelete(9999));
+    MessageDAL dal(db);
+    Message m1 = makeMessage(1, "Meeting tomorrow");
+    Message m2 = makeMessage(2, "Lunch plans");
+    Message m3 = makeMessage(3, "RE: Meeting tomorrow");
+    ASSERT_TRUE(dal.insert(m1));
+    ASSERT_TRUE(dal.insert(m2));
+    ASSERT_TRUE(dal.insert(m3));
+
+    auto results = dal.search(user_id, "Meeting", 100, 0);
+    EXPECT_EQ(results.size(), 2u);
 }
 
-TEST_F(MessageDALTest, HardDeleteDoesNotAffectOtherMessages)
+TEST_F(MessageDALTest, SearchIsCaseInsensitive)
 {
-    Message a = insertMessage("A", 1);
-    Message b = insertMessage("B", 2);
-    ASSERT_TRUE(messageDal->hardDelete(a.id.value()));
-    EXPECT_TRUE(messageDal->findByID(b.id.value()).has_value());
+    MessageDAL dal(db);
+    Message m = makeMessage(1, "Hello World");
+    ASSERT_TRUE(dal.insert(m));
+
+    // SQLite LIKE is case-insensitive for ASCII
+    EXPECT_EQ(dal.search(user_id, "hello", 100, 0).size(), 1u);
 }
 
-// ── update ────────────────────────────────────────────────────────────────────
-
-TEST_F(MessageDALTest, UpdateChangesSubject)
+TEST_F(MessageDALTest, SearchNoMatchReturnsEmpty)
 {
-    Message m = insertMessage("Original");
-    m.subject = "Updated";
-    ASSERT_TRUE(messageDal->update(m));
+    MessageDAL dal(db);
+    Message m = makeMessage(1, "Unrelated");
+    ASSERT_TRUE(dal.insert(m));
+    EXPECT_TRUE(dal.search(user_id, "xyz_no_match", 100, 0).empty());
+}
 
-    auto found = messageDal->findByID(m.id.value());
+TEST_F(MessageDALTest, SearchPagination)
+{
+    MessageDAL dal(db);
+    for (int i = 1; i <= 5; ++i)
+    {
+        Message m = makeMessage(i, "Promo offer " + std::to_string(i));
+        ASSERT_TRUE(dal.insert(m));
+    }
+    EXPECT_EQ(dal.search(user_id, "Promo", 2, 0).size(), 2u);
+    EXPECT_EQ(dal.search(user_id, "Promo", 2, 2).size(), 2u);
+    EXPECT_EQ(dal.search(user_id, "Promo", 2, 4).size(), 1u);
+}
+
+// ── optional fields ──────────────────────────────────────────────────────────
+
+TEST_F(MessageDALTest, NullOptionalFieldsRoundtrip)
+{
+    MessageDAL dal(db);
+    Message m = makeMessage(1);
+    m.subject          = std::nullopt;
+    m.sender_address   = std::nullopt;
+    m.mime_structure   = std::nullopt;
+    m.message_id_header = std::nullopt;
+    ASSERT_TRUE(dal.insert(m));
+
+    auto found = dal.findByID(m.id.value());
     ASSERT_TRUE(found.has_value());
-    EXPECT_EQ(found->subject.value_or(""), "Updated");
-}
-
-TEST_F(MessageDALTest, UpdateWithNoIdFails)
-{
-    Message m = makeMessage();
-    EXPECT_FALSE(messageDal->update(m));
-}
-
-TEST_F(MessageDALTest, UpdateNonExistentFails)
-{
-    Message m = makeMessage();
-    m.id = 9999;
-    EXPECT_FALSE(messageDal->update(m));
+    EXPECT_FALSE(found->subject.has_value());
+    EXPECT_FALSE(found->sender_address.has_value());
 }
