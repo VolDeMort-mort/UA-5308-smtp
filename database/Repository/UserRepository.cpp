@@ -52,13 +52,16 @@ bool UserRepository::registerUser(User& user, const std::string& password)
     if (!m_user_dal.insert(user))
         return setError(m_user_dal.getLastError());
 
-    Folder inbox;
-    inbox.user_id       = user.id.value();
-    inbox.name          = "INBOX";
-    inbox.next_uid      = 1;
-    inbox.is_subscribed = true;
-    if (!m_folder_dal.insert(inbox))
-        return setError(m_folder_dal.getLastError());
+    for (const char* name : {"INBOX", "Sent", "Drafts", "Trash", "Spam"})
+    {
+        Folder f;
+        f.user_id       = user.id.value();
+        f.name          = name;
+        f.next_uid      = 1;
+        f.is_subscribed = true;
+        if (!m_folder_dal.insert(f))
+            return setError(m_folder_dal.getLastError());
+    }
 
     return true;
 }
