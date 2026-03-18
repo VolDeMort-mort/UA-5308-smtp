@@ -237,19 +237,19 @@ TEST(ImapUtilsTest, ParseSequenceSet_MixedAndOverlapping)
 TEST(ImapUtilsTest, SortMessagesByTimeDescending_Basic)
 {
 	Message m1;
-	m1.created_at = "2026-03-01 10:00:00";
+	m1.internal_date = "2026-03-01 10:00:00";
 	Message m2;
-	m2.created_at = "2026-03-02 10:00:00";
+	m2.internal_date = "2026-03-02 10:00:00";
 	Message m3;
-	m3.created_at = "2026-03-03 10:00:00";
+	m3.internal_date = "2026-03-03 10:00:00";
 	std::vector<Message> msgs = {m2, m1, m3};
 
 	IMAP_UTILS::SortMessagesByTimeDescending(msgs);
 
 	ASSERT_EQ(msgs.size(), 3);
-	EXPECT_EQ(msgs[0].created_at, "2026-03-03 10:00:00");
-	EXPECT_EQ(msgs[1].created_at, "2026-03-02 10:00:00");
-	EXPECT_EQ(msgs[2].created_at, "2026-03-01 10:00:00");
+	EXPECT_EQ(msgs[0].internal_date, "2026-03-03 10:00:00");
+	EXPECT_EQ(msgs[1].internal_date, "2026-03-02 10:00:00");
+	EXPECT_EQ(msgs[2].internal_date, "2026-03-01 10:00:00");
 }
 
 TEST(ImapUtilsTest, SortMessagesByTimeDescending_Empty)
@@ -262,9 +262,9 @@ TEST(ImapUtilsTest, SortMessagesByTimeDescending_Empty)
 TEST(ImapUtilsTest, SortMessagesByTimeDescending_Single)
 {
 	Message m1;
-	m1.created_at = "2026-03-01 10:00:00";
+	m1.internal_date = "2026-03-01 10:00:00";
 	std::vector<Message> single_msg = {m1};
 	IMAP_UTILS::SortMessagesByTimeDescending(single_msg);
 	ASSERT_EQ(single_msg.size(), 1);
-	EXPECT_EQ(single_msg[0].created_at, "2026-03-01 10:00:00");
+	EXPECT_EQ(single_msg[0].internal_date, "2026-03-01 10:00:00");
 }

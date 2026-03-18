@@ -1,4 +1,5 @@
 #include "MessageRepository.h"
+#include <climits>
 
 MessageRepository::MessageRepository(DataBaseManager& db)
     : m_db(db.getDB())

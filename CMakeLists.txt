@@ -16,18 +16,18 @@ if(BUILD_LOGGER)
      add_subdirectory(logger)
 endif()
 
-# add_subdirectory(proto)
+add_subdirectory(proto)
 
 if(BUILD_SERVER)
-#    add_subdirectory(server)
+   add_subdirectory(server)
 endif()
 
 if(BUILD_IMAP)
-#    add_subdirectory(imap-server)
+   add_subdirectory(imap-server)
 endif()
 
 if(BUILD_MUA)
-#    add_subdirectory(mua)
+   add_subdirectory(mua)
 endif()
 
 if(BUILD_DATABASE)
