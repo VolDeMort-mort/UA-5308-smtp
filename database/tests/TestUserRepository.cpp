@@ -2,6 +2,8 @@
 #include "../DAL/UserDAL.h"
 #include "../Repository/UserRepository.h"
 
+
+
 class UserRepositoryTest : public DBFixture
 {
 protected:
@@ -12,7 +14,7 @@ protected:
     {
         DBFixture::SetUp();
         dal  = new UserDAL(db);
-        repo = new UserRepository(*dal);
+        repo = new UserRepository(db, *dal);
     }
 
     void TearDown() override

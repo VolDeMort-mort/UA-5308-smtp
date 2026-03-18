@@ -92,10 +92,22 @@ std::vector<Message> MessageRepository::search(int64_t user_id, const std::strin
 
 bool MessageRepository::deliver(Message& msg, int64_t folder_id)
 {
+    if (folder_id <= 0)
+    {
+        auto inbox = m_folder_dal.findByName(msg.user_id, "INBOX");
+        if (!inbox.has_value())
+            return setError("deliver: INBOX not found for user");
+        folder_id = inbox->id.value();
+    }
+
     msg.is_seen   = false;
     msg.is_recent = true;
     msg.is_draft  = false;
-    return assignUID(msg, folder_id);
+
+    if (!assignUID(msg, folder_id))
+        return false;
+
+    return true;
 }
 
 bool MessageRepository::saveToFolder(Message& msg, int64_t folder_id)

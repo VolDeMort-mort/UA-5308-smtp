@@ -22,7 +22,6 @@ public:
     bool hardDelete(int64_t id);
 
     const std::string& getLastError() const;
-
 private:
     sqlite3* m_db;
     std::string m_last_error;

@@ -31,7 +31,7 @@ public:
     std::vector<Message> findFlagged(int64_t folder_id, int limit = 50, int offset = 0) const;
     std::vector<Message> search(int64_t user_id, const std::string& query, int limit = 50, int offset = 0) const;
 
-    bool deliver(Message& msg, int64_t folder_id);
+    bool deliver(Message& msg, int64_t folder_id = 0);
     bool saveToFolder(Message& msg, int64_t folder_id);
 
     bool markSeen(int64_t id, bool seen);
