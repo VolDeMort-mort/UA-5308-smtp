@@ -49,7 +49,7 @@ bool SmtpSession::SaveMessage()
             new_user.username = username;
             new_user.password_hash = "smtp_auto";
 
-            if (!m_user_repo->registerUser(new_user))
+            if (!m_user_repo->registerUser(new_user, ""))
                 continue;
 
             user = m_user_repo->findByUsername(username);
@@ -58,16 +58,18 @@ bool SmtpSession::SaveMessage()
         if (!user || !user->id)
             continue;
 
+        auto inbox = m_message_repo->findFolderByName(user->id.value(), "INBOX");
+        if (!inbox || !inbox->id)
+            continue;
+
         Message msg;
+        msg.user_id       = user->id.value();
+        msg.from_address  = m_sender;
+        msg.raw_file_path = m_body; 
+        msg.size_bytes    = static_cast<int64_t>(m_body.size());
+        msg.internal_date = "";
 
-        msg.user_id = user->id.value();
-        msg.receiver = recipient;
-        msg.body = m_body;
-        msg.subject = "";
-        msg.status = MessageStatus::Received;
-        msg.is_seen = false;
-
-        if (!m_message_repo->send(msg))
+        if (!m_message_repo->deliver(msg, inbox->id.value()))
             continue;
 
         any_saved = true;

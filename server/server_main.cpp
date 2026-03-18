@@ -25,7 +25,7 @@ int main()
 			return 1;
 		}
 		UserDAL user_dal(db.getDB());
-		UserRepository user_repo(user_dal);
+		UserRepository user_repo(db.getDB(), user_dal);
 		MessageRepository message_repo(db);
 
 		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
