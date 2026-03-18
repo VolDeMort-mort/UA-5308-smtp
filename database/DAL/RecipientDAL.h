@@ -15,10 +15,11 @@ public:
 
     std::optional<Recipient> findByID(int64_t id) const;
     std::vector<Recipient> findByMessage(int64_t message_id) const;
+
     bool insert(Recipient& recipient);
     bool update(const Recipient& recipient);
     bool hardDelete(int64_t id);
-    
+
     const std::string& getLastError() const;
 
 private:
@@ -26,7 +27,6 @@ private:
     std::string m_last_error;
 
     bool setError(const char* sqlite_errmsg);
-
     std::vector<Recipient> fetchRows(sqlite3_stmt* stmt) const;
     static Recipient rowToRecipient(sqlite3_stmt* stmt);
 };
