@@ -11,7 +11,7 @@ option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
 option(BUILD_DATABASE "Build the Database" ON)
 
-#add_subdirectory(proto)
+add_subdirectory(logger)
 
 if(BUILD_SERVER)
 #    add_subdirectory(server)

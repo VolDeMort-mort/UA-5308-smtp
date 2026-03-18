@@ -1,26 +1,33 @@
 #include "DataBaseManager.h"
 
-#include <iostream>
 #include <fstream>
 #include <sstream>
 
 DataBaseManager::DataBaseManager(const std::string& db_path,
-                                 const std::string& migration_path)
+                                 const std::string& migration_path,
+                                 std::shared_ptr<ILogger> logger)
+    : m_logger(std::move(logger))
 {
     int rc = sqlite3_open(db_path.c_str(), &m_db);
 
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Failed to open database: " << sqlite3_errmsg(m_db) << "\n";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Failed to open: " + std::string(sqlite3_errmsg(m_db)));
         sqlite3_close(m_db);
         m_db = nullptr;
         return;
     }
 
+    if (m_logger)
+        m_logger->Log(LogLevel::DEBUG, "[DB] Opened: " + db_path);
+
     rc = sqlite3_exec(m_db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Failed to enable foreign keys: " << sqlite3_errmsg(m_db) << "\n";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Failed to enable foreign keys: "
+                          + std::string(sqlite3_errmsg(m_db)));
         sqlite3_close(m_db);
         m_db = nullptr;
         return;
@@ -28,11 +35,15 @@ DataBaseManager::DataBaseManager(const std::string& db_path,
 
     if (!applyMigration(migration_path))
     {
-        std::cerr << "Migration failed\n";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Migration failed: " + migration_path);
         sqlite3_close(m_db);
         m_db = nullptr;
         return;
     }
+
+    if (m_logger)
+        m_logger->Log(LogLevel::DEBUG, "[DB] Migration applied: " + migration_path);
 
     m_connected = true;
 }
@@ -61,7 +72,8 @@ bool DataBaseManager::applyMigration(const std::string& migration_path)
 
     if (!file.is_open())
     {
-        std::cerr << "Could not open migration file: " << migration_path << "\n";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Cannot open migration file: " + migration_path);
         return false;
     }
 
@@ -74,7 +86,9 @@ bool DataBaseManager::applyMigration(const std::string& migration_path)
 
     if (rc != SQLITE_OK)
     {
-        std::cerr << "Migration failed: " << (err_msg ? err_msg : "unknown error") << "\n";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Migration error: "
+                          + std::string(err_msg ? err_msg : "unknown"));
         sqlite3_free(err_msg);
         return false;
     }
