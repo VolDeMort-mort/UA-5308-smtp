@@ -3,9 +3,7 @@
 #include "SmtpParser.hpp"
 #include "SmtpResponse.hpp"
 
-SmtpSession::SmtpSession(std::string domain,
-                         MessageRepository* message_repo,
-                         UserRepository* user_repo)
+SmtpSession::SmtpSession(std::string domain, MessageRepository* message_repo, UserRepository* user_repo)
     : m_domain(std::move(domain)),
       m_message_repo(message_repo),
       m_user_repo(user_repo)
@@ -63,10 +61,10 @@ bool SmtpSession::SaveMessage()
             continue;
 
         Message msg;
-        msg.user_id       = user->id.value();
-        msg.from_address  = m_sender;
+        msg.user_id = user->id.value();
+        msg.from_address = m_sender;
         msg.raw_file_path = m_body; 
-        msg.size_bytes    = static_cast<int64_t>(m_body.size());
+        msg.size_bytes = static_cast<int64_t>(m_body.size());
         msg.internal_date = "";
 
         if (!m_message_repo->deliver(msg, inbox->id.value()))
