@@ -1,5 +1,6 @@
 #include "ImapCommandDispatcher.hpp"
 
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
 
