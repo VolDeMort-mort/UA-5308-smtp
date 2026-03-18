@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost REQUIRED)
-find_package(unofficial-sodium CONFIG REQUIRED)
 
 option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_IMAP "Build the IMAP server" ON)
@@ -17,14 +16,14 @@ if(BUILD_LOGGER)
      add_subdirectory(logger)
 endif()
 
-add_subdirectory(proto)
+# add_subdirectory(proto)
 
 if(BUILD_SERVER)
 #    add_subdirectory(server)
 endif()
 
 if(BUILD_IMAP)
-    add_subdirectory(imap-server)
+#    add_subdirectory(imap-server)
 endif()
 
 if(BUILD_MUA)
