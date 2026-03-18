@@ -2,18 +2,21 @@
 
 #include <boost/asio.hpp>
 #include <memory>
+#include <string>
 
 #include "SocketConnection.hpp"
 
 class SocketConnector
 {
 public:
-	SocketConnector() = default;
+    SocketConnector() = default;
 
-	bool initialize(boost::asio::io_context& ioContext);
+    bool Initialize(boost::asio::io_context& io_context);
 
-	bool connect(const std::string& host, uint16_t port, std::unique_ptr<SocketConnection>& outConnection);
+    bool Connect(const std::string& host,
+                 uint16_t port,
+                 std::unique_ptr<SocketConnection>& connection);
 
 private:
-	boost::asio::io_context* m_ioContext{nullptr};
+    boost::asio::io_context* m_io_context{nullptr};
 };

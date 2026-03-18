@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 
 enum class SmtpCommandType
@@ -11,11 +12,12 @@ enum class SmtpCommandType
 	RSET,
 	NOOP,
 	QUIT,
-	UNKNOWN
+	UNKNOWN,
+	STARTTLS
 };
 
 struct SmtpCommand
 {
-	SmtpCommandType type{SmtpCommandType::UNKNOWN};
-	std::string argument;
+    SmtpCommandType type{SmtpCommandType::UNKNOWN};
+    std::string argument;
 };

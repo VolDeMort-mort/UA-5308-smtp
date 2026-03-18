@@ -2,64 +2,119 @@
 #include <iostream>
 #include <memory>
 
+#include "FileStrategy.h"
+#include "Logger.h"
+#include "DataBaseManager.h"
+#include "ThreadPool.h"
+#include "ServerSecureChannel.hpp"
 #include "SmtpSession.hpp"
 #include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
 
 int main()
 {
+	constexpr uint16_t PORT = 25000;
+	const std::string SERVER_DOMAIN = "localhost";
+
 	try
 	{
-		constexpr uint16_t port = 25000;
-		const std::string domain = "localhost";
+		DataBaseManager db("mail.db", "../../database/scheme/001_init_scheme.sql");
+		if (!db.isConnected())
+		{
+			std::cerr << "Database connection failed\n";
+			return 1;
+		}
+		UserDAL user_dal(db.getDB());
+		UserRepository user_repo(user_dal);
+		MessageRepository message_repo(db);
 
-		boost::asio::io_context ioContext;
+		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
+
+		boost::asio::io_context io_context;
 
 		SocketAcceptor acceptor;
 
-		if (!acceptor.initialize(ioContext, port))
+		if (!acceptor.Initialize(io_context, PORT))
 		{
 			std::cerr << "Failed to initialize acceptor\n";
 			return 1;
 		}
 
-		std::cout << "SMTP Server running on port " << port << std::endl;
+		std::cout << "SMTP Server running on port " << PORT << std::endl;
+
+		ThreadPool pool;
+
+        constexpr int WORKER_THREADS = 4;
+
+        pool.initialize(WORKER_THREADS);
 
 		while (true)
-		{
-			std::unique_ptr<SocketConnection> connection;
+        {
+            std::unique_ptr<SocketConnection> connection;
 
-			if (!acceptor.accept(connection)) continue;
+            if (!acceptor.Accept(connection) || !connection)
+                continue;
 
-			SmtpSession session(domain);
+            std::shared_ptr<SocketConnection> shared_connection =
+                std::shared_ptr<SocketConnection>(std::move(connection));
 
-			if (!connection->send(session.greeting()))
-			{
-				connection->close();
-				continue;
-			}
+            pool.add_task([shared_connection,
+                           SERVER_DOMAIN,
+                           &message_repo,
+                           &user_repo,
+                           &logger]()
+            {
+                ServerSecureChannel channel(*shared_connection);
+                channel.setLogger(&logger);
 
-			std::string input;
+                SmtpSession session(SERVER_DOMAIN,
+                                    &message_repo,
+                                    &user_repo);
 
-			while (connection->receive(input))
-			{
-				std::string response = session.processLine(input);
+                if (!channel.Send(session.Greeting()))
+                {
+                    shared_connection->Close();
+                    return;
+                }
 
-				if (!response.empty())
-				{
-					if (!connection->send(response)) break;
-				}
+                std::string input;
 
-				if (session.isClosed()) break;
-			}
+                while (channel.Receive(input))
+                {
+                    std::string response =
+                        session.ProcessLine(input);
 
-			connection->close();
-		}
-	}
-	catch (const std::exception& e)
-	{
-		std::cerr << "Server error: " << e.what() << std::endl;
-	}
+                    if (!response.empty())
+                    {
+                        if (!channel.Send(response))
+                            break;
+                    }
 
-	return 0;
+                    if (session.getState() == SmtpState::STARTTLS)
+                    {
+                        if (!channel.StartTLS())
+                        {
+                            std::cerr << "TLS handshake failed\n";
+                            break;
+                        }
+
+                        session.ResetToHelo();
+                    }
+
+                    if (session.IsClosed())
+                        break;
+                }
+
+                shared_connection->Close();
+            });
+        }
+    }
+    catch (const std::exception& exception)
+    {
+        std::cerr << "Server error: "
+                  << exception.what()
+                  << std::endl;
+    }
+
+    return 0;
 }
