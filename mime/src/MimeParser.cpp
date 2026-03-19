@@ -31,7 +31,7 @@ std::string ToLower(std::string s)
 } // anonymous namespace
 
 bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
-							Logger& logger)
+							ILogger& logger)
 {
 	if (raw_mime.empty())
 	{
@@ -150,7 +150,7 @@ std::string MimeParser::ExtractBoundary(const std::string& content_type_header)
 	return StringUtils::Trim(boundary);
 }
 
-void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email, Logger& logger)
+void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email, ILogger& logger)
 {
 	out_email.sender     = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "From:"),    &logger);
 	out_email.recipient  = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "To:"),      &logger);
@@ -162,7 +162,7 @@ void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_ema
 }
 
 void MimeParser::ParseMultipartBody(const std::string& body, const std::string& boundary,
-									Email& out_email, Logger& logger)
+									Email& out_email, ILogger& logger)
 {
 	std::string delimiter = "--" + boundary;
 	size_t      start_pos = body.find(delimiter);
@@ -188,7 +188,7 @@ void MimeParser::ParseMultipartBody(const std::string& body, const std::string& 
 }
 
 void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
-								 Logger& logger)
+							 ILogger& logger)
 {
 	std::string part_headers, part_body;
 	SplitHeadersAndBody(part_raw, part_headers, part_body);
@@ -289,7 +289,7 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 	}
 }
 
-std::string MimeParser::ExtractFileName(const std::string& part_headers, Logger& logger)
+std::string MimeParser::ExtractFileName(const std::string& part_headers, ILogger& logger)
 {
 	std::string file_name;
 
