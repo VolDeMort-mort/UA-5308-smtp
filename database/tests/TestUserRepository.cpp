@@ -1,173 +1,188 @@
-#include <gtest/gtest.h>
-
+#include "TestHelper.h"
 #include "../DAL/UserDAL.h"
-#include "../DataBaseManager.h"
 #include "../Repository/UserRepository.h"
 
-class UserRepositoryTest : public ::testing::Test
+
+
+class UserRepositoryTest : public DBFixture
 {
 protected:
-	void SetUp() override
-	{
-		m_db = new DataBaseManager(":memory:", SCHEMA_PATH);
-		m_dal = new UserDAL(m_db->getDB());
-		m_repo = new UserRepository(*m_dal);
-	}
+    UserDAL*        dal  = nullptr;
+    UserRepository* repo = nullptr;
 
-	void TearDown() override
-	{
-		delete m_repo;
-		delete m_dal;
-		delete m_db;
-	}
+    void SetUp() override
+    {
+        DBFixture::SetUp();
+        dal  = new UserDAL(db);
+        repo = new UserRepository(db, *dal);
+    }
 
-	User make(const std::string& username = "alice", const std::string& hash = "hash")
-	{
-		User u;
-		u.username = username;
-		u.password_hash = hash;
-		return u;
-	}
+    void TearDown() override
+    {
+        delete repo;
+        delete dal;
+        DBFixture::TearDown();
+    }
 
-	DataBaseManager* m_db = nullptr;
-	UserDAL* m_dal = nullptr;
-	UserRepository* m_repo = nullptr;
+    User makeUser(const std::string& username)
+    {
+        User u; u.username = username;
+        return u;
+    }
 };
 
-TEST_F(UserRepositoryTest, RegisterUser_SetsID)
+// ── registerUser ─────────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, RegisterUserSuccess)
 {
-	auto u = make();
-	EXPECT_TRUE(m_repo->registerUser(u));
-	EXPECT_TRUE(u.id.has_value());
+    User u = makeUser("alice");
+    ASSERT_TRUE(repo->registerUser(u, "secret"));
+    ASSERT_TRUE(u.id.has_value());
 }
 
-TEST_F(UserRepositoryTest, RegisterUser_PersistsFields)
+TEST_F(UserRepositoryTest, RegisterUserHashesPassword)
 {
-	auto u = make("charlie", "secret");
-	m_repo->registerUser(u);
-	auto f = m_repo->findByID(u.id.value());
-	ASSERT_TRUE(f.has_value());
-	EXPECT_EQ(f->username, "charlie");
-	EXPECT_EQ(f->password_hash, "secret");
+    User u = makeUser("bob");
+    ASSERT_TRUE(repo->registerUser(u, "plaintext"));
+
+    auto stored = dal->findByID(u.id.value());
+    ASSERT_TRUE(stored.has_value());
+    // Must NOT store plaintext
+    EXPECT_NE(stored->password_hash, "plaintext");
+    EXPECT_FALSE(stored->password_hash.empty());
 }
 
-TEST_F(UserRepositoryTest, RegisterUser_RejectsDuplicateUsername)
+TEST_F(UserRepositoryTest, RegisterDuplicateUsernameFails)
 {
-	auto u1 = make("alice");
-	m_repo->registerUser(u1);
-	auto u2 = make("alice");
-	EXPECT_FALSE(m_repo->registerUser(u2));
+    User u1 = makeUser("dup");
+    ASSERT_TRUE(repo->registerUser(u1, "pass1"));
+
+    User u2 = makeUser("dup");
+    EXPECT_FALSE(repo->registerUser(u2, "pass2"));
+    EXPECT_FALSE(repo->getLastError().empty());
 }
 
-TEST_F(UserRepositoryTest, Authorize_SucceedsWithCorrectCredentials)
+// ── authorize ────────────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, AuthorizeCorrectCredentials)
 {
-	auto u = make("alice", "correct");
-	m_repo->registerUser(u);
-	EXPECT_TRUE(m_repo->authorize("alice", "correct"));
+    User u = makeUser("carol");
+    ASSERT_TRUE(repo->registerUser(u, "mypassword"));
+    EXPECT_TRUE(repo->authorize("carol", "mypassword"));
 }
 
-TEST_F(UserRepositoryTest, Authorize_FailsWithWrongPassword)
+TEST_F(UserRepositoryTest, AuthorizeWrongPasswordFails)
 {
-	auto u = make("alice", "correct");
-	m_repo->registerUser(u);
-	EXPECT_FALSE(m_repo->authorize("alice", "wrong"));
+    User u = makeUser("dave");
+    ASSERT_TRUE(repo->registerUser(u, "correct"));
+    EXPECT_FALSE(repo->authorize("dave", "wrong"));
+    EXPECT_FALSE(repo->getLastError().empty());
 }
 
-TEST_F(UserRepositoryTest, Authorize_FailsForUnknownUser)
+TEST_F(UserRepositoryTest, AuthorizeNonExistentUserFails)
 {
-	EXPECT_FALSE(m_repo->authorize("nobody", "hash"));
+    EXPECT_FALSE(repo->authorize("nobody", "pass"));
+    EXPECT_FALSE(repo->getLastError().empty());
 }
 
-TEST_F(UserRepositoryTest, FindByID_ReturnsNulloptIfMissing)
+TEST_F(UserRepositoryTest, AuthorizeDoesNotLeakWhichFieldFailed)
 {
-	EXPECT_FALSE(m_repo->findByID(99999).has_value());
+    // Both "user not found" and "wrong password" must set an error — callers
+    // should not be able to distinguish them from the bool return alone.
+    User u = makeUser("eve");
+    ASSERT_TRUE(repo->registerUser(u, "pass"));
+
+    bool wrong_user = repo->authorize("nobody", "pass");
+    bool wrong_pass = repo->authorize("eve", "wrong");
+
+    EXPECT_FALSE(wrong_user);
+    EXPECT_FALSE(wrong_pass);
 }
 
-TEST_F(UserRepositoryTest, FindByUsername_ReturnsCorrectUser)
+// ── changePassword ───────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, ChangePasswordAllowsLoginWithNewPassword)
 {
-	auto u = make("eve");
-	m_repo->registerUser(u);
-	ASSERT_TRUE(m_repo->findByUsername("eve").has_value());
+    User u = makeUser("frank");
+    ASSERT_TRUE(repo->registerUser(u, "old"));
+
+    ASSERT_TRUE(repo->changePassword(u.id.value(), "new"));
+
+    EXPECT_TRUE (repo->authorize("frank", "new"));
+    EXPECT_FALSE(repo->authorize("frank", "old"));
 }
 
-TEST_F(UserRepositoryTest, FindByUsername_ReturnsNulloptIfMissing)
+TEST_F(UserRepositoryTest, ChangePasswordNonExistentUserFails)
 {
-	EXPECT_FALSE(m_repo->findByUsername("nobody").has_value());
+    EXPECT_FALSE(repo->changePassword(9999, "newpass"));
+    EXPECT_FALSE(repo->getLastError().empty());
 }
 
-TEST_F(UserRepositoryTest, FindAll_ReturnsAllUsers)
+// ── findByID ─────────────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, FindByIDSuccess)
 {
-	auto u1 = make("alice");
-	auto u2 = make("bob");
-	m_repo->registerUser(u1);
-	m_repo->registerUser(u2);
-	EXPECT_EQ(m_repo->findAll().size(), 2u);
+    User u = makeUser("grace");
+    ASSERT_TRUE(repo->registerUser(u, "p"));
+
+    auto found = repo->findByID(u.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->username, "grace");
 }
 
-TEST_F(UserRepositoryTest, FindAll_EmptyWhenNoUsers)
+TEST_F(UserRepositoryTest, FindByIDMissingReturnsNullopt)
 {
-	EXPECT_TRUE(m_repo->findAll().empty());
+    EXPECT_FALSE(repo->findByID(9999).has_value());
 }
 
-TEST_F(UserRepositoryTest, Update_PersistsChanges)
+// ── findByUsername ───────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, FindByUsernameSuccess)
 {
-	auto u = make("alice", "old");
-	m_repo->registerUser(u);
-	u.username = "alice2";
-	u.password_hash = "new";
-	EXPECT_TRUE(m_repo->update(u));
-	auto f = m_repo->findByID(u.id.value());
-	EXPECT_EQ(f->username, "alice2");
-	EXPECT_EQ(f->password_hash, "new");
+    User u = makeUser("heidi");
+    ASSERT_TRUE(repo->registerUser(u, "p"));
+    EXPECT_TRUE(repo->findByUsername("heidi").has_value());
 }
 
-TEST_F(UserRepositoryTest, Update_RejectsDuplicateUsername)
+// ── update ───────────────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, UpdateUsernameSuccess)
 {
-	auto u1 = make("alice");
-	m_repo->registerUser(u1);
-	auto u2 = make("bob");
-	m_repo->registerUser(u2);
-	u2.username = "alice";
-	EXPECT_FALSE(m_repo->update(u2));
+    User u = makeUser("ivan");
+    ASSERT_TRUE(repo->registerUser(u, "p"));
+
+    u.username = "ivan2";
+    ASSERT_TRUE(repo->update(u));
+    EXPECT_TRUE(repo->findByUsername("ivan2").has_value());
+    EXPECT_FALSE(repo->findByUsername("ivan").has_value());
 }
 
-TEST_F(UserRepositoryTest, Update_FailsWithNoID)
+// ── hardDelete ───────────────────────────────────────────────────────────────
+
+TEST_F(UserRepositoryTest, HardDeleteRemovesUser)
 {
-	EXPECT_FALSE(m_repo->update(make()));
+    User u = makeUser("judy");
+    ASSERT_TRUE(repo->registerUser(u, "p"));
+    ASSERT_TRUE(repo->hardDelete(u.id.value()));
+    EXPECT_FALSE(repo->findByID(u.id.value()).has_value());
 }
 
-TEST_F(UserRepositoryTest, ChangePassword_PersistsNewHash)
+TEST_F(UserRepositoryTest, HardDeleteNonExistentFails)
 {
-	auto u = make("alice", "old");
-	m_repo->registerUser(u);
-	EXPECT_TRUE(m_repo->changePassword(u.id.value(), "new"));
-	EXPECT_EQ(m_repo->findByID(u.id.value())->password_hash, "new");
+    EXPECT_FALSE(repo->hardDelete(9999));
+    EXPECT_FALSE(repo->getLastError().empty());
 }
 
-TEST_F(UserRepositoryTest, ChangePassword_NewHashWorksForAuthorize)
-{
-	auto u = make("alice", "old");
-	m_repo->registerUser(u);
-	m_repo->changePassword(u.id.value(), "new");
-	EXPECT_FALSE(m_repo->authorize("alice", "old"));
-	EXPECT_TRUE(m_repo->authorize("alice", "new"));
-}
+// ── findAll pagination ───────────────────────────────────────────────────────
 
-TEST_F(UserRepositoryTest, ChangePassword_RejectsUnknownID)
+TEST_F(UserRepositoryTest, FindAllPagination)
 {
-	EXPECT_FALSE(m_repo->changePassword(99999, "new"));
-}
-
-TEST_F(UserRepositoryTest, HardDelete_RemovesUser)
-{
-	auto u = make();
-	m_repo->registerUser(u);
-	int64_t id = u.id.value();
-	EXPECT_TRUE(m_repo->hardDelete(id));
-	EXPECT_FALSE(m_repo->findByID(id).has_value());
-}
-
-TEST_F(UserRepositoryTest, HardDelete_RejectsNonExistent)
-{
-	EXPECT_FALSE(m_repo->hardDelete(99999));
+    for (int i = 0; i < 8; ++i)
+    {
+        User u = makeUser("user" + std::to_string(i));
+        ASSERT_TRUE(repo->registerUser(u, "p"));
+    }
+    EXPECT_EQ(repo->findAll(3, 0).size(), 3u);
+    EXPECT_EQ(repo->findAll(3, 3).size(), 3u);
+    EXPECT_EQ(repo->findAll(3, 6).size(), 2u);
 }

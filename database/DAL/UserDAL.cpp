@@ -2,14 +2,13 @@
 
 #define USER_SELECT \
     "SELECT id, username, password_hash " \
-    "From users "
+    "FROM users "
 
 UserDAL::UserDAL(sqlite3* db) : m_db(db) {}
 
 bool UserDAL::setError(const char* sqlite_errmsg)
 {
     m_last_error = sqlite_errmsg ? sqlite_errmsg : "unknown error";
-    //Log(ERROR, <<m_last_error);
     return false;
 }
 
@@ -22,7 +21,8 @@ User UserDAL::rowToUser(sqlite3_stmt* stmt)
 {
     User u;
 
-    if(sqlite3_column_type(stmt, 0) != SQLITE_NULL) u.id = sqlite3_column_int64(stmt, 0);
+    if (sqlite3_column_type(stmt, 0) != SQLITE_NULL)
+        u.id = sqlite3_column_int64(stmt, 0);
 
     auto text = [&](int col) -> std::string
     {
@@ -30,7 +30,7 @@ User UserDAL::rowToUser(sqlite3_stmt* stmt)
         return raw ? reinterpret_cast<const char*>(raw) : "";
     };
 
-    u.username = text(1);
+    u.username      = text(1);
     u.password_hash = text(2);
 
     return u;
@@ -39,11 +39,9 @@ User UserDAL::rowToUser(sqlite3_stmt* stmt)
 std::vector<User> UserDAL::fetchRows(sqlite3_stmt* stmt) const
 {
     std::vector<User> result;
-
-    while (sqlite3_step(stmt) == SQLITE_ROW) result.push_back(rowToUser(stmt));
-
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+        result.push_back(rowToUser(stmt));
     sqlite3_finalize(stmt);
-
     return result;
 }
 
@@ -52,15 +50,16 @@ std::optional<User> UserDAL::findByID(int64_t id) const
     const char* sql = USER_SELECT "WHERE id = ? LIMIT 1;";
 
     sqlite3_stmt* stmt = nullptr;
-    if(sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return std::nullopt;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return std::nullopt;
 
     sqlite3_bind_int64(stmt, 1, id);
 
     std::optional<User> result;
-    if(sqlite3_step(stmt) == SQLITE_ROW) result = rowToUser(stmt);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        result = rowToUser(stmt);
 
     sqlite3_finalize(stmt);
-
     return result;
 }
 
@@ -69,24 +68,27 @@ std::optional<User> UserDAL::findByUsername(const std::string& username) const
     const char* sql = USER_SELECT "WHERE username = ? LIMIT 1;";
 
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr ) != SQLITE_OK) return std::nullopt;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return std::nullopt;
 
     sqlite3_bind_text(stmt, 1, username.c_str(), -1, SQLITE_TRANSIENT);
 
     std::optional<User> result;
-    if(sqlite3_step(stmt) == SQLITE_ROW) result = rowToUser(stmt);
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+        result = rowToUser(stmt);
 
     sqlite3_finalize(stmt);
     return result;
 }
 
-std::vector<User> UserDAL::findAll() const
+std::vector<User> UserDAL::findAll(int limit, int offset) const
 {
-    const char* sql = USER_SELECT "ORDER BY username ASC;";
-
+    const char* sql = USER_SELECT "ORDER BY username ASC LIMIT ? OFFSET ?;";
     sqlite3_stmt* stmt = nullptr;
-    if(sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return {};
-
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return {};
+    sqlite3_bind_int(stmt, 1, limit);
+    sqlite3_bind_int(stmt, 2, offset);
     return fetchRows(stmt);
 }
 
@@ -119,8 +121,7 @@ bool UserDAL::update(const User& user)
         return setError("update() called on a User with no id");
 
     const char* sql =
-        "UPDATE users "
-        "SET username = ?, password_hash = ? "
+        "UPDATE users SET username = ?, password_hash = ? "
         "WHERE id = ?;";
 
     sqlite3_stmt* stmt = nullptr;

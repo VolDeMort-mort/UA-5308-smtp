@@ -38,7 +38,7 @@ if(BUILD_SERVER OR BUILD_IMAP OR BUILD_MUA)
 endif()
 
 if(BUILD_SERVER)
-    add_subdirectory(server)
+   add_subdirectory(server)
 endif()
 
 if(BUILD_IMAP OR BUILD_DATABASE)
@@ -46,9 +46,9 @@ if(BUILD_IMAP OR BUILD_DATABASE)
 endif()
 
 if(BUILD_IMAP)
-    add_subdirectory(imap-server)
+   add_subdirectory(imap-server)
 endif()
 
 if(BUILD_MUA)
-    add_subdirectory(mua)
+   add_subdirectory(mua)
 endif()

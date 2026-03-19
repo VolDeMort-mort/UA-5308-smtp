@@ -4,6 +4,8 @@
 #include <vector>
 
 #include "SmtpCommand.hpp"
+#include "MessageRepository.h"
+#include "UserRepository.h"
 
 enum class SmtpState
 {
@@ -20,7 +22,9 @@ class SmtpSession
 {
 public:
 
-    explicit SmtpSession(std::string domain);
+    explicit SmtpSession(std::string domain,
+			MessageRepository* message_repo,
+			UserRepository* user_repo);
 
     std::string Greeting() const;
 
@@ -33,6 +37,9 @@ public:
     void ResetToHelo();
 
 private:
+	bool SaveMessage();
+
+	static std::string ExtractUsername(const std::string& email);
 
     std::string HandleHelo(const SmtpCommand& command);
 
@@ -66,4 +73,8 @@ private:
     std::vector<std::string> m_recipients;
 
     std::string m_body;
+
+	MessageRepository* m_message_repo;
+
+	UserRepository* m_user_repo;
 };

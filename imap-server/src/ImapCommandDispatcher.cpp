@@ -1,5 +1,6 @@
 #include "ImapCommandDispatcher.hpp"
 
+#include <algorithm>
 #include <sstream>
 #include <stdexcept>
 
@@ -414,8 +415,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					{
 						fetch_response += "FLAGS (";
 						if (msg.is_seen) fetch_response += "\\Seen ";
-						if (msg.is_starred) fetch_response += "\\Flagged ";
-						if (msg.is_important) fetch_response += "\\Important ";
+						if (msg.is_flagged) fetch_response += "\\Flagged ";
 
 						if (fetch_response.back() == ' ' && fetch_response.substr(fetch_response.length() - 2) != " (")
 						{
@@ -425,11 +425,11 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "INTERNALDATE") // db uses ISO format
 					{
-						fetch_response += "INTERNALDATE \"" + msg.created_at + "\" ";
+						fetch_response += "INTERNALDATE \"" + msg.internal_date + "\" ";
 					}
 					else if (item == "RFC822.SIZE")
 					{
-						fetch_response += "RFC822.SIZE " + std::to_string(msg.body.size()) + " ";
+						fetch_response += "RFC822.SIZE " + std::to_string(msg.size_bytes) + " ";
 					}
 					else if (item == "ENVELOPE")
 					{
@@ -448,39 +448,53 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 						std::string sender_email =
 							sender_user ? (sender_user->username + "@test.com") : "unknown@test.com";
 
+						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
+						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+												   [](Recipient rec) { return rec.type == RecipientType::To; });
+						auto rec_cc = std::find_if(all_receipients.begin(), all_receipients.end(),
+												   [](Recipient rec) { return rec.type == RecipientType::Cc; });
+						auto rec_bcc = std::find_if(all_receipients.begin(), all_receipients.end(),
+													[](Recipient rec) { return rec.type == RecipientType::Bcc; });
+
 						std::string env = "(";
-						env += "\"" + msg.created_at + "\" ";							// 1. Date
-						env += "\"" + msg.subject + "\" ";								// 2. Subject
-						env += format_address(sender_email) + " ";						// 3. From
-						env += format_address(sender_email) + " ";						// 4. Sender
-						env += format_address(sender_email) + " ";						// 5. Reply-To
-						env += format_address(msg.receiver) + " ";						// 6. To
-						env += "NIL ";													// 7. Cc
-						env += "NIL ";													// 8. Bcc
-						env += "NIL ";													// 9. In-Reply-To
-						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\""; // 10. Message-ID
+						env += "\"" + msg.internal_date + "\" ";   // 1. Date
+						env += "\"" + msg.subject.value() + "\" "; // 2. Subject
+						env += format_address(sender_email) + " "; // 3. From
+						env += format_address(sender_email) + " "; // 4. Sender
+						env += format_address(sender_email) + " "; // 5. Reply-To
+						env +=
+							(rec_to != all_receipients.end()) ? (format_address(rec_to->address) + " ") : ""; // 6. To
+						env +=
+							(rec_cc != all_receipients.end()) ? (format_address(rec_cc->address) + " ") : ""; // 7. Cc
+						env += (rec_bcc != all_receipients.end()) ? (format_address(rec_bcc->address) + " ")
+																  : "";						   // 8. Bcc
+						env += msg.in_reply_to.has_value() ? msg.in_reply_to.value() : "NIL "; // 9. In-Reply-To
+						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\"";		   // 10. Message-ID
 						env += ")";
 
 						fetch_response += "ENVELOPE " + env + " ";
 					}
 					else if (item == "BODY" || item == "RFC822" || item == "RFC822.TEXT")
 					{
-						fetch_response += item + " {" + std::to_string(msg.body.size()) + "}\r\n" + msg.body;
+						fetch_response += item + " {" + std::to_string(msg.size_bytes) + "}\r\n" + "" /*msg.body*/;
 					}
 					else if (item == "RFC822.HEADER")
 					{
+						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
+						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+												   [](Recipient rec) { return rec.type == RecipientType::To; });
 						auto sender_user = m_userRepo.findByID(msg.user_id);
 						std::string sender = sender_user ? sender_user->username : "unknown";
 						std::string header = "From: " + sender +
 											 "@test.com\r\n"
 											 "To: " +
-											 msg.receiver +
+											 ((rec_to != all_receipients.end()) ? ((rec_to->address) + " ") : "") +
 											 "\r\n"
 											 "Subject: " +
-											 msg.subject +
+											 (msg.subject.has_value() ? msg.subject.value() : "") +
 											 "\r\n"
 											 "Date: " +
-											 msg.created_at +
+											 msg.internal_date +
 											 "\r\n"
 											 "\r\n"; // empty line declares end of header
 
@@ -492,7 +506,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 						// as our schema doesn`t support them
 						fetch_response +=
 							"BODYSTRUCTURE (\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " +
-							std::to_string(msg.body.size()) + " 0) ";
+							std::to_string(msg.size_bytes) + " 0) ";
 					}
 					// MIME parts are not implemented/integrated yet
 				}
@@ -571,23 +585,15 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 						}
 						else if (flag == "\\Flagged")
 						{
-							m_messRepo.markStarred(selected_messages[i].id.value(), cmd.m_args[1][0] == '+');
-							selected_messages[i].is_starred = (cmd.m_args[1][0] == '+');
-						}
-						else if (flag == "\\Important")
-						{
-							// not standart RFC protocol
-							// either our design decision or simply mistake for taking 'starred'(flagged) as important
-							m_messRepo.markImportant(selected_messages[i].id.value(), cmd.m_args[1][0] == '+');
-							selected_messages[i].is_important = (cmd.m_args[1][0] == '+');
+							m_messRepo.markFlagged(selected_messages[i].id.value(), cmd.m_args[1][0] == '+');
+							selected_messages[i].is_flagged = (cmd.m_args[1][0] == '+');
 						}
 					}
 					if (!silence)
 					{
 						std::string flagsStr = "(FLAGS (";
 						if (selected_messages[i].is_seen) flagsStr += "\\Seen ";
-						if (selected_messages[i].is_starred) flagsStr += "\\Flagged ";
-						if (selected_messages[i].is_important) flagsStr += "\\Important ";
+						if (selected_messages[i].is_flagged) flagsStr += "\\Flagged ";
 
 						if (flagsStr.back() == ' ' && flagsStr.substr(flagsStr.length() - 2) != " (")
 						{
@@ -751,7 +757,7 @@ std::string ImapCommandDispatcher::HandleCopy(const ImapCommand& cmd)
 				{
 					// FIX: we should copy message to another folder,
 					// but repo only provides mechanism of moving message
-					m_messRepo.moveToFolder(msg.id.value(), folder_dest_opt->id);
+					m_messRepo.copy(msg.id.value(), folder_dest_opt->id.value());
 				}
 
 				response = Ok(cmd.m_tag, "Copy completed");
@@ -797,8 +803,7 @@ std::string ImapCommandDispatcher::HandleExpunge(const ImapCommand& cmd)
 
 		std::vector<std::pair<Message, int>> expunged_seq_nums;
 		std::copy_if(messages_indexes.begin(), messages_indexes.end(), std::back_inserter(expunged_seq_nums),
-					 [](const std::pair<Message, int>& msg_pair)
-					 { return msg_pair.first.status == MessageStatus::Deleted; });
+					 [](const std::pair<Message, int>& msg_pair) { return msg_pair.first.is_deleted; });
 
 		for (const auto& [mess, index] : expunged_seq_nums)
 		{
