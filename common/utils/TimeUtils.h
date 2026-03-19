@@ -6,7 +6,7 @@ namespace SmtpClient {
 class TimeUtils
 {
 public:
-	static std::string GetCurrentDate();
+	static std::string get_current_date();
 };
 
 } // namespace SmtpClient

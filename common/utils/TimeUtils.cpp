@@ -6,7 +6,7 @@
 
 namespace SmtpClient {
 
-std::string TimeUtils::GetCurrentDate()
+std::string TimeUtils::get_current_date()
 {
 	std::time_t now    = std::time(nullptr);
 	std::tm     tm_now = {};

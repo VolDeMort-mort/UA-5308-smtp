@@ -7,7 +7,7 @@ using namespace SmtpClient;
 
 TEST(TimeUtilsTest, Rfc2822FormatMatch)
 {
-	std::string date = TimeUtils::GetCurrentDate();
+	std::string date = TimeUtils::get_current_date();
 
 	// Pattern: Day, DD Mon YYYY HH:MM:SS +ZZZZ
 	// Example: Tue, 03 Mar 2026 21:10:00 +0200
@@ -18,7 +18,7 @@ TEST(TimeUtilsTest, Rfc2822FormatMatch)
 
 TEST(TimeUtilsTest, CheckValidStaticParts)
 {
-	std::string date = TimeUtils::GetCurrentDate();
+	std::string date = TimeUtils::get_current_date();
 
 	// Check if it starts with a valid day of week followed by a comma
 	std::string day = date.substr(0, 3);
@@ -37,7 +37,7 @@ TEST(TimeUtilsTest, CheckValidStaticParts)
 
 TEST(TimeUtilsTest, TimezoneFormat)
 {
-	std::string date = TimeUtils::GetCurrentDate();
+	std::string date = TimeUtils::get_current_date();
 
 	// The last 5 characters should be something like +0200
 	std::string tz = date.substr(date.length() - 5);

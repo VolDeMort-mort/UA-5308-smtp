@@ -74,7 +74,7 @@ bool MimeBuilder::ValidateEmail(const Email& email_data, Logger& logger)
 void MimeBuilder::AppendMainHeaders(const Email& email_data, std::string& out)
 {
 	out += "MIME-Version: 1.0\r\n";
-	out += "Date: " + TimeUtils::GetCurrentDate() + "\r\n";
+	out += "Date: " + TimeUtils::get_current_date() + "\r\n";
 
 	if (!email_data.subject.empty())
 		out += "Subject: " + MimeEncoder::EncodeHeader(email_data.subject, "\r\n\t") + "\r\n";
