@@ -350,6 +350,7 @@ bool MessageRepository::incrementNextUID(int64_t folder_id)
     return true;
 }
 
+// FIX: Dosn`t copy recipients along the message
 std::optional<Message> MessageRepository::copy(int64_t id, int64_t target_folder_id)
 {
     auto msg = m_message_dal.findByID(id);

@@ -623,7 +623,7 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 	std::string response = "";
 	if (cmd.m_args.size() != 1)
 	{
-		response = ImapResponse::Bad(cmd.m_tag, "Invalid parametrs number");
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid parameters number");
 	}
 	else
 	{
@@ -765,8 +765,6 @@ std::string ImapCommandDispatcher::HandleCopy(const ImapCommand& cmd)
 
 				for (const auto& msg : selected_messages)
 				{
-					// FIX: we should copy message to another folder,
-					// but repo only provides mechanism of moving message
 					m_messRepo.copy(msg.id.value(), folder_dest_opt->id.value());
 				}
 

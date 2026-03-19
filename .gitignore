@@ -1,3 +1,9 @@
 build/
 .cache/
 .vscode/
+data/*
+!data/README.md
+!data/mailboxes/
+data/mailboxes/*
+!data/mailboxes/README.md
+*.txt

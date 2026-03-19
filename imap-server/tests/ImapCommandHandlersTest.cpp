@@ -706,7 +706,7 @@ TEST_F(CmdHandlerTests, HandleCreate_MissingArgs)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "A001 BAD Invalid parametrs number\r\n";
+	std::string expected = "A001 BAD Invalid parameters number\r\n";
 	EXPECT_EQ(response, expected);
 }
 
