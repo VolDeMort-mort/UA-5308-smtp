@@ -49,7 +49,6 @@ std::string ImapParser::ElementParser::ParseElement()
 	char c = m_str[m_pos];
 	if (c == '"') return ParseQuoted();
 	if (c == '(') return ParseList();
-	if (c == '[') return ParseResponse();
 	if (c == '{') return ParseLiteral();
 
 	return ParseAtom();
@@ -217,7 +216,7 @@ std::string ImapParser::ElementParser::ParseAtom()
 	while (m_pos < m_str.size())
 	{
 		char c = m_str[m_pos];
-		if (c == ' ' || c == '(' || c == ')' || c == '[' || c == ']' || c == '"' || c == '{') break;
+		if (c == ' ' || c == '(' || c == ')' || c == '"' || c == '{') break;
 		++m_pos;
 	}
 

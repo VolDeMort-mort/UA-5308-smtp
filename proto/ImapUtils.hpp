@@ -4,6 +4,9 @@
 
 #include "Entity/Message.h"
 #include "ImapCommand.hpp"
+#include "MimeParser.h"
+
+class MessageRepository;
 
 namespace IMAP_UTILS
 {
@@ -30,5 +33,14 @@ std::string DateToIMAPInternal(const std::string& str);
 
 // should be moved to repository layer
 void SortMessagesByTimeDescending(std::vector<Message>& messages);
+
+std::optional<SmtpClient::Email> GetParsedEmail(const Message& msg, ILogger& logger);
+
+std::string BuildEnvelope(const Message& msg, const std::optional<SmtpClient::Email>& email_opt,
+						  MessageRepository& messRepo);
+
+std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClient::Email>& email_opt);
+
+std::string GetBodyContent(const Message& msg, const std::optional<SmtpClient::Email>& email_opt);
 
 } // namespace IMAP_UTILS

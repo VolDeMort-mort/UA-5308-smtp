@@ -419,6 +419,8 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				const auto& msg = selected_messages[i];
 				size_t seq_num = lists_ids[i];
 
+				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+
 				std::string fetch_response = "(";
 				for (const auto& item : expanded_items)
 				{
@@ -436,8 +438,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "INTERNALDATE")
 					{
-						std::string imap_date = IMAP_UTILS::DateToIMAPInternal(msg.internal_date);
-						fetch_response += "INTERNALDATE \"" + imap_date + "\" ";
+						fetch_response += "INTERNALDATE \"" + IMAP_UTILS::DateToIMAPInternal(msg.internal_date) + "\" ";
 					}
 					else if (item == "RFC822.SIZE")
 					{
@@ -445,83 +446,48 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "ENVELOPE")
 					{
-						// Format: ((name route mailbox host))
-						auto format_address = [](const std::string& email) -> std::string
-						{
-							if (email.empty() || email == "NIL") return "NIL";
-							auto at_pos = email.find('@');
-							std::string mailbox = (at_pos != std::string::npos) ? email.substr(0, at_pos) : email;
-							std::string host = (at_pos != std::string::npos) ? email.substr(at_pos + 1) : "unknown";
-							return "((\"\" NIL \"" + mailbox + "\" \"" + host + "\"))";
-						};
-
-						// asuming sender is owner of message
-						auto sender_user = m_userRepo.findByID(msg.user_id);
-						std::string sender_email =
-							sender_user ? (sender_user->username + "@test.com") : "unknown@test.com";
-
-						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
-						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
-												   [](Recipient rec) { return rec.type == RecipientType::To; });
-						auto rec_cc = std::find_if(all_receipients.begin(), all_receipients.end(),
-												   [](Recipient rec) { return rec.type == RecipientType::Cc; });
-						auto rec_bcc = std::find_if(all_receipients.begin(), all_receipients.end(),
-													[](Recipient rec) { return rec.type == RecipientType::Bcc; });
-
-						std::string env = "(";
-						env += "\"" + IMAP_UTILS::DateToIMAPInternal(msg.internal_date) + "\" "; // 1. Date
-						env += "\"" + msg.subject.value() + "\" ";								 // 2. Subject
-						env += format_address(sender_email) + " ";								 // 3. From
-						env += format_address(sender_email) + " ";								 // 4. Sender
-						env += format_address(sender_email) + " ";								 // 5. Reply-To
-						env += (rec_to != all_receipients.end()) ? (format_address(rec_to->address) + " ")
-																 : "NIL "; // 6. To
-						env += (rec_cc != all_receipients.end()) ? (format_address(rec_cc->address) + " ")
-																 : "NIL "; // 7. Cc
-						env += (rec_bcc != all_receipients.end()) ? (format_address(rec_bcc->address) + " ")
-																  : "NIL "; // 8. Bcc
-						env += msg.in_reply_to.has_value() ? ("<" + msg.in_reply_to.value() + "> ")
-														   : "NIL ";					// 9. In-Reply-To
-						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\""; // 10. Message-ID
-						env += ")";
-
-						fetch_response += "ENVELOPE " + env + " ";
+						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, email_opt, m_messRepo) + " ";
 					}
-					else if (item == "BODY" || item == "RFC822" || item == "RFC822.TEXT")
+					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
-						fetch_response += item + " {" + std::to_string(msg.size_bytes) + "}\r\n" + "" /*msg.body*/;
+						std::string body = IMAP_UTILS::GetBodyContent(msg, email_opt);
+						fetch_response += item + " {" + std::to_string(body.size()) + "}\r\n" + body + " ";
 					}
 					else if (item == "RFC822.HEADER")
 					{
-						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
-						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
-												   [](Recipient rec) { return rec.type == RecipientType::To; });
-						auto sender_user = m_userRepo.findByID(msg.user_id);
-						std::string sender = sender_user ? sender_user->username : "unknown";
-						std::string header = "From: " + sender +
-											 "@test.com\r\n"
-											 "To: " +
-											 ((rec_to != all_receipients.end()) ? ((rec_to->address) + " ") : "") +
-											 "\r\n"
-											 "Subject: " +
-											 (msg.subject.has_value() ? msg.subject.value() : "") +
-											 "\r\n"
-											 "Date: " +
-											 msg.internal_date +
-											 "\r\n"
-											 "\r\n"; // empty line declares end of header
-
+						std::string header;
+						if (email_opt)
+						{
+							header = "From: " + email_opt->sender + "\r\n" + "To: " + email_opt->recipient + "\r\n" +
+									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
+									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
+						}
+						else
+						{
+							auto sender_user = m_userRepo.findByID(msg.user_id);
+							std::string sender = sender_user ? sender_user->username : "unknown";
+							auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
+							auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+													   [](Recipient rec) { return rec.type == RecipientType::To; });
+							header = "From: " + sender + "@test.com\r\n" +
+									 "To: " + (rec_to != all_receipients.end() ? rec_to->address : "") + "\r\n" +
+									 "Subject: " + (msg.subject.has_value() ? msg.subject.value() : "") + "\r\n" +
+									 "Date: " + msg.internal_date + "\r\n" + "\r\n";
+						}
 						fetch_response += "RFC822.HEADER {" + std::to_string(header.size()) + "}\r\n" + header;
 					}
 					else if (item == "BODYSTRUCTURE")
 					{
-						// base structure with only one text/plain part, without attachments or nested multiparts,
-						// as our schema doesn`t support them
-						fetch_response +=
-							"BODYSTRUCTURE (\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " +
-							std::to_string(msg.size_bytes) + " 0) ";
+						fetch_response += "BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
 					}
-					// MIME parts are not implemented/integrated yet
+					else if (item == "BODY")
+					{
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+					}
+					else
+					{
+						throw std::invalid_argument("Invalid fetch attribute: " + item);
+					}
 				}
 
 				if (!fetch_response.empty() && fetch_response.back() == ' ')
@@ -534,6 +500,10 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 			}
 
 			response += ImapResponse::Ok(cmd.m_tag, "Fetch completed");
+		}
+		catch (const std::invalid_argument& ex)
+		{
+			response = ImapResponse::Bad(cmd.m_tag, ex.what());
 		}
 		catch (const std::exception& ex)
 		{
@@ -945,6 +915,8 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 
 				const auto& msg = msg_opt.value();
 
+				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+
 				size_t seq_num = 0;
 				for (size_t i = 0; i < all_messages.size(); ++i)
 				{
@@ -980,72 +952,47 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					}
 					else if (item == "ENVELOPE")
 					{
-						auto format_address = [](const std::string& email) -> std::string
-						{
-							if (email.empty() || email == "NIL") return "NIL";
-							auto at_pos = email.find('@');
-							std::string mailbox = (at_pos != std::string::npos) ? email.substr(0, at_pos) : email;
-							std::string host = (at_pos != std::string::npos) ? email.substr(at_pos + 1) : "unknown";
-							return "((\"\" NIL \"" + mailbox + "\" \"" + host + "\"))";
-						};
-
-						auto sender_user = m_userRepo.findByID(msg.user_id);
-						std::string sender_email =
-							sender_user ? (sender_user->username + "@test.com") : "unknown@test.com";
-
-						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
-						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
-												   [](Recipient rec) { return rec.type == RecipientType::To; });
-						auto rec_cc = std::find_if(all_receipients.begin(), all_receipients.end(),
-												   [](Recipient rec) { return rec.type == RecipientType::Cc; });
-						auto rec_bcc = std::find_if(all_receipients.begin(), all_receipients.end(),
-													[](Recipient rec) { return rec.type == RecipientType::Bcc; });
-
-						std::string env = "(";
-						env += "\"" + IMAP_UTILS::DateToIMAPInternal(msg.internal_date) + "\" ";
-						env += "\"" + (msg.subject.value_or("")) + "\" ";
-						env += format_address(sender_email) + " ";
-						env += format_address(sender_email) + " ";
-						env += format_address(sender_email) + " ";
-						env += (rec_to != all_receipients.end()) ? (format_address(rec_to->address) + " ") : "NIL ";
-						env += (rec_cc != all_receipients.end()) ? (format_address(rec_cc->address) + " ") : "NIL ";
-						env += (rec_bcc != all_receipients.end()) ? (format_address(rec_bcc->address) + " ") : "NIL ";
-						env += msg.in_reply_to.has_value() ? ("<" + msg.in_reply_to.value() + "> ") : "NIL ";
-						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\"";
-						env += ")";
-
-						fetch_response += "ENVELOPE " + env + " ";
+						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, email_opt, m_messRepo) + " ";
 					}
-					else if (item == "BODY" || item == "RFC822" || item == "RFC822.TEXT")
+					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
-						fetch_response += item + " {" + std::to_string(msg.size_bytes) + "}\r\n" + "";
+						std::string body = IMAP_UTILS::GetBodyContent(msg, email_opt);
+						fetch_response += item + " {" + std::to_string(body.size()) + "}\r\n" + body + " ";
 					}
 					else if (item == "RFC822.HEADER")
 					{
-						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
-						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
-												   [](Recipient rec) { return rec.type == RecipientType::To; });
-						auto sender_user = m_userRepo.findByID(msg.user_id);
-						std::string sender = sender_user ? sender_user->username : "unknown";
-						std::string header = "From: " + sender +
-											 "@test.com\r\n"
-											 "To: " +
-											 ((rec_to != all_receipients.end()) ? rec_to->address : "") +
-											 "\r\n"
-											 "Subject: " +
-											 (msg.subject.value_or("")) +
-											 "\r\n"
-											 "Date: " +
-											 msg.internal_date +
-											 "\r\n"
-											 "\r\n";
+						std::string header;
+						if (email_opt)
+						{
+							header = "From: " + email_opt->sender + "\r\n" + "To: " + email_opt->recipient + "\r\n" +
+									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
+									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
+						}
+						else
+						{
+							auto sender_user = m_userRepo.findByID(msg.user_id);
+							std::string sender = sender_user ? sender_user->username : "unknown";
+							auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
+							auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+													   [](Recipient rec) { return rec.type == RecipientType::To; });
+							header = "From: " + sender + "@test.com\r\n" +
+									 "To: " + (rec_to != all_receipients.end() ? rec_to->address : "") + "\r\n" +
+									 "Subject: " + (msg.subject.has_value() ? msg.subject.value() : "") + "\r\n" +
+									 "Date: " + msg.internal_date + "\r\n" + "\r\n";
+						}
 						fetch_response += "RFC822.HEADER {" + std::to_string(header.size()) + "}\r\n" + header;
 					}
 					else if (item == "BODYSTRUCTURE")
 					{
-						fetch_response +=
-							"BODYSTRUCTURE (\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " +
-							std::to_string(msg.size_bytes) + " 0) ";
+						fetch_response += "BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+					}
+					else if (item == "BODY")
+					{
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+					}
+					else
+					{
+						throw std::invalid_argument("Invalid fetch attribute: " + item);
 					}
 				}
 
@@ -1059,6 +1006,10 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 			}
 
 			response += ImapResponse::Ok(cmd.m_tag, "Uid Fetch completed");
+		}
+		catch (const std::invalid_argument& ex)
+		{
+			response = ImapResponse::Bad(cmd.m_tag, ex.what());
 		}
 		catch (const std::exception& ex)
 		{

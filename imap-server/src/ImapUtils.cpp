@@ -1,9 +1,14 @@
 #include "ImapUtils.hpp"
 
 #include <algorithm>
+#include <fstream>
 #include <numeric>
 #include <sstream>
 #include <unordered_map>
+
+#include "Entity/Recipient.h"
+#include "MimeBuilder.h"
+#include "Repository/MessageRepository.h"
 
 namespace IMAP_UTILS
 {
@@ -261,6 +266,137 @@ std::string DateToIMAPInternal(const std::string& str)
 	return (day < 10 ? "0" : "") + std::to_string(day) + "-" + months[month - 1] + "-" + std::to_string(year) + " " +
 		   (hour < 10 ? "0" : "") + std::to_string(hour) + ":" + (minute < 10 ? "0" : "") + std::to_string(minute) +
 		   ":" + (second < 10 ? "0" : "") + std::to_string(second) + " +0000";
+}
+
+std::optional<SmtpClient::Email> GetParsedEmail(const Message& msg, ILogger& logger)
+{
+	std::ifstream file(msg.raw_file_path);
+	if (!file.is_open())
+	{
+		return std::nullopt;
+	}
+	std::string raw_mime{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+
+	SmtpClient::Email email;
+	if (!SmtpClient::MimeParser::ParseEmail(raw_mime, email, logger))
+	{
+		return std::nullopt;
+	}
+
+	return email;
+}
+
+// Format: ((name route mailbox host))
+std::string FormatAddress(const std::string& raw_email)
+{
+	if (raw_email.empty() || raw_email == "NIL") return "NIL";
+
+	std::string personal_name = "NIL";
+	std::string email_part = raw_email;
+
+	auto bracket_start = raw_email.find('<');
+	auto bracket_end = raw_email.find('>');
+
+	if (bracket_start != std::string::npos && bracket_end != std::string::npos && bracket_end > bracket_start)
+	{
+		if (bracket_start > 0)
+		{
+			std::string name = raw_email.substr(0, bracket_start);
+			auto name_end = name.find_last_not_of(" \t");
+			if (name_end != std::string::npos)
+			{
+				name = name.substr(0, name_end + 1);
+				if (name.front() == '"' && name.back() == '"' && name.length() > 1)
+				{
+					name = name.substr(1, name.length() - 2);
+				}
+				personal_name = "\"" + name + "\"";
+			}
+		}
+		email_part = raw_email.substr(bracket_start + 1, bracket_end - bracket_start - 1);
+	}
+
+	auto at_pos = email_part.find('@');
+	std::string mailbox = (at_pos != std::string::npos) ? email_part.substr(0, at_pos) : email_part;
+	std::string host = (at_pos != std::string::npos) ? email_part.substr(at_pos + 1) : "unknown";
+
+	return "(" + personal_name + " NIL \"" + mailbox + "\" \"" + host + "\")";
+}
+
+std::string BuildEnvelope(const Message& msg, const std::optional<SmtpClient::Email>& email_opt,
+						  MessageRepository& messRepo)
+{
+	std::string sender_email = email_opt ? email_opt->sender : "";
+	std::string subject = email_opt ? email_opt->subject : msg.subject.value_or("");
+	std::string message_id = email_opt ? email_opt->message_id : ("<" + std::to_string(msg.id.value()) + "@test.com>");
+	std::string in_reply_to = email_opt ? email_opt->in_reply_to : msg.in_reply_to.value_or("NIL");
+	std::string date = email_opt ? email_opt->date : msg.internal_date;
+
+	auto all_receipients = messRepo.findRecipientsByMessage(msg.id.value());
+	auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+							   [](Recipient rec) { return rec.type == RecipientType::To; });
+	auto rec_cc = std::find_if(all_receipients.begin(), all_receipients.end(),
+							   [](Recipient rec) { return rec.type == RecipientType::Cc; });
+	auto rec_bcc = std::find_if(all_receipients.begin(), all_receipients.end(),
+								[](Recipient rec) { return rec.type == RecipientType::Bcc; });
+
+	std::string env = "(";
+	env += "\"" + (email_opt ? date : DateToEmlDate(date)) + "\" ";
+	env += "\"" + subject + "\" ";
+	env += FormatAddress(sender_email) + " ";
+	env += FormatAddress(sender_email) + " ";
+	env += FormatAddress(sender_email) + " ";
+	env += (rec_to != all_receipients.end()) ? (FormatAddress(rec_to->address) + " ") : "NIL ";
+	env += (rec_cc != all_receipients.end()) ? (FormatAddress(rec_cc->address) + " ") : "NIL ";
+	env += (rec_bcc != all_receipients.end()) ? (FormatAddress(rec_bcc->address) + " ") : "NIL ";
+	env += (!in_reply_to.empty() && in_reply_to != "NIL") ? ("<" + in_reply_to + "> ") : "NIL ";
+	env += "\"" + message_id + "\"";
+	env += ")";
+	return env;
+}
+
+std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClient::Email>& email_opt)
+{
+	if (email_opt && email_opt->HasAttachments())
+	{
+		std::string boundary = SmtpClient::MimeBuilder::GenerateBoundary();
+		std::string bs = "((\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
+		bs += std::to_string(msg.size_bytes) + " 0) ";
+
+		for (const auto& att : email_opt->attachments)
+		{
+			bs += "(\"application\" \"octet-stream\" (\"name\" \"" + att.file_name + "\") NIL NIL \"base64\" ";
+			bs += std::to_string(att.file_size) + " 0) ";
+		}
+
+		bs += "\"multipart/mixed\" (\"boundary\" \"" + boundary + "\") NIL NIL)";
+		return bs;
+	}
+	else if (email_opt && email_opt->HasHtml())
+	{
+		std::string boundary = SmtpClient::MimeBuilder::GenerateBoundary();
+		std::string bs = "((\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
+		bs += std::to_string(email_opt->plain_text.size()) + " 0) ";
+		bs += "(\"text\" \"html\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
+		bs += std::to_string(email_opt->html_text.size()) + " 0) ";
+		bs += "\"multipart/alternative\" (\"boundary\" \"" + boundary + "\") NIL NIL)";
+		return bs;
+	}
+	else
+	{
+		size_t body_size = email_opt ? email_opt->plain_text.size() : msg.size_bytes;
+		return "(\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " + std::to_string(body_size) + " 0)";
+	}
+}
+
+std::string GetBodyContent(const Message& msg, const std::optional<SmtpClient::Email>& email_opt)
+{
+	if (email_opt)
+	{
+		if (!email_opt->plain_text.empty()) return email_opt->plain_text;
+		if (!email_opt->html_text.empty()) return email_opt->html_text;
+	}
+	return "";
 }
 
 } // namespace IMAP_UTILS
