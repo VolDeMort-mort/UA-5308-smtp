@@ -56,7 +56,7 @@ TEST(ImapResponseTest, Capability)
 TEST(ImapResponseTest, FlagsDefault)
 {
 	auto result = Flags();
-	EXPECT_EQ(result, "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Recent)\r\n");
+	EXPECT_EQ(result, "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)\r\n");
 }
 
 TEST(ImapResponseTest, FlagsCustom)

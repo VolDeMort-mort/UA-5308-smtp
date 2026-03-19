@@ -1,6 +1,7 @@
 #include "ImapUtils.hpp"
 
 #include <gtest/gtest.h>
+#include <stdexcept>
 
 #include "Entity/Message.h"
 
@@ -267,4 +268,143 @@ TEST(ImapUtilsTest, SortMessagesByTimeDescending_Single)
 	IMAP_UTILS::SortMessagesByTimeDescending(single_msg);
 	ASSERT_EQ(single_msg.size(), 1);
 	EXPECT_EQ(single_msg[0].internal_date, "2026-03-01 10:00:00");
+}
+
+TEST(ImapUtilsTest, DateToISO_EmptyString)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate(""), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_ValidDate_January)
+{
+	auto result = IMAP_UTILS::DateToEmlDate("2025-01-15 14:30:45");
+	EXPECT_EQ(result, "Wed, 15 Jan 2025 14:30:45 +0000");
+}
+
+TEST(ImapUtilsTest, DateToISO_ValidDate_December)
+{
+	auto result = IMAP_UTILS::DateToEmlDate("2025-12-25 00:00:00");
+	EXPECT_EQ(result, "Thu, 25 Dec 2025 00:00:00 +0000");
+}
+
+TEST(ImapUtilsTest, DateToISO_ValidDate_FebruaryLeapYear)
+{
+	auto result = IMAP_UTILS::DateToEmlDate("2024-02-29 23:59:59");
+	EXPECT_EQ(result, "Thu, 29 Feb 2024 23:59:59 +0000");
+}
+
+TEST(ImapUtilsTest, DateToISO_ValidDate_Sunday)
+{
+	auto result = IMAP_UTILS::DateToEmlDate("2025-06-15 12:00:00");
+	EXPECT_EQ(result, "Sun, 15 Jun 2025 12:00:00 +0000");
+}
+
+TEST(ImapUtilsTest, DateToISO_ValidDate_Monday)
+{
+	auto result = IMAP_UTILS::DateToEmlDate("2025-06-16 08:30:00");
+	EXPECT_EQ(result, "Mon, 16 Jun 2025 08:30:00 +0000");
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidMonth_Zero)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-00-15 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidMonth_Thirteen)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-13-15 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidDay_Zero)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-01-00 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidDay_ThirtyTwo)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-01-32 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidHour)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-01-15 25:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidMinute)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-01-15 14:60:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidSecond)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-01-15 14:30:60"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_InvalidFormat)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("not-a-date"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToISO_MalformedInput)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToEmlDate("2025-01-15"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_EmptyString)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal(""), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_ValidDate_Basic)
+{
+	auto result = IMAP_UTILS::DateToIMAPInternal("2025-01-15 14:30:45");
+	EXPECT_EQ(result, "15-Jan-2025 14:30:45 +0000");
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_ValidDate_December)
+{
+	auto result = IMAP_UTILS::DateToIMAPInternal("2025-12-25 00:00:00");
+	EXPECT_EQ(result, "25-Dec-2025 00:00:00 +0000");
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_ValidDate_SingleDigitDay)
+{
+	auto result = IMAP_UTILS::DateToIMAPInternal("2025-06-05 08:30:00");
+	EXPECT_EQ(result, "05-Jun-2025 08:30:00 +0000");
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_ValidDate_SingleDigitMonth)
+{
+	auto result = IMAP_UTILS::DateToIMAPInternal("2025-06-15 08:30:00");
+	EXPECT_EQ(result, "15-Jun-2025 08:30:00 +0000");
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_InvalidMonth_Zero)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal("2025-00-15 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_InvalidMonth_Thirteen)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal("2025-13-15 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_InvalidDay_Zero)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal("2025-01-00 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_InvalidDay_ThirtyTwo)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal("2025-01-32 14:30:45"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_InvalidFormat)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal("not-a-date"), std::runtime_error);
+}
+
+TEST(ImapUtilsTest, DateToIMAPInternal_MalformedInput)
+{
+	EXPECT_THROW(IMAP_UTILS::DateToIMAPInternal("2025-01-15"), std::runtime_error);
 }
