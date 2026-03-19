@@ -259,8 +259,50 @@ ImapCommand ImapParser::Parse(const std::string& line)
 		argsStr = rest.substr(argStart + 1);
 	}
 
-	cmd.m_args = ParseArguments(argsStr);
-	cmd.m_type = IMAP_UTILS::StringToCommandType(commandStr);
+	std::string upperCommand = IMAP_UTILS::ToUpper(commandStr);
+
+	if (upperCommand == "UID")
+	{
+		cmd.m_type = IMAP_UTILS::StringToCommandType("UID");
+		IMAP_UTILS::TrimParentheses(argsStr);
+		std::string uidArgs = argsStr;
+		size_t spaceInUidArgs = uidArgs.find(' ');
+		if (spaceInUidArgs != std::string::npos)
+		{
+			std::string subCommand = uidArgs.substr(0, spaceInUidArgs);
+			std::string restArgs = uidArgs.substr(spaceInUidArgs + 1);
+
+			std::string upperSub = IMAP_UTILS::ToUpper(subCommand);
+			if (upperSub == "FETCH")
+			{
+				cmd.m_type = ImapCommandType::UidFetch;
+				cmd.m_args = ParseArguments(restArgs);
+			}
+			else if (upperSub == "STORE")
+			{
+				cmd.m_type = ImapCommandType::UidStore;
+				cmd.m_args = ParseArguments(restArgs);
+			}
+			else if (upperSub == "COPY")
+			{
+				cmd.m_type = ImapCommandType::UidCopy;
+				cmd.m_args = ParseArguments(restArgs);
+			}
+			else
+			{
+				cmd.m_type = ImapCommandType::Unknown;
+			}
+		}
+		else
+		{
+			cmd.m_type = ImapCommandType::Unknown;
+		}
+	}
+	else
+	{
+		cmd.m_args = ParseArguments(argsStr);
+		cmd.m_type = IMAP_UTILS::StringToCommandType(commandStr);
+	}
 
 	return cmd;
 }

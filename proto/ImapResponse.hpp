@@ -31,7 +31,7 @@ inline std::string Capability()
 		   "EXPUNGE\r\n";
 }
 
-inline std::string Flags(const std::string& flagList = "(\\Seen \\Answered \\Flagged \\Draft \\Recent)")
+inline std::string Flags(const std::string& flagList = "(\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)") // RFC fix: added \\Deleted
 {
 	return "* FLAGS " + flagList + "\r\n";
 }

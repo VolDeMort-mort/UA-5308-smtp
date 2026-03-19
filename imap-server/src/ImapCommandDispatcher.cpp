@@ -28,6 +28,13 @@ ImapCommandDispatcher::ImapCommandDispatcher(ILogger& logger, UserRepository& us
 		{ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
 		{ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
 		{ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
+		{ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
+		{ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
+		{ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
+		{ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
+		{ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
+		{ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
+		{ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
 	};
 }
 
@@ -167,12 +174,23 @@ std::string ImapCommandDispatcher::HandleSelect(const ImapCommand& cmd)
 			m_currentMailbox.m_name = folder_opt->name;
 			auto all_messages = m_messRepo.findByFolder(folder_opt->id.value());
 			m_currentMailbox.m_exists = all_messages.size();
+			// TODO: Call m_messRepo.clearRecentByFolder(folder_opt->id.value()) before fetching messages
 			m_currentMailbox.m_recent = std::count_if(all_messages.begin(), all_messages.end(),
-													  [](const Message& msg) { return !msg.is_seen; });
+													  [](const Message& msg) { return msg.is_recent; });
 			m_currentMailbox.m_id = folder_opt->id;
 
-			response = ImapResponse::Flags() + ImapResponse::Exists(m_currentMailbox.m_exists) +
-					   ImapResponse::Recent(m_currentMailbox.m_recent);
+			size_t unseen_count = std::count_if(all_messages.begin(), all_messages.end(),
+												[](const Message& msg) { return !msg.is_seen; });
+			int64_t uidnext = folder_opt->next_uid;
+			int64_t uidvalidity = folder_opt->id.value();
+
+			response = ImapResponse::Flags();
+			response += "* OK [UIDVALIDITY " + std::to_string(uidvalidity) + "]\r\n";
+			response += "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent \\*)]\r\n";
+			response += "* OK [UNSEEN " + std::to_string(unseen_count) + "]\r\n";
+			response += ImapResponse::Exists(m_currentMailbox.m_exists);
+			response += "* OK [UIDNEXT " + std::to_string(uidnext) + "]\r\n";
+			response += ImapResponse::Recent(m_currentMailbox.m_recent);
 			response += ImapResponse::Ok(cmd.m_tag, "[READ-WRITE] Select completed");
 			m_state = SessionState::Selected;
 			m_logger.Log(PROD, "ImapCommandDispatcher::HandleSelect - Mailbox selected: " + m_currentMailbox.m_name);
@@ -241,7 +259,10 @@ std::string ImapCommandDispatcher::HandleLsub(const ImapCommand& cmd)
 	else
 	{
 		auto folders = m_messRepo.findFoldersByUser(m_authenticatedUserID.value());
-		for (const auto& folder : folders)
+		std::vector<Folder> subscribed_folders;
+		std::copy_if(folders.begin(), folders.end(), std::back_inserter(subscribed_folders),
+					 [](Folder& folder) { return folder.is_subscribed; });
+		for (const auto& folder : subscribed_folders)
 		{
 			response += ImapResponse::Lsub('/', folder.name, "HasNoChildren");
 		}
@@ -282,10 +303,9 @@ std::string ImapCommandDispatcher::HandleStatus(const ImapCommand& cmd)
 				}
 				else if (req == "RECENT")
 				{
-					// recent is not implemented yet, so we return the count of unseen messages for now
 					success = true;
 					size_t recent = std::count_if(all_messages.begin(), all_messages.end(),
-												  [](const Message& msg) { return !msg.is_seen; });
+												  [](const Message& msg) { return msg.is_recent; });
 					response += "RECENT " + std::to_string(recent) + " ";
 				}
 				else if (req == "UNSEEN")
@@ -404,19 +424,20 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				{
 					if (item == "FLAGS")
 					{
+						// \Recent is read-only per RFC and not settable by client
 						fetch_response += "FLAGS (";
 						if (msg.is_seen) fetch_response += "\\Seen ";
+						if (msg.is_deleted) fetch_response += "\\Deleted ";
+						if (msg.is_draft) fetch_response += "\\Draft ";
+						if (msg.is_answered) fetch_response += "\\Answered ";
 						if (msg.is_flagged) fetch_response += "\\Flagged ";
-
-						if (fetch_response.back() == ' ' && fetch_response.substr(fetch_response.length() - 2) != " (")
-						{
-							fetch_response.pop_back(); // removing trailing space
-						}
+						if (fetch_response.back() == ' ') fetch_response.pop_back();
 						fetch_response += ") ";
 					}
-					else if (item == "INTERNALDATE") // db uses ISO format
+					else if (item == "INTERNALDATE")
 					{
-						fetch_response += "INTERNALDATE \"" + msg.internal_date + "\" ";
+						std::string imap_date = IMAP_UTILS::DateToIMAPInternal(msg.internal_date);
+						fetch_response += "INTERNALDATE \"" + imap_date + "\" ";
 					}
 					else if (item == "RFC822.SIZE")
 					{
@@ -448,19 +469,20 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 													[](Recipient rec) { return rec.type == RecipientType::Bcc; });
 
 						std::string env = "(";
-						env += "\"" + msg.internal_date + "\" ";   // 1. Date
-						env += "\"" + msg.subject.value() + "\" "; // 2. Subject
-						env += format_address(sender_email) + " "; // 3. From
-						env += format_address(sender_email) + " "; // 4. Sender
-						env += format_address(sender_email) + " "; // 5. Reply-To
-						env +=
-							(rec_to != all_receipients.end()) ? (format_address(rec_to->address) + " ") : ""; // 6. To
-						env +=
-							(rec_cc != all_receipients.end()) ? (format_address(rec_cc->address) + " ") : ""; // 7. Cc
+						env += "\"" + IMAP_UTILS::DateToIMAPInternal(msg.internal_date) + "\" "; // 1. Date
+						env += "\"" + msg.subject.value() + "\" ";								 // 2. Subject
+						env += format_address(sender_email) + " ";								 // 3. From
+						env += format_address(sender_email) + " ";								 // 4. Sender
+						env += format_address(sender_email) + " ";								 // 5. Reply-To
+						env += (rec_to != all_receipients.end()) ? (format_address(rec_to->address) + " ")
+																 : "NIL "; // 6. To
+						env += (rec_cc != all_receipients.end()) ? (format_address(rec_cc->address) + " ")
+																 : "NIL "; // 7. Cc
 						env += (rec_bcc != all_receipients.end()) ? (format_address(rec_bcc->address) + " ")
-																  : "";						   // 8. Bcc
-						env += msg.in_reply_to.has_value() ? msg.in_reply_to.value() : "NIL "; // 9. In-Reply-To
-						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\"";		   // 10. Message-ID
+																  : "NIL "; // 8. Bcc
+						env += msg.in_reply_to.has_value() ? ("<" + msg.in_reply_to.value() + "> ")
+														   : "NIL ";					// 9. In-Reply-To
+						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\""; // 10. Message-ID
 						env += ")";
 
 						fetch_response += "ENVELOPE " + env + " ";
@@ -566,29 +588,24 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 			{
 				for (size_t i = 0; i < selected_messages.size(); ++i)
 				{
-					for (const auto& flag : flags)
+					auto prefixed_flags = flags;
+					for (auto& f : prefixed_flags)
 					{
-						if (flag == "\\Seen")
-						{
-							m_messRepo.markSeen(selected_messages[i].id.value(), cmd.m_args[1][0] == '+');
-							selected_messages[i].is_seen = (cmd.m_args[1][0] == '+');
-						}
-						else if (flag == "\\Flagged")
-						{
-							m_messRepo.markFlagged(selected_messages[i].id.value(), cmd.m_args[1][0] == '+');
-							selected_messages[i].is_flagged = (cmd.m_args[1][0] == '+');
-						}
+						f = cmd.m_args[1][0] + f;
 					}
+					m_messRepo.setFlags(selected_messages[i].id.value(), prefixed_flags);
+
 					if (!silence)
 					{
+						auto updated_msg = m_messRepo.findByID(selected_messages[i].id.value());
 						std::string flagsStr = "(FLAGS (";
-						if (selected_messages[i].is_seen) flagsStr += "\\Seen ";
-						if (selected_messages[i].is_flagged) flagsStr += "\\Flagged ";
-
-						if (flagsStr.back() == ' ' && flagsStr.substr(flagsStr.length() - 2) != " (")
-						{
-							flagsStr.pop_back();
-						}
+						if (updated_msg && updated_msg->is_seen) flagsStr += "\\Seen ";
+						if (updated_msg && updated_msg->is_deleted) flagsStr += "\\Deleted ";
+						if (updated_msg && updated_msg->is_draft) flagsStr += "\\Draft ";
+						if (updated_msg && updated_msg->is_answered) flagsStr += "\\Answered ";
+						if (updated_msg && updated_msg->is_flagged) flagsStr += "\\Flagged ";
+						if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
+						if (flagsStr.back() == ' ') flagsStr.pop_back();
 						flagsStr += "))";
 						response += ImapResponse::Fetch(lists_ids[i], flagsStr);
 					}
@@ -596,7 +613,32 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 			}
 			else
 			{
-				// repo doesn`t support setting flags directly, so we ignore this case for now
+				for (size_t i = 0; i < selected_messages.size(); ++i)
+				{
+					std::vector<std::string> clean_flags;
+					for (const auto& f : flags)
+					{
+						std::string clean = f;
+						if (!clean.empty() && (clean[0] == '+' || clean[0] == '-')) clean = clean.substr(1);
+						clean_flags.push_back(clean);
+					}
+					m_messRepo.setFlags(selected_messages[i].id.value(), clean_flags);
+
+					if (!silence)
+					{
+						auto updated_msg = m_messRepo.findByID(selected_messages[i].id.value());
+						std::string flagsStr = "(FLAGS (";
+						if (updated_msg && updated_msg->is_seen) flagsStr += "\\Seen ";
+						if (updated_msg && updated_msg->is_deleted) flagsStr += "\\Deleted ";
+						if (updated_msg && updated_msg->is_draft) flagsStr += "\\Draft ";
+						if (updated_msg && updated_msg->is_answered) flagsStr += "\\Answered ";
+						if (updated_msg && updated_msg->is_flagged) flagsStr += "\\Flagged ";
+						if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
+						if (flagsStr.back() == ' ') flagsStr.pop_back();
+						flagsStr += "))";
+						response += ImapResponse::Fetch(lists_ids[i], flagsStr);
+					}
+				}
 			}
 
 			response += ImapResponse::Ok(cmd.m_tag, "Store completed");
@@ -638,7 +680,7 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 		else
 		{
 			m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
-			response = ImapResponse::Bad(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+			response = ImapResponse::No(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
 		}
 	}
 
@@ -664,6 +706,10 @@ std::string ImapCommandDispatcher::HandleDelete(const ImapCommand& cmd)
 		if (!folder_opt.has_value())
 		{
 			response = ImapResponse::Bad(cmd.m_tag, "No such folder");
+		}
+		else if (folder_opt->name == "INBOX")
+		{
+			response = ImapResponse::No(cmd.m_tag, "Can`t delete INBOX folder");
 		}
 		else
 		{
@@ -834,5 +880,422 @@ std::string ImapCommandDispatcher::HandleExpunge(const ImapCommand& cmd)
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleExpunge - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleExpunge - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUidFetch - In: tag=" + cmd.m_tag + ", args=[" +
+							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUidFetch - Start");
+
+	std::string response = "";
+	if (m_state != SessionState::Selected)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
+	}
+	else if (cmd.m_args.size() < 2)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "Missing arguments");
+	}
+	else
+	{
+		try
+		{
+			auto uids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], INT64_MAX);
+			auto all_messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
+			auto data_items_str = IMAP_UTILS::TrimParentheses(cmd.m_args[1]);
+			auto data_items = IMAP_UTILS::SplitArgs(data_items_str);
+
+			std::vector<std::string> expanded_items;
+			for (const auto& item : data_items)
+			{
+				std::string upper_item = IMAP_UTILS::ToUpper(item);
+				if (upper_item == "ALL")
+				{
+					expanded_items.push_back("FLAGS");
+					expanded_items.push_back("INTERNALDATE");
+					expanded_items.push_back("RFC822.SIZE");
+					expanded_items.push_back("ENVELOPE");
+				}
+				else if (upper_item == "FAST")
+				{
+					expanded_items.push_back("FLAGS");
+					expanded_items.push_back("INTERNALDATE");
+					expanded_items.push_back("RFC822.SIZE");
+				}
+				else if (upper_item == "FULL")
+				{
+					expanded_items.push_back("FLAGS");
+					expanded_items.push_back("INTERNALDATE");
+					expanded_items.push_back("RFC822.SIZE");
+					expanded_items.push_back("ENVELOPE");
+					expanded_items.push_back("BODY");
+				}
+				else
+				{
+					expanded_items.push_back(upper_item);
+				}
+			}
+
+			for (int64_t uid : uids)
+			{
+				auto msg_opt = m_messRepo.findByUID(m_currentMailbox.m_id.value(), uid);
+				if (!msg_opt.has_value()) continue;
+
+				const auto& msg = msg_opt.value();
+
+				size_t seq_num = 0;
+				for (size_t i = 0; i < all_messages.size(); ++i)
+				{
+					if (all_messages[i].uid == uid)
+					{
+						seq_num = i + 1; // sequence numbers are 1-based
+						break;
+					}
+				}
+
+				std::string fetch_response = "(UID " + std::to_string(msg.uid) + " ";
+				for (const auto& item : expanded_items)
+				{
+					if (item == "FLAGS")
+					{
+						// \Recent is read-only per RFC and not settable by client
+						fetch_response += "FLAGS (";
+						if (msg.is_seen) fetch_response += "\\Seen ";
+						if (msg.is_deleted) fetch_response += "\\Deleted ";
+						if (msg.is_draft) fetch_response += "\\Draft ";
+						if (msg.is_answered) fetch_response += "\\Answered ";
+						if (msg.is_flagged) fetch_response += "\\Flagged ";
+						if (fetch_response.back() == ' ') fetch_response.pop_back();
+						fetch_response += ") ";
+					}
+					else if (item == "INTERNALDATE")
+					{
+						fetch_response += "INTERNALDATE \"" + IMAP_UTILS::DateToIMAPInternal(msg.internal_date) + "\" ";
+					}
+					else if (item == "RFC822.SIZE")
+					{
+						fetch_response += "RFC822.SIZE " + std::to_string(msg.size_bytes) + " ";
+					}
+					else if (item == "ENVELOPE")
+					{
+						auto format_address = [](const std::string& email) -> std::string
+						{
+							if (email.empty() || email == "NIL") return "NIL";
+							auto at_pos = email.find('@');
+							std::string mailbox = (at_pos != std::string::npos) ? email.substr(0, at_pos) : email;
+							std::string host = (at_pos != std::string::npos) ? email.substr(at_pos + 1) : "unknown";
+							return "((\"\" NIL \"" + mailbox + "\" \"" + host + "\"))";
+						};
+
+						auto sender_user = m_userRepo.findByID(msg.user_id);
+						std::string sender_email =
+							sender_user ? (sender_user->username + "@test.com") : "unknown@test.com";
+
+						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
+						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+												   [](Recipient rec) { return rec.type == RecipientType::To; });
+						auto rec_cc = std::find_if(all_receipients.begin(), all_receipients.end(),
+												   [](Recipient rec) { return rec.type == RecipientType::Cc; });
+						auto rec_bcc = std::find_if(all_receipients.begin(), all_receipients.end(),
+													[](Recipient rec) { return rec.type == RecipientType::Bcc; });
+
+						std::string env = "(";
+						env += "\"" + IMAP_UTILS::DateToIMAPInternal(msg.internal_date) + "\" ";
+						env += "\"" + (msg.subject.value_or("")) + "\" ";
+						env += format_address(sender_email) + " ";
+						env += format_address(sender_email) + " ";
+						env += format_address(sender_email) + " ";
+						env += (rec_to != all_receipients.end()) ? (format_address(rec_to->address) + " ") : "NIL ";
+						env += (rec_cc != all_receipients.end()) ? (format_address(rec_cc->address) + " ") : "NIL ";
+						env += (rec_bcc != all_receipients.end()) ? (format_address(rec_bcc->address) + " ") : "NIL ";
+						env += msg.in_reply_to.has_value() ? ("<" + msg.in_reply_to.value() + "> ") : "NIL ";
+						env += "\"<" + std::to_string(msg.id.value()) + "@test.com>\"";
+						env += ")";
+
+						fetch_response += "ENVELOPE " + env + " ";
+					}
+					else if (item == "BODY" || item == "RFC822" || item == "RFC822.TEXT")
+					{
+						fetch_response += item + " {" + std::to_string(msg.size_bytes) + "}\r\n" + "";
+					}
+					else if (item == "RFC822.HEADER")
+					{
+						auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
+						auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
+												   [](Recipient rec) { return rec.type == RecipientType::To; });
+						auto sender_user = m_userRepo.findByID(msg.user_id);
+						std::string sender = sender_user ? sender_user->username : "unknown";
+						std::string header = "From: " + sender +
+											 "@test.com\r\n"
+											 "To: " +
+											 ((rec_to != all_receipients.end()) ? rec_to->address : "") +
+											 "\r\n"
+											 "Subject: " +
+											 (msg.subject.value_or("")) +
+											 "\r\n"
+											 "Date: " +
+											 msg.internal_date +
+											 "\r\n"
+											 "\r\n";
+						fetch_response += "RFC822.HEADER {" + std::to_string(header.size()) + "}\r\n" + header;
+					}
+					else if (item == "BODYSTRUCTURE")
+					{
+						fetch_response +=
+							"BODYSTRUCTURE (\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " +
+							std::to_string(msg.size_bytes) + " 0) ";
+					}
+				}
+
+				if (!fetch_response.empty() && fetch_response.back() == ' ')
+				{
+					fetch_response.pop_back();
+				}
+
+				fetch_response += ")";
+				response += ImapResponse::Fetch(seq_num, fetch_response);
+			}
+
+			response += ImapResponse::Ok(cmd.m_tag, "Uid Fetch completed");
+		}
+		catch (const std::exception& ex)
+		{
+			response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
+			m_logger.Log(PROD, "ImapCommandDispatcher::HandleUidFetch - Invalid UID FETCH usage, exception: " +
+								   std::string(ex.what()));
+		}
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUidFetch - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUidFetch - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleUidStore(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUidStore - In: tag=" + cmd.m_tag + ", args=[" +
+							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUidStore - Start");
+
+	std::string response = "";
+	if (m_state != SessionState::Selected)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
+	}
+	else if (cmd.m_args.size() != 3)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "Missing arguments");
+	}
+	else
+	{
+		try
+		{
+			auto uids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], INT64_MAX);
+
+			auto flags = IMAP_UTILS::SplitArgs(IMAP_UTILS::TrimParentheses(cmd.m_args[2]));
+			bool silence = cmd.m_args[1].find(".SILENT") != std::string::npos;
+
+			for (int64_t uid : uids)
+			{
+				auto msg_opt = m_messRepo.findByUID(m_currentMailbox.m_id.value(), uid);
+				if (!msg_opt.has_value()) continue;
+
+				auto prefixed_flags = flags;
+				for (auto& f : prefixed_flags)
+				{
+					f = cmd.m_args[1][0] + f;
+				}
+				m_messRepo.setFlags(msg_opt->id.value(), prefixed_flags);
+
+				if (!silence)
+				{
+					auto updated_msg = m_messRepo.findByID(msg_opt->id.value());
+					std::string flagsStr = "(UID " + std::to_string(msg_opt->uid) + " FLAGS (";
+					if (updated_msg && updated_msg->is_seen) flagsStr += "\\Seen ";
+					if (updated_msg && updated_msg->is_deleted) flagsStr += "\\Deleted ";
+					if (updated_msg && updated_msg->is_draft) flagsStr += "\\Draft ";
+					if (updated_msg && updated_msg->is_answered) flagsStr += "\\Answered ";
+					if (updated_msg && updated_msg->is_flagged) flagsStr += "\\Flagged ";
+					if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
+					if (flagsStr.back() == ' ') flagsStr.pop_back();
+					flagsStr += "))";
+					response += ImapResponse::Fetch(1, flagsStr);
+				}
+			}
+
+			response += ImapResponse::Ok(cmd.m_tag, "Uid Store completed");
+		}
+		catch (const std::exception& ex)
+		{
+			response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
+			m_logger.Log(PROD, "ImapCommandDispatcher::HandleUidStore - Invalid UID STORE usage, exception: " +
+								   std::string(ex.what()));
+		}
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUidStore - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUidStore - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleUidCopy(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUidCopy - In: tag=" + cmd.m_tag + ", args=[" +
+							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUidCopy - Start");
+
+	std::string response = "";
+	if (m_state != SessionState::Selected)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
+	}
+	else if (cmd.m_args.size() != 2)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "Missing arguments");
+	}
+	else
+	{
+		auto folder_dest_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[1]);
+		if (!folder_dest_opt.has_value())
+		{
+			response = ImapResponse::Bad(cmd.m_tag, "No such folder");
+		}
+		else
+		{
+			try
+			{
+				auto uids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], INT64_MAX);
+
+				for (int64_t uid : uids)
+				{
+					auto msg_opt = m_messRepo.findByUID(m_currentMailbox.m_id.value(), uid);
+					if (!msg_opt.has_value()) continue;
+
+					m_messRepo.copy(msg_opt->id.value(), folder_dest_opt->id.value());
+				}
+
+				response = ImapResponse::Ok(cmd.m_tag, "Uid Copy completed");
+			}
+			catch (const std::exception& ex)
+			{
+				response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
+				m_logger.Log(PROD, "ImapCommandDispatcher::HandleUidCopy - Invalid UID COPY usage, exception: " +
+									   std::string(ex.what()));
+			}
+		}
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUidCopy - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUidCopy - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleSubscribe - In: tag=" + cmd.m_tag + ", args=[" +
+							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleSubscribe - Start");
+
+	std::string response = "";
+	if (cmd.m_args.size() != 1)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
+	}
+	else
+	{
+		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
+		if (!folder_opt.has_value())
+		{
+			response = ImapResponse::Bad(cmd.m_tag, "Mailbox does not exist");
+		}
+		else
+		{
+			// repo doesn`t support this yet
+		}
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleSubscribe - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleSubscribe - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleUnsubscribe(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUnsubscribe - In: tag=" + cmd.m_tag + ", args=[" +
+							IMAP_UTILS::JoinArgs(cmd.m_args) + "]");
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUnsubscribe - Start");
+
+	std::string response = "";
+	if (cmd.m_args.size() != 1)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "Invalid arguments number");
+	}
+	else
+	{
+		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
+		if (!folder_opt.has_value())
+		{
+			response = ImapResponse::Bad(cmd.m_tag, "Mailbox does not exist");
+		}
+		else
+		{
+			// repo doesn`t support this yet
+		}
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUnsubscribe - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleUnsubscribe - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleClose(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleClose - In: tag=" + cmd.m_tag);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleClose - Start");
+
+	std::string response = "";
+	if (m_state != SessionState::Selected)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
+	}
+	else
+	{
+		if (m_messRepo.expunge(m_currentMailbox.m_id.value()))
+		{
+			response = ImapResponse::Ok(cmd.m_tag, "Close completed");
+			m_state = SessionState::Authenticated;
+			m_currentMailbox = MailboxState{};
+		}
+		else
+		{
+			response = ImapResponse::No(cmd.m_tag, "Close failed");
+			m_logger.Log(DEBUG, "Close failed: " + m_messRepo.getLastError());
+		}
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleClose - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleClose - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleCheck(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCheck - In: tag=" + cmd.m_tag);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCheck - Start");
+
+	std::string response = "";
+	if (m_state != SessionState::Selected)
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "No mailbox selected");
+	}
+	else
+	{
+		response = ImapResponse::Ok(cmd.m_tag, "Check completed");
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCheck - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCheck - End");
 	return response;
 }

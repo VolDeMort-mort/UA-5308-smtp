@@ -22,6 +22,13 @@ enum class ImapCommandType
 	Copy,
 	Move,
 	Expunge,
+	UidFetch,
+	UidStore,
+	UidCopy,
+	Subscribe,
+	Unsubscribe,
+	Close,
+	Check,
 	Unknown
 };
 

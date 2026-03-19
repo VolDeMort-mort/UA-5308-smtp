@@ -58,6 +58,11 @@ ImapCommandType StringToCommandType(const std::string& cmd)
 		{"COPY", ImapCommandType::Copy},
 		{"MOVE", ImapCommandType::Move},
 		{"EXPUNGE", ImapCommandType::Expunge},
+		{"UID", ImapCommandType::UidFetch},
+		{"SUBSCRIBE", ImapCommandType::Subscribe},
+		{"UNSUBSCRIBE", ImapCommandType::Unsubscribe},
+		{"CLOSE", ImapCommandType::Close},
+		{"CHECK", ImapCommandType::Check},
 	};
 
 	auto it = commandMap.find(IMAP_UTILS::ToUpper(cmd));
@@ -88,6 +93,13 @@ std::string CommandTypeToString(const ImapCommandType& type)
 		{ImapCommandType::Copy, "COPY"},
 		{ImapCommandType::Move, "MOVE"},
 		{ImapCommandType::Expunge, "EXPUNGE"},
+		{ImapCommandType::UidFetch, "UID FETCH"},
+		{ImapCommandType::UidStore, "UID STORE"},
+		{ImapCommandType::UidCopy, "UID COPY"},
+		{ImapCommandType::Subscribe, "SUBSCRIBE"},
+		{ImapCommandType::Unsubscribe, "UNSUBSCRIBE"},
+		{ImapCommandType::Close, "CLOSE"},
+		{ImapCommandType::Check, "CHECK"},
 	};
 
 	auto it = commandMap.find(type);
@@ -172,6 +184,83 @@ void SortMessagesByTimeDescending(std::vector<Message>& messages)
 {
 	std::sort(messages.begin(), messages.end(),
 			  [](const Message& a, const Message& b) { return a.internal_date > b.internal_date; });
+}
+
+std::string DateToEmlDate(const std::string& str)
+{
+	if (str.empty()) throw std::runtime_error("DateToEmlDate: empty date string");
+
+	static const std::string months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+										 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+	static const std::string days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+	std::stringstream ss(str);
+	int year, month, day, hour, minute, second;
+	char dash1, dash2, colon1, colon2;
+
+	if (!(ss >> year >> dash1 >> month >> dash2 >> day >> hour >> colon1 >> minute >> colon2 >> second))
+	{
+		throw std::runtime_error("DateToEmlDate: failed to parse date string '" + str + "'");
+	}
+
+	if (dash1 != '-' || dash2 != '-' || colon1 != ':' || colon2 != ':')
+	{
+		throw std::runtime_error("DateToEmlDate: invalid date format in '" + str + "'");
+	}
+
+	if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 ||
+		minute > 59 || second < 0 || second > 59)
+	{
+		throw std::runtime_error("DateToEmlDate: invalid date values in '" + str + "'");
+	}
+
+	int adjustedYear = year;
+	int adjustedMonth = month;
+	if (adjustedMonth < 3)
+	{
+		adjustedMonth += 12;
+		adjustedYear--;
+	}
+	int dow = (day + (13 * (adjustedMonth + 1)) / 5 + adjustedYear + adjustedYear / 4 - adjustedYear / 100 +
+			   adjustedYear / 400) %
+			  7;
+	dow = (dow + 6) % 7;
+
+	return days[dow] + ", " + (day < 10 ? "0" : "") + std::to_string(day) + " " + months[month - 1] + " " +
+		   std::to_string(year) + " " + (hour < 10 ? "0" : "") + std::to_string(hour) + ":" + (minute < 10 ? "0" : "") +
+		   std::to_string(minute) + ":" + (second < 10 ? "0" : "") + std::to_string(second) + " +0000";
+}
+
+std::string DateToIMAPInternal(const std::string& str)
+{
+	if (str.empty()) throw std::runtime_error("DateToIMAPInternal: empty date string");
+
+	static const std::string months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+										 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+	std::stringstream ss(str);
+	int year, month, day, hour, minute, second;
+	char dash1, dash2, colon1, colon2;
+
+	if (!(ss >> year >> dash1 >> month >> dash2 >> day >> hour >> colon1 >> minute >> colon2 >> second))
+	{
+		throw std::runtime_error("DateToIMAPInternal: failed to parse date string '" + str + "'");
+	}
+
+	if (dash1 != '-' || dash2 != '-' || colon1 != ':' || colon2 != ':')
+	{
+		throw std::runtime_error("DateToIMAPInternal: invalid date format in '" + str + "'");
+	}
+
+	if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 ||
+		minute > 59 || second < 0 || second > 59)
+	{
+		throw std::runtime_error("DateToIMAPInternal: invalid date values in '" + str + "'");
+	}
+
+	return (day < 10 ? "0" : "") + std::to_string(day) + "-" + months[month - 1] + "-" + std::to_string(year) + " " +
+		   (hour < 10 ? "0" : "") + std::to_string(hour) + ":" + (minute < 10 ? "0" : "") + std::to_string(minute) +
+		   ":" + (second < 10 ? "0" : "") + std::to_string(second) + " +0000";
 }
 
 } // namespace IMAP_UTILS

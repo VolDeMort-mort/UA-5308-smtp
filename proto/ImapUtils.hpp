@@ -22,6 +22,12 @@ std::string TrimParentheses(const std::string& str);
 
 std::vector<int64_t> ParseSequenceSet(const std::string& sequenceSet, int64_t maxValue = INT64_MAX);
 
+// example: "2025-01-15 14:30:45" -> "Wed, 15 Jan 2025 14:30:45 +0000")
+std::string DateToEmlDate(const std::string& str);
+
+// example: "2025-01-15 14:30:45" -> "15-Jan-2025 14:30:45 +0000"
+std::string DateToIMAPInternal(const std::string& str);
+
 // should be moved to repository layer
 void SortMessagesByTimeDescending(std::vector<Message>& messages);
 
