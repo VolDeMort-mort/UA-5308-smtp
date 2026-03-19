@@ -220,10 +220,9 @@ TEST_F(CmdHandlerTests, HandleSelect_Success)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	// RFC fix: SELECT now returns all required responses (UIDVALIDITY, PERMANENTFLAGS, UNSEEN, UIDNEXT)
 	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)\r\n"
 						   "* OK [UIDVALIDITY 1]\r\n"
-						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent \\*)]\r\n"
+						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n"
 						   "* OK [UNSEEN 3]\r\n"
 						   "* 3 EXISTS\r\n"
 						   "* OK [UIDNEXT 4]\r\n"
@@ -246,10 +245,9 @@ TEST_F(CmdHandlerTests, HandleSelect_SuccessDifferentFolder)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	// RFC fix: SELECT now returns all required responses
 	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)\r\n"
 						   "* OK [UIDVALIDITY 2]\r\n"
-						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent \\*)]\r\n"
+						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n"
 						   "* OK [UNSEEN 1]\r\n"
 						   "* 1 EXISTS\r\n"
 						   "* OK [UIDNEXT 2]\r\n"
@@ -452,14 +450,12 @@ TEST_F(CmdHandlerTests, HandleFetch_Success_All_SingleMessage)
 
 	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH ("));
 
-	// RFC fix: FLAGS now shows empty () since \Recent is not shown in FETCH response (it's read-only)
-	EXPECT_THAT(response, testing::HasSubstr("FLAGS ()"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Recent)"));
 
 	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE 21"));
 
 	EXPECT_THAT(response, testing::HasSubstr("\"Hello Bob\""));
 
-	// RFC fix: INTERNALDATE now uses proper IMAP date format
 	EXPECT_THAT(response, testing::HasSubstr("INTERNALDATE \""));
 
 	EXPECT_THAT(response, testing::HasSubstr("A002 OK Fetch completed\r\n"));
@@ -999,8 +995,7 @@ TEST_F(CmdHandlerTests, HandleCapability_NoAuthRequired)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected =
-		"* CAPABILITY IMAP4rev1 LOGIN LOGOUT SELECT LIST LSUB STATUS FETCH STORE CREATE DELETE RENAME COPY EXPUNGE\r\n";
+	std::string expected = "* CAPABILITY IMAP4rev1\r\n";
 	EXPECT_THAT(response, testing::HasSubstr(expected));
 }
 

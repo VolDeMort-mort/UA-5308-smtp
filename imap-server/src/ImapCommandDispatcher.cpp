@@ -186,7 +186,7 @@ std::string ImapCommandDispatcher::HandleSelect(const ImapCommand& cmd)
 
 			response = ImapResponse::Flags();
 			response += "* OK [UIDVALIDITY " + std::to_string(uidvalidity) + "]\r\n";
-			response += "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent \\*)]\r\n";
+			response += "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n";
 			response += "* OK [UNSEEN " + std::to_string(unseen_count) + "]\r\n";
 			response += ImapResponse::Exists(m_currentMailbox.m_exists);
 			response += "* OK [UIDNEXT " + std::to_string(uidnext) + "]\r\n";
@@ -308,6 +308,16 @@ std::string ImapCommandDispatcher::HandleStatus(const ImapCommand& cmd)
 												  [](const Message& msg) { return msg.is_recent; });
 					response += "RECENT " + std::to_string(recent) + " ";
 				}
+				else if (req == "UIDNEXT")
+				{
+					success = true;
+					response += "UIDNEXT " + std::to_string(folder_opt->next_uid) + " ";
+				}
+				else if (req == "UIDVALIDITY")
+				{
+					success = true;
+					response += "UIDVALIDITY " + std::to_string(folder_opt->id.value()) + " ";
+				}
 				else if (req == "UNSEEN")
 				{
 					success = true;
@@ -426,13 +436,13 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				{
 					if (item == "FLAGS")
 					{
-						// \Recent is read-only per RFC and not settable by client
 						fetch_response += "FLAGS (";
 						if (msg.is_seen) fetch_response += "\\Seen ";
 						if (msg.is_deleted) fetch_response += "\\Deleted ";
 						if (msg.is_draft) fetch_response += "\\Draft ";
 						if (msg.is_answered) fetch_response += "\\Answered ";
 						if (msg.is_flagged) fetch_response += "\\Flagged ";
+						if (msg.is_recent) fetch_response += "\\Recent ";
 						if (fetch_response.back() == ' ') fetch_response.pop_back();
 						fetch_response += ") ";
 					}
@@ -932,13 +942,13 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 				{
 					if (item == "FLAGS")
 					{
-						// \Recent is read-only per RFC and not settable by client
 						fetch_response += "FLAGS (";
 						if (msg.is_seen) fetch_response += "\\Seen ";
 						if (msg.is_deleted) fetch_response += "\\Deleted ";
 						if (msg.is_draft) fetch_response += "\\Draft ";
 						if (msg.is_answered) fetch_response += "\\Answered ";
 						if (msg.is_flagged) fetch_response += "\\Flagged ";
+						if (msg.is_recent) fetch_response += "\\Recent ";
 						if (fetch_response.back() == ' ') fetch_response.pop_back();
 						fetch_response += ") ";
 					}
@@ -1048,8 +1058,9 @@ std::string ImapCommandDispatcher::HandleUidStore(const ImapCommand& cmd)
 			auto flags = IMAP_UTILS::SplitArgs(IMAP_UTILS::TrimParentheses(cmd.m_args[2]));
 			bool silence = cmd.m_args[1].find(".SILENT") != std::string::npos;
 
-			for (int64_t uid : uids)
+			for (int i{0}; i < uids.size(); i++)
 			{
+				int64_t uid = uids[i];
 				auto msg_opt = m_messRepo.findByUID(m_currentMailbox.m_id.value(), uid);
 				if (!msg_opt.has_value()) continue;
 
@@ -1072,7 +1083,7 @@ std::string ImapCommandDispatcher::HandleUidStore(const ImapCommand& cmd)
 					if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
 					if (flagsStr.back() == ' ') flagsStr.pop_back();
 					flagsStr += "))";
-					response += ImapResponse::Fetch(1, flagsStr);
+					response += ImapResponse::Fetch(i + 1, flagsStr);
 				}
 			}
 

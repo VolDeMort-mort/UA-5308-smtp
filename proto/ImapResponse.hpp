@@ -27,11 +27,10 @@ inline std::string Untagged(const std::string& message)
 
 inline std::string Capability()
 {
-	return "* CAPABILITY IMAP4rev1 LOGIN LOGOUT SELECT LIST LSUB STATUS FETCH STORE CREATE DELETE RENAME COPY "
-		   "EXPUNGE\r\n";
+	return "* CAPABILITY IMAP4rev1\r\n";
 }
 
-inline std::string Flags(const std::string& flagList = "(\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)") // RFC fix: added \\Deleted
+inline std::string Flags(const std::string& flagList = "(\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)")
 {
 	return "* FLAGS " + flagList + "\r\n";
 }

@@ -49,8 +49,7 @@ TEST(ImapResponseTest, UntaggedWithMessage)
 TEST(ImapResponseTest, Capability)
 {
 	auto result = Capability();
-	EXPECT_EQ(result, "* CAPABILITY IMAP4rev1 LOGIN LOGOUT SELECT LIST LSUB STATUS FETCH STORE CREATE DELETE RENAME "
-					  "COPY EXPUNGE\r\n");
+	EXPECT_EQ(result, "* CAPABILITY IMAP4rev1\r\n");
 }
 
 TEST(ImapResponseTest, FlagsDefault)
