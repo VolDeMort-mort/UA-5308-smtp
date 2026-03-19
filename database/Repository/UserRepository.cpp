@@ -40,7 +40,7 @@ std::vector<User> UserRepository::findAll(int limit, int offset) const
     return result;
 }
 
-// FIX: should also create physical folders in data/mailboxes/{user_id}/ 
+// FIX: should also create physical folders in data/mailboxes/{user_id}/ if email saving will be distributed by folders
 bool UserRepository::registerUser(User& user, const std::string& password)
 {
     if (m_user_dal.findByUsername(user.username).has_value())
