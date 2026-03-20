@@ -41,6 +41,6 @@ std::string BuildEnvelope(const Message& msg, const std::optional<SmtpClient::Em
 
 std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClient::Email>& email_opt);
 
-std::string GetBodyContent(const Message& msg, const std::optional<SmtpClient::Email>& email_opt);
+std::string GetBodyContent(const Message& msg);
 
 } // namespace IMAP_UTILS

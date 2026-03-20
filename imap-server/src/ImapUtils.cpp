@@ -374,6 +374,8 @@ std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClien
 	}
 	else if (email_opt && email_opt->HasHtml())
 	{
+		// can`t extract boundary from SmtpClient::Email class
+		// also information about original encoding isn`t being saved
 		std::string boundary = SmtpClient::MimeBuilder::GenerateBoundary();
 		std::string bs = "((\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
 		bs += std::to_string(email_opt->plain_text.size()) + " 0) ";
@@ -389,14 +391,15 @@ std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClien
 	}
 }
 
-std::string GetBodyContent(const Message& msg, const std::optional<SmtpClient::Email>& email_opt)
+std::string GetBodyContent(const Message& msg)
 {
-	if (email_opt)
+	std::ifstream file(msg.raw_file_path);
+	if (!file.is_open())
 	{
-		if (!email_opt->plain_text.empty()) return email_opt->plain_text;
-		if (!email_opt->html_text.empty()) return email_opt->html_text;
+		return "";
 	}
-	return "";
+
+	return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 }
 
 } // namespace IMAP_UTILS

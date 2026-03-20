@@ -187,6 +187,7 @@ std::string ImapCommandDispatcher::HandleSelect(const ImapCommand& cmd)
 			response = ImapResponse::Flags();
 			response += "* OK [UIDVALIDITY " + std::to_string(uidvalidity) + "]\r\n";
 			response += "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n";
+			// should return first UID of unseen message not count
 			response += "* OK [UNSEEN " + std::to_string(unseen_count) + "]\r\n";
 			response += ImapResponse::Exists(m_currentMailbox.m_exists);
 			response += "* OK [UIDNEXT " + std::to_string(uidnext) + "]\r\n";
@@ -460,7 +461,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
-						std::string body = IMAP_UTILS::GetBodyContent(msg, email_opt);
+						std::string body = IMAP_UTILS::GetBodyContent(msg);
 						fetch_response += item + " {" + std::to_string(body.size()) + "}\r\n" + body + " ";
 					}
 					else if (item == "RFC822.HEADER")
@@ -966,7 +967,7 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					}
 					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
-						std::string body = IMAP_UTILS::GetBodyContent(msg, email_opt);
+						std::string body = IMAP_UTILS::GetBodyContent(msg);
 						fetch_response += item + " {" + std::to_string(body.size()) + "}\r\n" + body + " ";
 					}
 					else if (item == "RFC822.HEADER")
