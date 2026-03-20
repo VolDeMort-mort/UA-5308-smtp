@@ -70,6 +70,7 @@ class ThreadPool {
 
     bool is_working_unsafe() const;
     void routine(int worker_id);
+    void log(LogLevel level, const std::string& msg);
 
 public:
     ~ThreadPool() { terminate(); }
@@ -109,8 +110,7 @@ auto ThreadPool::add_task(Priority priority, F&& func, Args&&... args)
     using R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>;
 
     if (!m_is_initialized.load() || m_is_terminated.load()) {
-        if (m_logger) m_logger->Log(LogLevel::PROD,
-            "[ThreadPool] Warning: Failed to add task. Pool not ready.");
+        log(LogLevel::PROD, "[ThreadPool] Warning: Failed to add task. Pool not ready.");
         std::promise<R> p;
         p.set_exception(std::make_exception_ptr(std::runtime_error("ThreadPool not ready")));
         return p.get_future();
@@ -128,8 +128,7 @@ auto ThreadPool::add_task(Priority priority, F&& func, Args&&... args)
     }
     m_queue_cv.notify_one();
 
-    if (m_logger) m_logger->Log(LogLevel::TRACE,
-        "[ThreadPool] Task " + std::to_string(taskId) + " added.");
+    log(LogLevel::TRACE, "[ThreadPool] Task " + std::to_string(taskId) + " added.");
     return fut;
 }
 
