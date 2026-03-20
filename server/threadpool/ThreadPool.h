@@ -3,7 +3,6 @@
 #include <functional>
 #include <future>
 #include <queue>
-#include <shared_mutex>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -35,7 +34,6 @@ struct TaskComparator {
 };
 
 class TasksQueue {
-    std::shared_mutex m_mutex;
     std::priority_queue<Task, std::vector<Task>, TaskComparator> m_tasks;
 public:
     TasksQueue() = default;
@@ -124,7 +122,10 @@ auto ThreadPool::add_task(Priority priority, F&& func, Args&&... args)
     auto fut = pkg->get_future();
 
     int taskId = m_total_tasks.fetch_add(1);
-    m_queue.push(taskId, priority, [pkg]() { (*pkg)(); });
+    {
+        std::lock_guard<std::mutex> lock(m_queue_mutex);
+        m_queue.push(taskId, priority, [pkg]() { (*pkg)(); });
+    }
     m_queue_cv.notify_one();
 
     if (m_logger) m_logger->Log(LogLevel::TRACE,

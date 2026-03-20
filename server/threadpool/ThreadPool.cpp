@@ -3,24 +3,20 @@
 TasksQueue::~TasksQueue() { clear(); }
 
 bool TasksQueue::empty() {
-    std::shared_lock lock(m_mutex);
     return m_tasks.empty();
 }
 
 std::size_t TasksQueue::size() {
-    std::shared_lock lock(m_mutex);
     return m_tasks.size();
 }
 
 void TasksQueue::clear() {
-    std::unique_lock lock(m_mutex);
     while (!m_tasks.empty()) {
         m_tasks.pop();
     }
 }
 
 bool TasksQueue::pop(Task& task) {
-    std::unique_lock lock(m_mutex);
     if (m_tasks.empty()) return false;
     task = std::move(const_cast<Task&>(m_tasks.top()));
     m_tasks.pop();
@@ -29,7 +25,6 @@ bool TasksQueue::pop(Task& task) {
 
 bool TasksQueue::push(int taskId, Priority priority, std::function<void()> func) {
     Task newTask(taskId, priority, std::move(func));
-    std::unique_lock lock(m_mutex);
     m_tasks.push(std::move(newTask));
     return true;
 }
