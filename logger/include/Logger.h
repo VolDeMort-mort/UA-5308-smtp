@@ -41,7 +41,7 @@ public:
 	void set_strategy(std::shared_ptr<ILoggerStrategy> strategy);
 
 	/**
-	 * @brief Formatting message and push it into PushToQueue()
+	 * @brief Add raw message into queue
 	 * @param level Level of the logs(PROD, DEBUG, TRACE)
 	 * @param message Raw text of the log
 	 */
@@ -68,23 +68,19 @@ public:
 private:
 	std::shared_ptr<ILoggerStrategy> m_strategy; // pointer to abstract class
 
-	std::mutex m_queue_mtx;			  // mutex for queue & Read()
-	std::mutex m_strategy_mtx;		  // mutex for safety runtime strategy switching
-	std::queue<std::string> m_queue;  // queue with logs
-	std::condition_variable m_cv;	  // cv for queue and Read()
-	std::thread m_work_thread;		  // thread for queue
-	std::atomic<bool> m_running_flag; // flag for queue life cycle(false - break cycle)
-	std::atomic<bool> m_flush;		  // flag for Read() to force flush logs
-
-	/**
-	 * @brief Add logs into m_queue
-	 * @param message The formatted string of the log
-	 */
-	void PushToQueue(const std::string& message);
+	std::mutex m_queue_mtx;								  // mutex for queue & Read()
+	std::mutex m_strategy_mtx;							  // mutex for safety runtime strategy switching
+	std::queue<std::pair<LogLevel, std::string>> m_queue; // queue with logs
+	std::condition_variable m_cv;						  // cv for queue and Read()
+	std::thread m_work_thread;							  // thread for queue
+	std::atomic<bool> m_running_flag;					  // flag for queue life cycle(false - break cycle)
+	std::atomic<bool> m_flush;							  // flag for Read() to force flush logs
+	std::atomic<bool> m_is_flushed;						  // flag that logs are flushed
 
 	/**
 	 * @brief Async thread with local queue
 	 * @details Implementing waiting logic for batch or timeout
+	 * before writing, formatting the raw message from queue
 	 */
 	void WorkQueue();
 };

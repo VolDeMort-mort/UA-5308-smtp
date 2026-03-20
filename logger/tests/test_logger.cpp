@@ -151,7 +151,7 @@ TEST_F(LoggerClass, StressTest)
 		if (t.joinable())
 			t.join();
 	}
-	auto read = logger->Read(1010);
+	auto read = stress_logger->Read(1010);
 	EXPECT_EQ(read.size(), 1010);
 	auto search_logs = stress_logger->Search(DEBUG, 10, 1010);
 	EXPECT_EQ(search_logs.size(), 10);
