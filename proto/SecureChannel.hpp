@@ -38,6 +38,6 @@ protected:
 							const unsigned char* private_key) = 0;
 
 private:
-	std::string Encrypt(const std::string raw_data);
-	std::string Decrypt(const std::string data);
+	std::string Encrypt(const std::string& raw_data);
+	std::string Decrypt(const std::string& data);
 };

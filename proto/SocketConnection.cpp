@@ -125,30 +125,66 @@ bool SocketConnection::IsOpen() const noexcept
 	return m_socket.is_open();
 }
 
+
 bool SocketConnection::ReceiveRaw(unsigned char* buffer, std::size_t size)
 {
-	try
-	{
-		std::size_t received = boost::asio::read(m_socket, boost::asio::buffer(buffer, size));
-
-		return received == size;
-	}
-	catch (const std::exception&)
+	if (!m_socket.is_open())
 	{
 		return false;
 	}
+
+	std::size_t total = 0;
+
+	while (total < size)
+	{
+		if (!WaitForEvent(true))
+		{
+			return false;
+		}
+
+		boost::system::error_code error_code;
+
+		std::size_t received = m_socket.read_some(boost::asio::buffer(buffer + total, size - total), error_code);
+
+		if (error_code)
+		{
+			Close();
+			return false;
+		}
+
+		total += received;
+	}
+	return true;
 }
+	
 
 bool SocketConnection::SendRaw(const unsigned char* buffer, std::size_t size)
 {
-	try
-	{
-		std::size_t sent = boost::asio::write(m_socket, boost::asio::buffer(buffer, size));
-
-		return sent == size;
-	}
-	catch (const std::exception&)
+	if (!m_socket.is_open())
 	{
 		return false;
 	}
+
+	std::size_t total = 0;
+
+	while (total < size)
+	{
+		if (!WaitForEvent(false))
+		{
+			return false;
+		}
+
+		boost::system::error_code error_code;
+
+		std::size_t sent = m_socket.write_some(boost::asio::buffer(buffer + total, size - total), error_code);
+
+		if (error_code)
+		{
+			Close();
+			return false;
+		}
+
+		total += sent;
+	}
+	return true;
 }

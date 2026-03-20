@@ -10,7 +10,7 @@ void SecureChannel::setLogger(Logger* logger)
 	m_logger = logger;
 }
 
-std::string SecureChannel:: Encrypt(const std::string raw_data)
+std::string SecureChannel:: Encrypt(const std::string& raw_data)
 {
 	unsigned char nonce[crypto_aead_chacha20poly1305_ietf_NPUBBYTES];
 	randombytes_buf(nonce, sizeof(nonce));
@@ -40,7 +40,7 @@ std::string SecureChannel:: Encrypt(const std::string raw_data)
 	return pair;
 }
 
-std::string SecureChannel::Decrypt(const std::string raw_data)
+std::string SecureChannel::Decrypt(const std::string& raw_data)
 {
 	const std::size_t nonce_size = crypto_aead_chacha20poly1305_ietf_NPUBBYTES;
 	const std::size_t tag_size = crypto_aead_chacha20poly1305_ietf_ABYTES;
@@ -96,7 +96,9 @@ bool SecureChannel::Send(const std::string& data)
 		return m_conn.Send(data);
 	}
 
+	if (m_logger) m_logger->Log(LogLevel::TRACE, "ENCRYPT: encrypting message");
 	std::string encrypted_text = Encrypt(data);
+
 	std::uint32_t text_len = static_cast<std::uint32_t>(encrypted_text.size());
 	std::uint32_t net_len = htonl(text_len);
 
@@ -141,6 +143,8 @@ bool SecureChannel::Receive(std::string& data)
 	}
 
 	data = Decrypt(encrypted_text);
+	if (m_logger) m_logger->Log(LogLevel::TRACE, "DECRYPT: message decrypted successfully");
+
 	if (!data.empty() && data.back() == '\n') data.pop_back();
 	if (!data.empty() && data.back() == '\r') data.pop_back();
 
