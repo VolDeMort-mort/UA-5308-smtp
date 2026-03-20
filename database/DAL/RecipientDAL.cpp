@@ -1,7 +1,7 @@
 #include "RecipientDAL.h"
 
 #define RECIPIENT_SELECT \
-    "SELECT id, message_id, address " \
+    "SELECT id, message_id, address, type " \
     "FROM recipients "
 
 RecipientDAL::RecipientDAL(sqlite3* db) : m_db(db) {}
@@ -9,7 +9,6 @@ RecipientDAL::RecipientDAL(sqlite3* db) : m_db(db) {}
 bool RecipientDAL::setError(const char* sqlite_errmsg)
 {
     m_last_error = sqlite_errmsg ? sqlite_errmsg : "unknown error";
-    //Log(ERROR, >>m_last_error);
     return false;
 }
 
@@ -22,23 +21,28 @@ Recipient RecipientDAL::rowToRecipient(sqlite3_stmt* stmt)
 {
     Recipient r;
 
-    if(sqlite3_column_type(stmt, 0) != SQLITE_NULL) r.id = sqlite3_column_int64(stmt, 0);
+    if (sqlite3_column_type(stmt, 0) != SQLITE_NULL)
+        r.id = sqlite3_column_int64(stmt, 0);
 
     r.message_id = sqlite3_column_int64(stmt, 1);
 
-    const unsigned char* raw = sqlite3_column_text(stmt, 2);
-    r.address = raw ? reinterpret_cast<const char*>(raw) : "";
-    
+    auto text = [&](int col) -> std::string
+    {
+        const unsigned char* raw = sqlite3_column_text(stmt, col);
+        return raw ? reinterpret_cast<const char*>(raw) : "";
+    };
+
+    r.address = text(2);
+    r.type    = Recipient::typeFromString(text(3));
+
     return r;
 }
 
 std::vector<Recipient> RecipientDAL::fetchRows(sqlite3_stmt* stmt) const
 {
     std::vector<Recipient> results;
-
     while (sqlite3_step(stmt) == SQLITE_ROW)
         results.push_back(rowToRecipient(stmt));
-
     sqlite3_finalize(stmt);
     return results;
 }
@@ -76,15 +80,16 @@ std::vector<Recipient> RecipientDAL::findByMessage(int64_t message_id) const
 bool RecipientDAL::insert(Recipient& recipient)
 {
     const char* sql =
-        "INSERT INTO recipients (message_id, address) "
-        "VALUES (?, ?);";
+        "INSERT INTO recipients (message_id, address, type) "
+        "VALUES (?, ?, ?);";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return setError(sqlite3_errmsg(m_db));
 
     sqlite3_bind_int64(stmt, 1, recipient.message_id);
-    sqlite3_bind_text(stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text (stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text (stmt, 3, Recipient::typeToString(recipient.type).c_str(), -1, SQLITE_TRANSIENT);
 
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
     if (ok)
@@ -102,8 +107,7 @@ bool RecipientDAL::update(const Recipient& recipient)
         return setError("update() called on a Recipient with no id");
 
     const char* sql =
-        "UPDATE recipients "
-        "SET message_id = ?, address = ? "
+        "UPDATE recipients SET message_id = ?, address = ?, type = ? "
         "WHERE id = ?;";
 
     sqlite3_stmt* stmt = nullptr;
@@ -111,8 +115,9 @@ bool RecipientDAL::update(const Recipient& recipient)
         return setError(sqlite3_errmsg(m_db));
 
     sqlite3_bind_int64(stmt, 1, recipient.message_id);
-    sqlite3_bind_text(stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 3, recipient.id.value());
+    sqlite3_bind_text (stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text (stmt, 3, Recipient::typeToString(recipient.type).c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 4, recipient.id.value());
 
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
     if (!ok) setError(sqlite3_errmsg(m_db));

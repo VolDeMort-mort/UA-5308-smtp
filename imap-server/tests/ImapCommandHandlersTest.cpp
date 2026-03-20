@@ -2,11 +2,15 @@
 #include <gtest/gtest.h>
 #include <memory>
 
+#include "DAL/FolderDAL.h"
 #include "DAL/UserDAL.h"
 #include "DataBaseManager.h"
+#include "Entity/Folder.h"
+#include "Entity/Message.h"
 #include "ILogger.h"
 #include "ImapCommand.hpp"
 #include "ImapCommandDispatcher.hpp"
+#include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
 
 #ifndef SCHEMA_PATH
@@ -25,19 +29,17 @@ protected:
 	void SetUp() override
 	{
 		db = std::make_unique<DataBaseManager>(":memory:", SCHEMA_PATH);
-		SeedDB();
-
 		userDal = std::make_unique<UserDAL>(db->getDB());
-		userRepo = std::make_unique<UserRepository>(*userDal);
+		userRepo = std::make_unique<UserRepository>(db->getDB(), *userDal);
 		messRepo = std::make_unique<MessageRepository>(*db);
 		dispatcher = std::make_unique<ImapCommandDispatcher>(mockLogger, *userRepo, *messRepo);
+		SeedDB();
 	}
 
 	void TearDown() override
 	{
 		char* errMsg = nullptr;
 		int rc = sqlite3_exec(db->getDB(),
-							  "DELETE FROM attachments; "
 							  "DELETE FROM recipients; "
 							  "DELETE FROM messages; "
 							  "DELETE FROM folders; "
@@ -83,85 +85,67 @@ protected:
 
 	void SeedDB()
 	{
-		char* errMsg = nullptr;
-		int rc = sqlite3_exec(
-			db->getDB(),
-			"-- Users\n"
-			"INSERT INTO users (username, password_hash) VALUES ('alice', 'pass123');\n"
-			"INSERT INTO users (username, password_hash) VALUES ('bob', 'pass123');\n"
-			"INSERT INTO users (username, password_hash) VALUES ('charlie', 'pass123');\n"
-			"INSERT INTO users (username, password_hash) VALUES ('dave', 'pass123');\n"
+		User alice, bob, charlie, dave;
+		alice.username = "alice";
+		bob.username = "bob";
+		charlie.username = "charlie";
+		dave.username = "dave";
 
-			"-- Alice folders: INBOX, Sent, Drafts, Archive\n"
-			"INSERT INTO folders (user_id, name) VALUES (1, 'INBOX');\n"
-			"INSERT INTO folders (user_id, name) VALUES (1, 'Sent');\n"
-			"INSERT INTO folders (user_id, name) VALUES (1, 'Drafts');\n"
-			"INSERT INTO folders (user_id, name) VALUES (1, 'Archive');\n"
+		userRepo->registerUser(alice, pass);
+		userRepo->registerUser(bob, pass);
+		userRepo->registerUser(charlie, pass);
+		userRepo->registerUser(dave, pass);
 
-			"-- Bob folders: INBOX, Sent, Drafts, Spam, Work\n"
-			"INSERT INTO folders (user_id, name) VALUES (2, 'INBOX');\n"
-			"INSERT INTO folders (user_id, name) VALUES (2, 'Sent');\n"
-			"INSERT INTO folders (user_id, name) VALUES (2, 'Drafts');\n"
-			"INSERT INTO folders (user_id, name) VALUES (2, 'Spam');\n"
-			"INSERT INTO folders (user_id, name) VALUES (2, 'Work');\n"
+		FolderDAL folderDal(db->getDB());
 
-			"-- Charlie folders: INBOX, Sent, Drafts, Family\n"
-			"INSERT INTO folders (user_id, name) VALUES (3, 'INBOX');\n"
-			"INSERT INTO folders (user_id, name) VALUES (3, 'Sent');\n"
-			"INSERT INTO folders (user_id, name) VALUES (3, 'Drafts');\n"
-			"INSERT INTO folders (user_id, name) VALUES (3, 'Family');\n"
+		auto bobSpam = Folder{std::nullopt, 2, "Spam", 1, true};
+		auto bobWork = Folder{std::nullopt, 2, "Work", 1, true};
+		auto charlieFamily = Folder{std::nullopt, 3, "Family", 1, true};
+		auto aliceArchive = Folder{std::nullopt, 1, "Archive", 1, true};
 
-			"-- Dave folders: INBOX, Sent, Drafts (no messages)\n"
-			"INSERT INTO folders (user_id, name) VALUES (4, 'INBOX');\n"
-			"INSERT INTO folders (user_id, name) VALUES (4, 'Sent');\n"
-			"INSERT INTO folders (user_id, name) VALUES (4, 'Drafts');\n"
+		folderDal.insert(bobSpam);
+		folderDal.insert(bobWork);
+		folderDal.insert(charlieFamily);
+		folderDal.insert(aliceArchive);
 
-			"-- Alice messages in INBOX (folder 1)\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (1, 1, 'Hello Bob', 'Hey Bob, how are you?', 'bob@test.com', 'sent', 1, 0, 0);\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (1, 1, 'Re: Project', 'Lets discuss the project', 'charlie@test.com', 'received', 1, 1, 1);\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (1, 1, 'Third message', 'This is third', 'dave@test.com', 'received', 0, 0, 0);\n"
+		auto aliceInbox = folderDal.findByName(1, "INBOX");
+		auto aliceSent = folderDal.findByName(1, "Sent");
+		auto bobInbox = folderDal.findByName(2, "INBOX");
+		auto bobWorkFolder = folderDal.findByName(2, "Work");
+		auto charlieInbox = folderDal.findByName(3, "INBOX");
+		auto charlieFamilyFolder = folderDal.findByName(3, "Family");
 
-			"-- Alice messages in Sent (folder 2)\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (1, 2, 'Hi Bob', 'Another message to Bob', 'bob@test.com', 'sent', 1, 0, 0);\n"
-
-			"-- Bob messages in INBOX (folder 5)\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (2, 5, 'Hi Alice', 'Alice you there?', 'alice@test.com', 'sent', 1, 0, 0);\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (2, 5, 'Hi Charlie', 'Charlie meeting tomorrow', 'charlie@test.com', 'sent', 0, 1, 0);\n"
-
-			"-- Bob messages in Work (folder 8)\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (2, 8, 'Meeting notes', 'Notes from our call', 'alice@test.com', 'received', 1, 0, 1);\n"
-
-			"-- Charlie messages in INBOX (folder 10)\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (3, 10, 'Party invite', 'Hey guys, party at my place!', 'alice@test.com', 'sent', 1, 1, 0);\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (3, 10, 'Party invite', 'Hey guys, party at my place!', 'bob@test.com', 'sent', 1, 1, 0);\n"
-
-			"-- Charlie messages in Family (folder 12)\n"
-			"INSERT INTO messages (user_id, folder_id, subject, body, receiver, status, is_seen, is_starred, "
-			"is_important) "
-			"VALUES (3, 12, 'Re: Project update', 'Thanks for the update', 'alice@test.com', 'received', 0, 0, 0);\n",
-			nullptr, nullptr, &errMsg);
-		if (rc != SQLITE_OK)
+		auto addMsg = [&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject,
+						  bool flagged, bool answered)
 		{
-			sqlite3_free(errMsg);
-		}
+			Message msg;
+			msg.user_id = userId;
+			msg.from_address = from;
+			msg.subject = subject;
+			msg.raw_file_path = "/tmp/test_msg_" + subject + ".eml";
+			msg.size_bytes = 21;
+			msg.is_seen = false;
+			msg.is_flagged = flagged;
+			msg.is_answered = answered;
+			msg.is_deleted = false;
+			msg.is_draft = false;
+			msg.is_recent = true;
+			msg.internal_date = "2024-01-01 12:00:00";
+			messRepo->deliver(msg, folderId);
+		};
+
+		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Hello Bob", false, false);
+		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Re: Project", true, true);
+		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Third message", false, false);
+		addMsg(1, aliceSent->id.value(), "alice@test.com", "Hi Bob", false, false);
+
+		addMsg(2, bobInbox->id.value(), "bob@test.com", "Hi Alice", false, false);
+		addMsg(2, bobInbox->id.value(), "bob@test.com", "Hi Charlie", true, false);
+		addMsg(2, bobWorkFolder->id.value(), "bob@test.com", "Meeting notes", true, false);
+
+		addMsg(3, charlieInbox->id.value(), "charlie@test.com", "Party invite", true, false);
+		addMsg(3, charlieInbox->id.value(), "charlie@test.com", "Party invite", true, false);
+		addMsg(3, charlieFamilyFolder->id.value(), "charlie@test.com", "Re: Project update", false, false);
 	}
 };
 
@@ -238,7 +222,7 @@ TEST_F(CmdHandlerTests, HandleSelect_Success)
 
 	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Recent)\r\n"
 						   "* 3 EXISTS\r\n"
-						   "* 1 RECENT\r\n"
+						   "* 3 RECENT\r\n"
 						   "A002 OK [READ-WRITE] Select completed\r\n";
 	EXPECT_EQ(response, expected);
 	EXPECT_EQ(dispatcher->get_State(), SessionState::Selected);
@@ -259,7 +243,7 @@ TEST_F(CmdHandlerTests, HandleSelect_SuccessDifferentFolder)
 
 	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Recent)\r\n"
 						   "* 1 EXISTS\r\n"
-						   "* 0 RECENT\r\n"
+						   "* 1 RECENT\r\n"
 						   "A002 OK [READ-WRITE] Select completed\r\n";
 	EXPECT_EQ(response, expected);
 	EXPECT_EQ(dispatcher->get_MailboxState().m_name, "Sent");
@@ -381,7 +365,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Unseen)
 	std::string response = dispatcher->Dispatch(cmd);
 
 	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 3"));
-	EXPECT_THAT(response, testing::HasSubstr("UNSEEN 1"));
+	EXPECT_THAT(response, testing::HasSubstr("UNSEEN 3"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -396,7 +380,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Recent)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	EXPECT_THAT(response, testing::HasSubstr("RECENT 1"));
+	EXPECT_THAT(response, testing::HasSubstr("RECENT 3"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -458,7 +442,7 @@ TEST_F(CmdHandlerTests, HandleFetch_Success_All_SingleMessage)
 
 	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH ("));
 
-	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Seen)"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS ()"));
 
 	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE 21"));
 
@@ -604,11 +588,11 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Multiple)
 	ImapCommand cmd;
 	cmd.m_tag = "A002";
 	cmd.m_type = ImapCommandType::Store;
-	cmd.m_args = {"1", "+FLAGS", "(\\Seen \\Flagged \\Important)"};
+	cmd.m_args = {"1", "+FLAGS", "(\\Seen \\Flagged)"};
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged \\Important))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 

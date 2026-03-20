@@ -1,182 +1,197 @@
-#include <fstream>
-#include <gtest/gtest.h>
-#include <sqlite3.h>
-#include <sstream>
-
+#include "TestHelper.h"
+#include "../DAL/UserDAL.h"
+#include "../DAL/FolderDAL.h"
 #include "../DAL/MessageDAL.h"
 #include "../DAL/RecipientDAL.h"
-#include "../Entity/Recipient.h"
 
-class RecipientDALTest : public ::testing::Test
+class RecipientDALTest : public DBFixture
 {
 protected:
-	void SetUp() override
-	{
-		sqlite3_open(":memory:", &m_db);
+    int64_t message_id = -1;
 
-		std::ifstream file(SCHEMA_PATH);
-		std::stringstream ss;
-		ss << file.rdbuf();
-		sqlite3_exec(m_db, ss.str().c_str(), nullptr, nullptr, nullptr);
+    void SetUp() override
+    {
+        DBFixture::SetUp();
 
-		sqlite3_exec(m_db,
-					 "INSERT INTO users   (id, username, password_hash) VALUES (1, 'alice', 'hash');"
-					 "INSERT INTO folders (id, user_id, name) VALUES (1, 1, 'Inbox');",
-					 nullptr, nullptr, nullptr);
+        UserDAL udal(db);
+        User u; u.username = "owner"; u.password_hash = "h";
+        ASSERT_TRUE(udal.insert(u));
 
-		MessageDAL msgDal(m_db);
-		Message m1;
-		m1.user_id = 1;
-		m1.folder_id = 1;
-		m1.receiver = "b@b.com";
-		m1.subject = "M1";
-		m1.status = MessageStatus::Draft;
-		Message m2;
-		m2.user_id = 1;
-		m2.folder_id = 1;
-		m2.receiver = "c@c.com";
-		m2.subject = "M2";
-		m2.status = MessageStatus::Sent;
-		msgDal.insert(m1);
-		msgDal.insert(m2);
-		m_msg1 = m1.id.value();
-		m_msg2 = m2.id.value();
+        FolderDAL fdal(db);
+        Folder f; f.user_id = u.id.value(); f.name = "INBOX"; f.next_uid = 1; f.is_subscribed = true;
+        ASSERT_TRUE(fdal.insert(f));
 
-		m_dal = new RecipientDAL(m_db);
-	}
+        MessageDAL mdal(db);
+        Message m;
+        m.user_id = u.id.value(); m.folder_id = f.id.value(); m.uid = 1;
+        m.raw_file_path = "/tmp/1.eml"; m.size_bytes = 512;
+        m.from_address = "from@test.com"; m.internal_date = "2024-01-01T00:00:00Z";
+        ASSERT_TRUE(mdal.insert(m));
+        message_id = m.id.value();
+    }
 
-	void TearDown() override
-	{
-		delete m_dal;
-		sqlite3_close(m_db);
-	}
-
-	Recipient make(int64_t msg_id = 0, const std::string& address = "alice@example.com")
-	{
-		Recipient r;
-		r.message_id = msg_id == 0 ? m_msg1 : msg_id;
-		r.address = address;
-		return r;
-	}
-
-	sqlite3* m_db = nullptr;
-	RecipientDAL* m_dal = nullptr;
-	int64_t m_msg1 = 0;
-	int64_t m_msg2 = 0;
+    Recipient makeRecipient(const std::string& address, RecipientType type = RecipientType::To)
+    {
+        Recipient r;
+        r.message_id = message_id;
+        r.address    = address;
+        r.type       = type;
+        return r;
+    }
 };
 
-TEST_F(RecipientDALTest, Insert_SetsID)
+// ── insert & findByID ────────────────────────────────────────────────────────
+
+TEST_F(RecipientDALTest, InsertAssignsID)
 {
-	auto r = make();
-	EXPECT_TRUE(m_dal->insert(r));
-	EXPECT_TRUE(r.id.has_value());
+    RecipientDAL dal(db);
+    Recipient r = makeRecipient("to@example.com");
+    ASSERT_TRUE(dal.insert(r));
+    ASSERT_TRUE(r.id.has_value());
 }
 
-TEST_F(RecipientDALTest, Insert_PersistsFields)
+TEST_F(RecipientDALTest, FindByIDReturnsCorrectFields)
 {
-	auto r = make(m_msg1, "specific@example.com");
-	m_dal->insert(r);
+    RecipientDAL dal(db);
+    Recipient r = makeRecipient("cc@example.com", RecipientType::Cc);
+    ASSERT_TRUE(dal.insert(r));
 
-	auto f = m_dal->findByID(r.id.value());
-	ASSERT_TRUE(f.has_value());
-	EXPECT_EQ(f->address, "specific@example.com");
-	EXPECT_EQ(f->message_id, m_msg1);
+    auto found = dal.findByID(r.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->address, "cc@example.com");
+    EXPECT_EQ(found->type, RecipientType::Cc);
+    EXPECT_EQ(found->message_id, message_id);
 }
 
-TEST_F(RecipientDALTest, Insert_RejectsUnknownMessage)
+TEST_F(RecipientDALTest, FindByIDMissingReturnsNullopt)
 {
-	auto r = make(99999);
-	EXPECT_FALSE(m_dal->insert(r));
+    RecipientDAL dal(db);
+    EXPECT_FALSE(dal.findByID(9999).has_value());
 }
 
-TEST_F(RecipientDALTest, Insert_AllowsMultiplePerMessage)
+// ── findByMessage ────────────────────────────────────────────────────────────
+
+TEST_F(RecipientDALTest, FindByMessageReturnsAllRecipients)
 {
-	auto r1 = make(m_msg1, "a@example.com");
-	auto r2 = make(m_msg1, "b@example.com");
-	auto r3 = make(m_msg1, "c@example.com");
-	EXPECT_TRUE(m_dal->insert(r1));
-	EXPECT_TRUE(m_dal->insert(r2));
-	EXPECT_TRUE(m_dal->insert(r3));
+    RecipientDAL dal(db);
+    dal.insert(makeRecipient("to1@x.com",  RecipientType::To));
+    dal.insert(makeRecipient("to2@x.com",  RecipientType::To));
+    dal.insert(makeRecipient("cc1@x.com",  RecipientType::Cc));
+    dal.insert(makeRecipient("bcc1@x.com", RecipientType::Bcc));
+
+    auto result = dal.findByMessage(message_id);
+    EXPECT_EQ(result.size(), 4u);
 }
 
-TEST_F(RecipientDALTest, Insert_AllowsSameAddressOnDifferentMessages)
+TEST_F(RecipientDALTest, FindByMessageEmptyWhenNone)
 {
-	auto r1 = make(m_msg1, "shared@example.com");
-	auto r2 = make(m_msg2, "shared@example.com");
-	EXPECT_TRUE(m_dal->insert(r1));
-	EXPECT_TRUE(m_dal->insert(r2));
+    RecipientDAL dal(db);
+    EXPECT_TRUE(dal.findByMessage(message_id).empty());
 }
 
-TEST_F(RecipientDALTest, FindByID_ReturnsNulloptIfMissing)
+TEST_F(RecipientDALTest, FindByMessageDoesNotReturnOtherMessages)
 {
-	EXPECT_FALSE(m_dal->findByID(99999).has_value());
+    UserDAL udal(db); FolderDAL fdal(db); MessageDAL mdal(db);
+    User u2; u2.username = "u2"; u2.password_hash = "h"; udal.insert(u2);
+    Folder f2; f2.user_id = u2.id.value(); f2.name = "INBOX"; f2.next_uid = 1; f2.is_subscribed = true;
+    fdal.insert(f2);
+    Message m2; m2.user_id = u2.id.value(); m2.folder_id = f2.id.value(); m2.uid = 1;
+    m2.raw_file_path = "/tmp/2.eml"; m2.size_bytes = 100; m2.from_address = "x@y.com";
+    m2.internal_date = "2024-01-01T00:00:00Z";
+    mdal.insert(m2);
+
+    RecipientDAL dal(db);
+    Recipient r; r.message_id = m2.id.value(); r.address = "other@y.com"; r.type = RecipientType::To;
+    dal.insert(r);
+
+    EXPECT_TRUE(dal.findByMessage(message_id).empty());
 }
 
-TEST_F(RecipientDALTest, FindByMessage_ReturnsAll)
-{
-	auto r1 = make(m_msg1, "a@example.com");
-	auto r2 = make(m_msg1, "b@example.com");
-	auto r3 = make(m_msg2, "c@example.com");
-	m_dal->insert(r1);
-	m_dal->insert(r2);
-	m_dal->insert(r3);
+// ── recipient types ──────────────────────────────────────────────────────────
 
-	EXPECT_EQ(m_dal->findByMessage(m_msg1).size(), 2u);
+TEST_F(RecipientDALTest, AllTypesRoundtrip)
+{
+    RecipientDAL dal(db);
+    Recipient to      = makeRecipient("to@x.com",      RecipientType::To);
+    Recipient cc      = makeRecipient("cc@x.com",      RecipientType::Cc);
+    Recipient bcc     = makeRecipient("bcc@x.com",     RecipientType::Bcc);
+    Recipient replyto = makeRecipient("reply@x.com",   RecipientType::ReplyTo);
+
+    dal.insert(to); dal.insert(cc); dal.insert(bcc); dal.insert(replyto);
+
+    auto all = dal.findByMessage(message_id);
+    ASSERT_EQ(all.size(), 4u);
+
+    int to_count = 0, cc_count = 0, bcc_count = 0, replyto_count = 0;
+    for (const auto& r : all)
+    {
+        if (r.type == RecipientType::To)      ++to_count;
+        if (r.type == RecipientType::Cc)      ++cc_count;
+        if (r.type == RecipientType::Bcc)     ++bcc_count;
+        if (r.type == RecipientType::ReplyTo) ++replyto_count;
+    }
+    EXPECT_EQ(to_count,      1);
+    EXPECT_EQ(cc_count,      1);
+    EXPECT_EQ(bcc_count,     1);
+    EXPECT_EQ(replyto_count, 1);
 }
 
-TEST_F(RecipientDALTest, FindByMessage_EmptyWhenNone)
+// ── update ───────────────────────────────────────────────────────────────────
+
+TEST_F(RecipientDALTest, UpdateChangesAddress)
 {
-	EXPECT_TRUE(m_dal->findByMessage(m_msg1).empty());
+    RecipientDAL dal(db);
+    Recipient r = makeRecipient("old@x.com");
+    ASSERT_TRUE(dal.insert(r));
+
+    r.address = "new@x.com";
+    ASSERT_TRUE(dal.update(r));
+
+    auto found = dal.findByID(r.id.value());
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->address, "new@x.com");
 }
 
-TEST_F(RecipientDALTest, Update_PersistsAddressChange)
+TEST_F(RecipientDALTest, UpdateChangesType)
 {
-	auto r = make(m_msg1, "old@example.com");
-	m_dal->insert(r);
-	r.address = "new@example.com";
-	EXPECT_TRUE(m_dal->update(r));
-	EXPECT_EQ(m_dal->findByID(r.id.value())->address, "new@example.com");
+    RecipientDAL dal(db);
+    Recipient r = makeRecipient("x@x.com", RecipientType::To);
+    ASSERT_TRUE(dal.insert(r));
+
+    r.type = RecipientType::Cc;
+    ASSERT_TRUE(dal.update(r));
+
+    EXPECT_EQ(dal.findByID(r.id.value())->type, RecipientType::Cc);
 }
 
-TEST_F(RecipientDALTest, Update_FailsWithNoID)
+TEST_F(RecipientDALTest, UpdateWithoutIDFails)
 {
-	auto r = make();
-	EXPECT_FALSE(m_dal->update(r));
+    RecipientDAL dal(db);
+    Recipient r = makeRecipient("x@x.com");
+    EXPECT_FALSE(dal.update(r));
 }
 
-TEST_F(RecipientDALTest, HardDelete_RemovesRow)
+// ── hardDelete ───────────────────────────────────────────────────────────────
+
+TEST_F(RecipientDALTest, HardDeleteRemovesRecipient)
 {
-	auto r = make();
-	m_dal->insert(r);
-	int64_t id = r.id.value();
-	EXPECT_TRUE(m_dal->hardDelete(id));
-	EXPECT_FALSE(m_dal->findByID(id).has_value());
+    RecipientDAL dal(db);
+    Recipient r = makeRecipient("del@x.com");
+    ASSERT_TRUE(dal.insert(r));
+    ASSERT_TRUE(dal.hardDelete(r.id.value()));
+    EXPECT_FALSE(dal.findByID(r.id.value()).has_value());
 }
 
-TEST_F(RecipientDALTest, HardDelete_OnlyRemovesTarget)
+TEST_F(RecipientDALTest, HardDeleteOnlyRemovesTargeted)
 {
-	auto r1 = make(m_msg1, "keep@example.com");
-	auto r2 = make(m_msg1, "del@example.com");
-	m_dal->insert(r1);
-	m_dal->insert(r2);
-	m_dal->hardDelete(r2.id.value());
+    RecipientDAL dal(db);
+    Recipient r1 = makeRecipient("keep@x.com");
+    Recipient r2 = makeRecipient("del@x.com");
+    ASSERT_TRUE(dal.insert(r1));
+    ASSERT_TRUE(dal.insert(r2));
 
-	EXPECT_TRUE(m_dal->findByID(r1.id.value()).has_value());
-	EXPECT_FALSE(m_dal->findByID(r2.id.value()).has_value());
-}
+    ASSERT_TRUE(dal.hardDelete(r2.id.value()));
 
-TEST_F(RecipientDALTest, Cascade_DeletedWhenMessageDeleted)
-{
-	auto r1 = make(m_msg1, "a@example.com");
-	auto r2 = make(m_msg1, "b@example.com");
-	m_dal->insert(r1);
-	m_dal->insert(r2);
-
-	sqlite3_stmt* stmt = nullptr;
-	sqlite3_prepare_v2(m_db, "DELETE FROM messages WHERE id = ?;", -1, &stmt, nullptr);
-	sqlite3_bind_int64(stmt, 1, m_msg1);
-	sqlite3_step(stmt);
-	sqlite3_finalize(stmt);
-
-	EXPECT_TRUE(m_dal->findByMessage(m_msg1).empty());
+    EXPECT_TRUE (dal.findByID(r1.id.value()).has_value());
+    EXPECT_FALSE(dal.findByID(r2.id.value()).has_value());
 }

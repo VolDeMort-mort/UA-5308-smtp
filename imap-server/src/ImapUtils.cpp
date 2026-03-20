@@ -171,7 +171,7 @@ std::vector<int64_t> ParseSequenceSet(const std::string& sequenceSet, int64_t ma
 void SortMessagesByTimeDescending(std::vector<Message>& messages)
 {
 	std::sort(messages.begin(), messages.end(),
-			  [](const Message& a, const Message& b) { return a.created_at > b.created_at; });
+			  [](const Message& a, const Message& b) { return a.internal_date > b.internal_date; });
 }
 
 } // namespace IMAP_UTILS

@@ -3,9 +3,77 @@
 #include "SmtpParser.hpp"
 #include "SmtpResponse.hpp"
 
-SmtpSession::SmtpSession(std::string domain)
-    : m_domain(std::move(domain))
+SmtpSession::SmtpSession(std::string domain, MessageRepository* message_repo, UserRepository* user_repo)
+    : m_domain(std::move(domain)),
+      m_message_repo(message_repo),
+      m_user_repo(user_repo)
 {
+}
+
+std::string SmtpSession::ExtractUsername(const std::string& email)
+{
+    std::string clean = email;
+
+    if (!clean.empty() && clean.front() == '<')
+        clean.erase(0, 1);
+
+    if (!clean.empty() && clean.back() == '>')
+        clean.pop_back();
+
+    auto pos = clean.find('@');
+
+    if (pos == std::string::npos)
+        return clean;
+
+    return clean.substr(0, pos);
+}
+
+bool SmtpSession::SaveMessage()
+{
+    if (m_recipients.empty())
+        return false;
+
+    bool any_saved = false;
+
+    for (const auto& recipient : m_recipients)
+    {
+        std::string username = ExtractUsername(recipient);
+
+        auto user = m_user_repo->findByUsername(username);
+
+        if (!user)
+        {
+            User new_user;
+            new_user.username = username;
+            new_user.password_hash = "smtp_auto";
+
+            if (!m_user_repo->registerUser(new_user, ""))
+                continue;
+
+            user = m_user_repo->findByUsername(username);
+        }
+
+        if (!user || !user->id)
+            continue;
+
+        auto inbox = m_message_repo->findFolderByName(user->id.value(), "INBOX");
+        if (!inbox || !inbox->id)
+            continue;
+
+        Message msg;
+        msg.user_id = user->id.value();
+        msg.from_address = m_sender;
+        msg.raw_file_path = m_body; 
+        msg.size_bytes = static_cast<int64_t>(m_body.size());
+        msg.internal_date = "";
+
+        if (!m_message_repo->deliver(msg, inbox->id.value()))
+            continue;
+
+        any_saved = true;
+    }
+
+    return any_saved;
 }
 
 std::string SmtpSession::Greeting() const
@@ -41,7 +109,13 @@ std::string SmtpSession::ProcessLine(const std::string& line)
     if (m_state == SmtpState::RECEIVING_DATA)
     {
         if (line == ".")
-        {
+        {	
+			if(!SaveMessage())
+			{
+				ResetMessage();
+				m_state = SmtpState::WAIT_MAIL;
+				return SmtpResponse::MessageStorageFailed();
+			}
             m_state = SmtpState::WAIT_MAIL;
 
             ResetMessage();

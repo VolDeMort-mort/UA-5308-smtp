@@ -1,65 +1,79 @@
 #include "DataBaseManager.h"
 
-#include <iostream>
 #include <fstream>
 #include <sstream>
 
-DataBaseManager::DataBaseManager(const std::string& db_path, const std::string& mygration_path)
+DataBaseManager::DataBaseManager(const std::string& db_path,
+                                 const std::string& migration_path,
+                                 std::shared_ptr<ILogger> logger)
+    : m_logger(std::move(logger))
 {
-    int result_code = sqlite3_open(db_path.c_str(), &m_db);
+    int rc = sqlite3_open(db_path.c_str(), &m_db);
 
-    if(result_code != SQLITE_OK)
+    if (rc != SQLITE_OK)
     {
-        //Log(ERROR, "failed to open database");
-        std::cerr << "failed to open database";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Failed to open: " + std::string(sqlite3_errmsg(m_db)));
         sqlite3_close(m_db);
         m_db = nullptr;
         return;
     }
 
-    sqlite3_exec(m_db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
+    if (m_logger)
+        m_logger->Log(LogLevel::DEBUG, "[DB] Opened: " + db_path);
 
-    if(!applyMygration(mygration_path))
+    rc = sqlite3_exec(m_db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
+    if (rc != SQLITE_OK)
     {
-        //Log(WARNING, "Mygration Failed");
-        std::cerr << "mygration failed";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Failed to enable foreign keys: "
+                          + std::string(sqlite3_errmsg(m_db)));
+        sqlite3_close(m_db);
+        m_db = nullptr;
         return;
     }
 
-    m_connected = true;
+    if (!applyMigration(migration_path))
+    {
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Migration failed: " + migration_path);
+        sqlite3_close(m_db);
+        m_db = nullptr;
+        return;
+    }
 
-    //Logger(TRACE, "Database connected");
-    std::cerr << "Database connected";
+    if (m_logger)
+        m_logger->Log(LogLevel::DEBUG, "[DB] Migration applied: " + migration_path);
+
+    m_connected = true;
 }
 
 DataBaseManager::~DataBaseManager()
 {
-    if(m_db)
-    {
+    if (m_db)
         sqlite3_close(m_db);
-        //Log("Tracce", "Database closed");
-        std::cerr << "Database closed";
-    }
 }
 
 sqlite3* DataBaseManager::getDB() const
 {
+    if (!m_connected)
+        return nullptr;
     return m_db;
 }
 
 bool DataBaseManager::isConnected() const
 {
-    return m_db;
+    return m_connected;
 }
 
-bool DataBaseManager::applyMygration(const std::string& mygration_path)
+bool DataBaseManager::applyMigration(const std::string& migration_path)
 {
-    std::ifstream file(mygration_path);
+    std::ifstream file(migration_path);
 
-    if(!file.is_open())
+    if (!file.is_open())
     {
-        //Log(TRACE, "Couldn't open database mygration target");
-        std::cerr << "Couldnt open db mygration target";
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Cannot open migration file: " + migration_path);
         return false;
     }
 
@@ -68,18 +82,16 @@ bool DataBaseManager::applyMygration(const std::string& mygration_path)
     std::string sql = buffer.str();
 
     char* err_msg = nullptr;
+    int rc = sqlite3_exec(m_db, sql.c_str(), nullptr, nullptr, &err_msg);
 
-    int result_code = sqlite3_exec(m_db, sql.c_str(), nullptr, nullptr, &err_msg);
-
-    if(result_code != SQLITE_OK)
+    if (rc != SQLITE_OK)
     {
-        //Log + err msg;
-        std::cerr << "mygration failed" << err_msg;
+        if (m_logger)
+            m_logger->Log(LogLevel::PROD, "[DB] Migration error: "
+                          + std::string(err_msg ? err_msg : "unknown"));
         sqlite3_free(err_msg);
         return false;
     }
 
-    //Log(TRACE, "Mygration success");
-    std::cerr << "mygration success";
     return true;
 }

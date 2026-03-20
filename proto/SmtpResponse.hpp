@@ -24,6 +24,11 @@ namespace SmtpResponse
         return "354 End data with <CR><LF>.<CR><LF>\r\n";
     }
 
+	inline std::string MessageStorageFailed()
+	{
+		return "452 Message storage failed\r\n";
+	}
+
     inline std::string BadSequence()
     {
         return "503 Bad sequence of commands\r\n";
