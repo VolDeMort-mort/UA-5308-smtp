@@ -147,10 +147,12 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            contentHeight: implicitHeight
+
+            contentHeight: navLayout.implicitHeight
+
             boundsBehavior: Flickable.StopAtBounds
 
-            // Basic navigation
+            // Navigation
             ColumnLayout {
                 id: navLayout
                 width: parent.width

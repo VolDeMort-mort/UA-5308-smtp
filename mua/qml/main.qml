@@ -11,7 +11,7 @@ ApplicationWindow {
     visible: true
     width: Screen.width
     height: Screen.height
-    minimumWidth: 500
+    minimumWidth: 800
     minimumHeight: 600
     visibility: Window.Maximized
     title: "Email Client"

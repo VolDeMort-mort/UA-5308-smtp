@@ -12,6 +12,7 @@ Rectangle {
     radius: 20
 
     property bool allSelected: false
+    property real w: toolbarBackground.width
 
     RowLayout {
         id: toolbarRoot
@@ -24,14 +25,8 @@ Rectangle {
         ActionBtn {
             implicitWidth: 50
             iconRow.children: [
-                SvgIcon {
-                    pathData: Icons.deselCheckbox
-                    color: Theme.textColor
-                    size: 14 },
-                SvgIcon {
-                    pathData: Icons.downArrow
-                    color: Theme.textColor
-                    size: 12 }
+                SvgIcon { pathData: Icons.deselCheckbox; color: Theme.textColor; size: 14 },
+                SvgIcon { pathData: Icons.downArrow; color: Theme.textColor; size: 12 }
             ]
             onClicked: {
                 allSelected = !allSelected
@@ -44,25 +39,26 @@ Rectangle {
         // Refresh btn
         ActionBtn {
             implicitWidth: 40
-            iconRow.children: [
-                SvgIcon {
-                    pathData: Icons.refresh
-                    color: Theme.textColor
-                    size: 14 }
-            ]
+            iconRow.children: [ SvgIcon { pathData: Icons.refresh; color: Theme.textColor; size: 14 } ]
         }
 
         // Spacer
         Text {
-            text: "|";
-            color: Theme.textColor;
-            font.pixelSize: Theme.fontSizeMedium;
-            Layout.margins: 4 }
+            text: "|"
+            color: Theme.textColor
+            font.pixelSize: Theme.fontSizeMedium
+            Layout.margins: 4
 
+            opacity: w > 350 ? 1.0 : 0.0
+            visible: opacity > 0.0
+        }
 
         // Forward to btn
         ActionBtn {
             implicitWidth: 95
+            opacity: w > 350 ? 1.0 : 0.0
+            visible: opacity > 0.0
+
             iconRow.children: [
                 SvgIcon { pathData: Icons.moveTo; color: Theme.textColor; size: 14 },
                 Text { text: "Forward"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
@@ -72,6 +68,9 @@ Rectangle {
         // Move to btn
         ActionBtn {
             implicitWidth: 105
+            opacity: w > 450 ? 1.0 : 0.0
+            visible: opacity > 0.0
+
             iconRow.children: [
                 SvgIcon { pathData: Icons.folder; color: Theme.textColor; size: 14 },
                 Text { text: "Move to"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
@@ -81,6 +80,9 @@ Rectangle {
         // Spam btn
         ActionBtn {
             implicitWidth: 85
+            opacity: w > 550 ? 1.0 : 0.0
+            visible: opacity > 0.0
+
             iconRow.children: [
                 SvgIcon { pathData: Icons.spam; color: Theme.textColor; size: 14 },
                 Text { text: "Spam"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
@@ -90,6 +92,9 @@ Rectangle {
         // Delete btn
         ActionBtn {
             implicitWidth: 90
+            opacity: w > 650 ? 1.0 : 0.0
+            visible: opacity > 0.0
+
             iconRow.children: [
                 SvgIcon { pathData: Icons.trash; color: Theme.textColor; size: 14 },
                 Text { text: "Delete"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
@@ -99,10 +104,11 @@ Rectangle {
         // ... btn
         ActionBtn {
             implicitWidth: 40
+
             iconRow.children: [ SvgIcon { pathData: Icons.etc; color: Theme.mutedTextColor; size: 16 } ]
         }
 
-        // Spacer
+        // Flexible Spacer
         Item { Layout.fillWidth: true }
 
         // Filters
@@ -115,18 +121,8 @@ Rectangle {
                 id: allButtonLayout
                 anchors.fill: parent
                 spacing: 4
-
-                Text {
-                    text: "All"
-                    color: Theme.textColor
-                    font.pixelSize: Theme.fontSizeMedium
-                }
-
-                SvgIcon {
-                    pathData: Icons.downArrow
-                    color: Theme.textColor
-                    size: 14
-                }
+                Text { text: "All"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
+                SvgIcon { pathData: Icons.downArrow; color: Theme.textColor; size: 14 }
             }
 
             MouseArea {
