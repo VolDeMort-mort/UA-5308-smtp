@@ -21,6 +21,8 @@ FetchContent_Declare(
     OVERRIDE_FIND_PACKAGE
 )
 
+find_package(Boost REQUIRED)
+
 enable_testing()
 
 option(BUILD_SERVER   "Build the SMTP server"     ON)
