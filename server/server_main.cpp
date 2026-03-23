@@ -69,7 +69,8 @@ int main()
 
                 SmtpSession session(SERVER_DOMAIN,
                                     &message_repo,
-                                    &user_repo);
+                                    &user_repo,
+                                    &logger);
 
                 if (!channel.Send(session.Greeting()))
                 {
