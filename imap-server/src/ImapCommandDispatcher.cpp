@@ -495,6 +495,10 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					{
 						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
 					}
+					else if (item == "UID")
+					{
+						fetch_response += "UID " + std::to_string(msg.uid) + " ";
+					}
 					else
 					{
 						throw std::invalid_argument("Invalid fetch attribute: " + item);
@@ -1001,6 +1005,10 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					{
 						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
 					}
+					else if (item == "UID")
+					{
+						fetch_response += "UID " + std::to_string(msg.uid) + " ";
+					}
 					else
 					{
 						throw std::invalid_argument("Invalid fetch attribute: " + item);
@@ -1155,6 +1163,7 @@ std::string ImapCommandDispatcher::HandleUidCopy(const ImapCommand& cmd)
 	return response;
 }
 
+// currently does nothing
 std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 {
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleSubscribe - In: tag=" + cmd.m_tag + ", args=[" +
@@ -1184,6 +1193,7 @@ std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 	return response;
 }
 
+// currently does nothing
 std::string ImapCommandDispatcher::HandleUnsubscribe(const ImapCommand& cmd)
 {
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUnsubscribe - In: tag=" + cmd.m_tag + ", args=[" +

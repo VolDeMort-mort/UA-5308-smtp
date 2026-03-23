@@ -357,38 +357,64 @@ std::string BuildEnvelope(const Message& msg, const std::optional<SmtpClient::Em
 
 std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClient::Email>& email_opt)
 {
-	if (email_opt && email_opt->HasAttachments())
+	// email class doesn`t provide charset
+	// std::string charset = (email_opt && !email_opt->charset.empty()) ? email_opt->charset : "utf-8";
+	std::string charset = "utf-8";
+
+	if (!email_opt)
 	{
-		std::string boundary = SmtpClient::MimeBuilder::GenerateBoundary();
-		std::string bs = "((\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
-		bs += std::to_string(msg.size_bytes) + " 0) ";
-
-		for (const auto& att : email_opt->attachments)
-		{
-			bs += "(\"application\" \"octet-stream\" (\"name\" \"" + att.file_name + "\") NIL NIL \"base64\" ";
-			bs += std::to_string(att.file_size) + " 0) ";
-		}
-
-		bs += "\"multipart/mixed\" (\"boundary\" \"" + boundary + "\") NIL NIL)";
-		return bs;
+		return "(\"text\" \"plain\" (\"charset\" \"" + charset + "\") NIL NIL \"7bit\" " +
+			   std::to_string(msg.size_bytes) + " 0)";
 	}
-	else if (email_opt && email_opt->HasHtml())
+
+	bool has_html = email_opt->HasHtml();
+	bool has_attach = email_opt->HasAttachments();
+
+	auto count_lines = [](const std::string& str) { return std::count(str.begin(), str.end(), '\n'); };
+
+	std::string charset_params = "(\"charset\" \"" + charset + "\")";
+	std::string plain_part = "(\"text\" \"plain\" " + charset_params + " NIL NIL \"7bit\" " +
+							 std::to_string(email_opt->plain_text.size()) + " " +
+							 std::to_string(count_lines(email_opt->plain_text)) + ")";
+
+	std::string html_part = "";
+	if (has_html)
+	{
+		html_part = "(\"text\" \"html\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " +
+					std::to_string(email_opt->html_text.size()) + " " +
+					std::to_string(count_lines(email_opt->html_text)) + ")";
+	}
+
+	std::string text_block;
+	if (has_html)
 	{
 		// can`t extract boundary from SmtpClient::Email class
-		// also information about original encoding isn`t being saved
-		std::string boundary = SmtpClient::MimeBuilder::GenerateBoundary();
-		std::string bs = "((\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
-		bs += std::to_string(email_opt->plain_text.size()) + " 0) ";
-		bs += "(\"text\" \"html\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" ";
-		bs += std::to_string(email_opt->html_text.size()) + " 0) ";
-		bs += "\"multipart/alternative\" (\"boundary\" \"" + boundary + "\") NIL NIL)";
-		return bs;
+		std::string alt_bound = SmtpClient::MimeBuilder::GenerateBoundary();
+		text_block = "(" + plain_part + html_part + " \"alternative\" (\"boundary\" \"" + alt_bound + "\") NIL NIL)";
 	}
 	else
 	{
-		size_t body_size = email_opt ? email_opt->plain_text.size() : msg.size_bytes;
-		return "(\"text\" \"plain\" (\"charset\" \"utf-8\") NIL NIL \"7bit\" " + std::to_string(body_size) + " 0)";
+		text_block = plain_part;
 	}
+
+	if (!has_attach)
+	{
+		return text_block;
+	}
+
+	// can`t extract boundary from SmtpClient::Email class
+	std::string mix_bound = SmtpClient::MimeBuilder::GenerateBoundary();
+	std::string final_bs = "(" + text_block;
+
+	for (const auto& att : email_opt->attachments)
+	{
+		final_bs += " (\"application\" \"octet-stream\" (\"name\" \"" + att.file_name + "\") NIL NIL \"base64\" " +
+					std::to_string(att.file_size) + ")";
+	}
+
+	final_bs += " \"mixed\" (\"boundary\" \"" + mix_bound + "\") NIL NIL)";
+
+	return final_bs;
 }
 
 std::string GetBodyContent(const Message& msg)
