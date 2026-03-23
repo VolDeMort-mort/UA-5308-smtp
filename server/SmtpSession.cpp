@@ -96,6 +96,8 @@ void SmtpSession::ResetMessage()
 void SmtpSession::ResetToHelo()
 {
 	m_state = SmtpState::WAIT_HELO;
+	m_authenticated = false;
+	m_auth_username.clear();
 	ResetMessage();
 }
 
@@ -105,6 +107,9 @@ std::string SmtpSession::ProcessLine(const std::string& line)
 
     if (line.size() > MAX_SMTP_LINE)
         return SmtpResponse::SyntaxError();
+
+    if (m_state == SmtpState::AUTH_WAIT_USER || m_state == SmtpState::AUTH_WAIT_PASS) 
+        return HandleAuthLine(line);
 
     if (m_state == SmtpState::RECEIVING_DATA)
     {
@@ -145,6 +150,9 @@ std::string SmtpSession::ProcessLine(const std::string& line)
         case SmtpCommandType::EHLO:
             return HandleHelo(command);
 
+        case SmtpCommandType::AUTH:
+			return HandleAuth(command);
+
         case SmtpCommandType::MAIL:
             return HandleMail(command);
 
@@ -175,23 +183,22 @@ std::string SmtpSession::ProcessLine(const std::string& line)
 
 std::string SmtpSession::HandleHelo(const SmtpCommand& command)
 {
-    if (m_state != SmtpState::WAIT_HELO)
-        return SmtpResponse::BadSequence();
+	ResetToHelo();
 
-    m_state = SmtpState::WAIT_MAIL;
+	m_state = SmtpState::WAIT_MAIL;
 
-	if (command.type == SmtpCommandType::EHLO)
-	{
-		return SmtpResponse::ReadyToStartTLS(m_domain);
-	}
+	if (command.type == SmtpCommandType::EHLO) 
+        return SmtpResponse::Ehlo(m_domain, m_secure);
 
-    return SmtpResponse::Hello(m_domain);
+	return SmtpResponse::Hello(m_domain);
 }
 
 std::string SmtpSession::HandleMail(const SmtpCommand& command)
 {
     if (m_state != SmtpState::WAIT_MAIL)
         return SmtpResponse::BadSequence();
+
+    if (!m_authenticated) return SmtpResponse::AuthRequired();
 
     m_sender = command.argument;
 
@@ -254,4 +261,138 @@ std::string SmtpSession::HandleStartTLS()
      m_state = SmtpState::STARTTLS;
 
      return SmtpResponse::StartTls();
+}
+
+std::string SmtpSession::HandleAuth(const SmtpCommand& command)
+{
+	if (m_state != SmtpState::WAIT_MAIL) return SmtpResponse::BadSequence();
+
+	if (m_authenticated) return SmtpResponse::BadSequence();
+
+	if (!m_secure) return SmtpResponse::EncryptionRequired();
+
+	auto sp = command.argument.find(' ');
+	std::string mechanism = command.argument.substr(0, sp);
+	std::string initial_response = (sp == std::string::npos) ? "" : command.argument.substr(sp + 1);
+
+	// AUTH LOGIN
+	// Two separate messeges: server asks for username, then password.
+	// Nothing is sent upfront
+	if (mechanism == "LOGIN")
+	{
+		m_state = SmtpState::AUTH_WAIT_USER;
+		const std::string label = "Username:";
+		std::vector<uint8_t> bytes(label.begin(), label.end());
+		return SmtpResponse::AuthChallenge(Base64Encoder::EncodeBase64(bytes));
+	}
+
+	// AUTH PLAIN
+	// One messege that send login and password together
+	// The client may send credentials inline with the AUTH command,
+	// or wait for an empty answer and send them on the next line.
+	if (mechanism == "PLAIN")
+	{
+		if (initial_response.empty())
+		{
+			// Client chose send empty chalange and send credatials afterwards
+            // enter AUTH_WAIT_PASS and wait
+			m_state = SmtpState::AUTH_WAIT_PASS;
+			return SmtpResponse::AuthChallenge("");
+		}
+
+		std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(initial_response);
+
+		if (decoded.empty()) return SmtpResponse::AuthFailed();
+
+		// The credentials must be sent in format "\0user\0password"
+        // So, we are finding '\0' and parsing login and pass
+		std::string blob(reinterpret_cast<char*>(decoded.data()), decoded.size());
+
+		auto first_nul = blob.find('\0');
+		auto second_nul = (first_nul == std::string::npos) ? std::string::npos : blob.find('\0', first_nul + 1);
+
+		if (first_nul == std::string::npos || second_nul == std::string::npos) return SmtpResponse::AuthFailed();
+
+		std::string username = blob.substr(first_nul + 1, second_nul - first_nul - 1);
+		std::string password = blob.substr(second_nul + 1);
+
+		if (!m_user_repo->authorize(username, password)) return SmtpResponse::AuthFailed();
+
+		m_authenticated = true;
+		return SmtpResponse::AuthSucceeded();
+	}
+
+	return SmtpResponse::UnrecognizedAuthMech();
+}
+
+std::string SmtpSession::HandleAuthLine(const std::string& line)
+{
+	// AUTH LOGIN step 1: username
+	if (m_state == SmtpState::AUTH_WAIT_USER)
+	{
+		std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(line);
+
+		if (decoded.empty() && !line.empty())
+		{
+			m_state = SmtpState::WAIT_MAIL;
+			return SmtpResponse::AuthFailed();
+		}
+
+		m_auth_username.assign(reinterpret_cast<char*>(decoded.data()), decoded.size());
+
+		m_state = SmtpState::AUTH_WAIT_PASS;
+
+		const std::string label = "Password:";
+		std::vector<uint8_t> bytes(label.begin(), label.end());
+		return SmtpResponse::AuthChallenge(Base64Encoder::EncodeBase64(bytes));
+	}
+
+	// AUTH LOGIN step 2: password or AUTH PLAIN: username and password
+	if (m_state == SmtpState::AUTH_WAIT_PASS)
+	{
+		std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(line);
+
+		if (decoded.empty() && !line.empty())
+		{
+			m_state = SmtpState::WAIT_MAIL;
+			m_auth_username.clear();
+			return SmtpResponse::AuthFailed();
+		}
+
+		std::string value(reinterpret_cast<char*>(decoded.data()), decoded.size());
+
+		// If m_auth_username is empty we arrived here from AUTH PLAIN, if not - AUTH LOGIN
+		if (m_auth_username.empty())
+		{
+			auto first_nul = value.find('\0');
+			auto second_nul = (first_nul == std::string::npos) ? std::string::npos : value.find('\0', first_nul + 1);
+
+			if (first_nul == std::string::npos || second_nul == std::string::npos)
+			{
+				m_state = SmtpState::WAIT_MAIL;
+				return SmtpResponse::AuthFailed();
+			}
+
+			std::string username = value.substr(first_nul + 1, second_nul - first_nul - 1);
+			std::string password = value.substr(second_nul + 1);
+
+			m_state = SmtpState::WAIT_MAIL;
+
+			if (!m_user_repo->authorize(username, password)) return SmtpResponse::AuthFailed();
+		}
+		else
+		{
+			// AUTH LOGIN password
+			std::string username = std::move(m_auth_username);
+			m_auth_username.clear();
+			m_state = SmtpState::WAIT_MAIL;
+
+			if (!m_user_repo->authorize(username, value)) return SmtpResponse::AuthFailed();
+		}
+
+		m_authenticated = true;
+		return SmtpResponse::AuthSucceeded();
+	}
+
+	return SmtpResponse::SyntaxError();
 }

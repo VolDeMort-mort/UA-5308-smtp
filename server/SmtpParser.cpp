@@ -70,6 +70,23 @@ SmtpCommand SmtpParser::Parse(const std::string& line)
 	{
 		command.type = SmtpCommandType::STARTTLS;
 	}
+	else if (StartsWith(upper, "AUTH "))
+	{
+		command.type = SmtpCommandType::AUTH;
+		
+        std::string arg = clean.substr(5);
+
+        // to insure that credentials that could be sent with AUTH stau case-sensative
+		auto sp = arg.find(' ');
+		if (sp == std::string::npos)
+		{
+			command.argument = ToUpper(arg);
+		}
+		else
+		{
+			command.argument = ToUpper(arg.substr(0, sp)) + " " + arg.substr(sp + 1);
+		}
+	}
 
     return command;
 }
