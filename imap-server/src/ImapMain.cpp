@@ -9,6 +9,8 @@
 #include "UserRepository.h"
 
 // use with relative path to root folder from directory you are launching from
+// better to call from root of project, e.g. ./build/imap-server/imap_server ./
+// if other path are used, some issues with .env files pathes may occur
 int main(int argc, char** argv)
 {
 	Logger logger(std::make_unique<FileStrategy>(TRACE));

@@ -12,30 +12,29 @@
 ImapCommandDispatcher::ImapCommandDispatcher(ILogger& logger, UserRepository& userRepo, MessageRepository& messRepo)
 	: m_logger(logger), m_userRepo(userRepo), m_messRepo(messRepo)
 {
-	m_handlers = {
-		{ImapCommandType::Login, [this](const ImapCommand& cmd) { return HandleLogin(cmd); }},
-		{ImapCommandType::Logout, [this](const ImapCommand& cmd) { return HandleLogout(cmd); }},
-		{ImapCommandType::Capability, [this](const ImapCommand& cmd) { return HandleCapability(cmd); }},
-		{ImapCommandType::Noop, [this](const ImapCommand& cmd) { return HandleNoop(cmd); }},
-		{ImapCommandType::Select, [this](const ImapCommand& cmd) { return HandleSelect(cmd); }},
-		{ImapCommandType::List, [this](const ImapCommand& cmd) { return HandleList(cmd); }},
-		{ImapCommandType::Lsub, [this](const ImapCommand& cmd) { return HandleLsub(cmd); }},
-		{ImapCommandType::Status, [this](const ImapCommand& cmd) { return HandleStatus(cmd); }},
-		{ImapCommandType::Fetch, [this](const ImapCommand& cmd) { return HandleFetch(cmd); }},
-		{ImapCommandType::Store, [this](const ImapCommand& cmd) { return HandleStore(cmd); }},
-		{ImapCommandType::Create, [this](const ImapCommand& cmd) { return HandleCreate(cmd); }},
-		{ImapCommandType::Delete, [this](const ImapCommand& cmd) { return HandleDelete(cmd); }},
-		{ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
-		{ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
-		{ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
-		{ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
-		{ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
-		{ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
-		{ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
-		{ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
-		{ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
-		{ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
-	};
+	m_handlers = {{ImapCommandType::Login, [this](const ImapCommand& cmd) { return HandleLogin(cmd); }},
+				  {ImapCommandType::Logout, [this](const ImapCommand& cmd) { return HandleLogout(cmd); }},
+				  {ImapCommandType::Capability, [this](const ImapCommand& cmd) { return HandleCapability(cmd); }},
+				  {ImapCommandType::Noop, [this](const ImapCommand& cmd) { return HandleNoop(cmd); }},
+				  {ImapCommandType::Select, [this](const ImapCommand& cmd) { return HandleSelect(cmd); }},
+				  {ImapCommandType::List, [this](const ImapCommand& cmd) { return HandleList(cmd); }},
+				  {ImapCommandType::Lsub, [this](const ImapCommand& cmd) { return HandleLsub(cmd); }},
+				  {ImapCommandType::Status, [this](const ImapCommand& cmd) { return HandleStatus(cmd); }},
+				  {ImapCommandType::Fetch, [this](const ImapCommand& cmd) { return HandleFetch(cmd); }},
+				  {ImapCommandType::Store, [this](const ImapCommand& cmd) { return HandleStore(cmd); }},
+				  {ImapCommandType::Create, [this](const ImapCommand& cmd) { return HandleCreate(cmd); }},
+				  {ImapCommandType::Delete, [this](const ImapCommand& cmd) { return HandleDelete(cmd); }},
+				  {ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
+				  {ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
+				  {ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
+				  {ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
+				  {ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
+				  {ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
+				  {ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
+				  {ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
+				  {ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
+				  {ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
+				  {ImapCommandType::StartTLS, [this](const ImapCommand& cmd) { return HandleStartTLS(cmd); }}};
 }
 
 std::string ImapCommandDispatcher::Dispatch(const ImapCommand& cmd)
@@ -60,6 +59,7 @@ bool ImapCommandDispatcher::RequiresAuth(ImapCommandType type) const
 	case ImapCommandType::Logout:
 	case ImapCommandType::Capability:
 	case ImapCommandType::Noop:
+	case ImapCommandType::StartTLS:
 		result = false;
 		break;
 	default:
@@ -1260,5 +1260,17 @@ std::string ImapCommandDispatcher::HandleCheck(const ImapCommand& cmd)
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCheck - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCheck - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleStartTLS(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - In: tag=" + cmd.m_tag);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - Start");
+
+	std::string response = cmd.m_tag + " OK Begin TLS negotiation now\r\n";
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - End");
 	return response;
 }

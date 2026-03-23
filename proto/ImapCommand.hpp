@@ -29,6 +29,7 @@ enum class ImapCommandType
 	Unsubscribe,
 	Close,
 	Check,
+	StartTLS,
 	Unknown
 };
 

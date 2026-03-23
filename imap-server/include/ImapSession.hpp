@@ -34,12 +34,16 @@ private:
 	void HandleCommand(const std::string& line);
 	void WriteResponse(const std::string& msg); // adds message to the queue
 	void Write();								// writes to the client from queue
+	void UpgradeToTLS();
 
 	ImapConfig& m_config;
 	boost::asio::ip::tcp::socket m_socket;
 	boost::asio::streambuf m_buffer;
 	boost::asio::strand<boost::asio::any_io_executor> m_strand;
 	boost::asio::steady_timer m_timer;
+
+	bool m_is_starttls_pending = false;
+	bool m_is_secure = false;
 
 	std::queue<std::string> m_write_queue;
 	bool m_is_writing = false;
