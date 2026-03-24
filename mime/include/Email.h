@@ -9,7 +9,9 @@ namespace SmtpClient {
 struct Email
 {
 	std::string sender;
-	std::string recipient;
+	std::vector<std::string> to;
+	std::vector<std::string> cc;
+	std::vector<std::string> bcc;
 	std::string subject;
 	std::string date;
 	std::string charset = "utf-8";

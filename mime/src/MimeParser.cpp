@@ -189,13 +189,63 @@ std::string MimeParser::ExtractCharset(const std::string& content_type_header)
 
 void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email, ILogger& logger)
 {
-	out_email.sender     = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "From:"),    &logger);
-	out_email.recipient  = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "To:"),      &logger);
-	out_email.subject    = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "Subject:"), &logger);
-	out_email.date       = GetHeaderValue(top_headers, "Date:");
-	out_email.message_id = GetHeaderValue(top_headers, "Message-ID:");
+	out_email.sender  = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "From:"),    &logger);
+	out_email.subject = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "Subject:"), &logger);
+	out_email.date    = GetHeaderValue(top_headers, "Date:");
+
+	std::string to_raw = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "To:"), &logger);
+	out_email.to = SplitAddresses(to_raw);
+
+	std::string cc_raw = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "Cc:"), &logger);
+	out_email.cc = SplitAddresses(cc_raw);
+
+	out_email.message_id  = GetHeaderValue(top_headers, "Message-ID:");
 	out_email.in_reply_to = GetHeaderValue(top_headers, "In-Reply-To:");
-	out_email.references = GetHeaderValue(top_headers, "References:");
+	out_email.references  = GetHeaderValue(top_headers, "References:");
+}
+
+std::vector<std::string> MimeParser::SplitAddresses(const std::string& header_value)
+{
+	std::vector<std::string> result;
+	if (header_value.empty()) return result;
+
+	std::string current;
+	int  angle_depth = 0;
+	bool in_quotes   = false;
+
+	for (char c : header_value)
+	{
+		if (c == '"' && angle_depth == 0)
+		{
+			in_quotes = !in_quotes;
+			current += c;
+		}
+		else if (!in_quotes && c == '<')
+		{
+			angle_depth++;
+			current += c;
+		}
+		else if (!in_quotes && c == '>')
+		{
+			if (angle_depth > 0) angle_depth--;
+			current += c;
+		}
+		else if (!in_quotes && angle_depth == 0 && c == ',')
+		{
+			std::string trimmed = StringUtils::Trim(current);
+			if (!trimmed.empty()) result.push_back(trimmed);
+			current.clear();
+		}
+		else
+		{
+			current += c;
+		}
+	}
+
+	std::string trimmed = StringUtils::Trim(current);
+	if (!trimmed.empty()) result.push_back(trimmed);
+
+	return result;
 }
 
 void MimeParser::ParseMultipartBody(const std::string& body, const std::string& boundary,
@@ -431,6 +481,95 @@ std::string MimeParser::GetHeaderValue(const std::string& headers, const std::st
 		}
 	}
 	return result;
+}
+
+bool MimeParser::ParseStructure(const std::string& raw_mime, MimePart& out_root,
+								ILogger& logger)
+{
+	if (raw_mime.empty())
+	{
+		logger.Log(PROD, "ParseStructure: empty input.");
+		return false;
+	}
+
+	ParsePartStructure(raw_mime, out_root, logger);
+	return true;
+}
+
+void MimeParser::ParsePartStructure(const std::string& raw_part, MimePart& out_part,
+									ILogger& logger)
+{
+	std::string headers, body;
+	SplitHeadersAndBody(raw_part, headers, body);
+
+	std::string content_type     = GetHeaderValue(headers, "Content-Type:");
+	std::string ct_lower         = ToLower(content_type);
+	std::string ct_no_params     = ct_lower;
+	size_t      semi             = ct_no_params.find(';');
+	if (semi != std::string::npos) ct_no_params = ct_no_params.substr(0, semi);
+	ct_no_params = StringUtils::Trim(ct_no_params);
+
+	// Split "type/subtype"
+	size_t slash = ct_no_params.find('/');
+	if (slash != std::string::npos)
+	{
+		out_part.type    = ct_no_params.substr(0, slash);
+		out_part.subtype = ct_no_params.substr(slash + 1);
+	}
+	else
+	{
+		out_part.type    = ct_no_params.empty() ? "text" : ct_no_params;
+		out_part.subtype = ct_no_params.empty() ? "plain" : "";
+	}
+
+	if (out_part.IsMultipart())
+	{
+		out_part.boundary = ExtractBoundary(content_type);
+
+		if (out_part.boundary.empty())
+		{
+			logger.Log(PROD, "ParseStructure: multipart without boundary in Content-Type: " + content_type);
+			return;
+		}
+
+		std::string delimiter = "--" + out_part.boundary;
+		size_t      start_pos = body.find(delimiter);
+
+		while (start_pos != std::string::npos)
+		{
+			start_pos += delimiter.length();
+
+			if (start_pos < body.length() && body[start_pos] == '\r') start_pos++;
+			if (start_pos < body.length() && body[start_pos] == '\n') start_pos++;
+
+			// Closing delimiter "--boundary--"
+			if (start_pos + 1 < body.length() && body.substr(start_pos, 2) == "--")
+				break;
+
+			size_t end_pos = body.find(delimiter, start_pos);
+			if (end_pos == std::string::npos) break;
+
+			std::string sub_part = body.substr(start_pos, end_pos - start_pos);
+
+			MimePart child;
+			ParsePartStructure(sub_part, child, logger);
+			out_part.children.push_back(std::move(child));
+
+			start_pos = end_pos;
+		}
+	}
+	else
+	{
+		out_part.charset  = ExtractCharset(content_type);
+		out_part.encoding = ToLower(GetHeaderValue(headers, "Content-Transfer-Encoding:"));
+		if (out_part.encoding.empty()) out_part.encoding = "7bit";
+
+		out_part.filename = ExtractFileName(headers, logger);
+		if (out_part.filename == "unnamed_file") out_part.filename.clear();
+
+		out_part.size  = body.size();
+		out_part.lines = static_cast<std::size_t>(std::count(body.begin(), body.end(), '\n'));
+	}
 }
 
 } // namespace SmtpClient

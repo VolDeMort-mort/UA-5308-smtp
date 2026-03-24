@@ -12,6 +12,21 @@
 #include  "../../common/utils/StringUtils.h"
 namespace SmtpClient {
 
+namespace {
+
+std::string JoinAddresses(const std::vector<std::string>& addresses)
+{
+	std::string result;
+	for (std::size_t i = 0; i < addresses.size(); ++i)
+	{
+		if (i > 0) result += ", ";
+		result += addresses[i];
+	}
+	return result;
+}
+
+} // anonymous namespace
+
 bool MimeBuilder::BuildEmail(const Email& email_data, std::string& out_mime,
 							 ILogger& logger)
 {
@@ -48,9 +63,9 @@ bool MimeBuilder::ValidateEmail(const Email& email_data, ILogger& logger)
 		logger.Log(PROD, "MimeBuilder error: sender is empty.");
 		return false;
 	}
-	if (StringUtils::Trim(email_data.recipient).empty())
+	if (email_data.to.empty())
 	{
-		logger.Log(PROD, "MimeBuilder error: recipient is empty.");
+		logger.Log(PROD, "MimeBuilder error: recipient (To) is empty.");
 		return false;
 	}
 	if (StringUtils::Trim(email_data.plain_text).empty() && email_data.html_text.empty())
@@ -63,10 +78,13 @@ bool MimeBuilder::ValidateEmail(const Email& email_data, ILogger& logger)
 		logger.Log(PROD, "MimeBuilder error: invalid sender address.");
 		return false;
 	}
-	if (StringUtils::Trim(email_data.recipient).find('@') == std::string::npos)
+	for (const auto& addr : email_data.to)
 	{
-		logger.Log(PROD, "MimeBuilder error: invalid recipient address.");
-		return false;
+		if (StringUtils::Trim(addr).find('@') == std::string::npos)
+		{
+			logger.Log(PROD, "MimeBuilder error: invalid To address: " + addr);
+			return false;
+		}
 	}
 	return true;
 }
@@ -80,7 +98,10 @@ void MimeBuilder::AppendMainHeaders(const Email& email_data, std::string& out)
 		out += "Subject: " + MimeEncoder::EncodeHeader(email_data.subject, "\r\n\t") + "\r\n";
 
 	out += "From: " + email_data.sender + "\r\n";
-	out += "To: " + email_data.recipient + "\r\n";
+	out += "To: " + JoinAddresses(email_data.to) + "\r\n";
+	if (!email_data.cc.empty())
+		out += "Cc: " + JoinAddresses(email_data.cc) + "\r\n";
+	//! no bcc as RFC 5322 requires not to write it here and just pass through RCPT TO
 
 	std::string msg_id = email_data.message_id;
 	if (msg_id.empty())
