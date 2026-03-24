@@ -10,16 +10,16 @@ if(MSVC)
 endif()
 
 # --- GTest ---
-# OVERRIDE_FIND_PACKAGE intercepts all find_package(GTest) calls in
-# subdirectories and provides GTest via FetchContent automatically.
 include(FetchContent)
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     GTest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        v1.14.0
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     OVERRIDE_FIND_PACKAGE
 )
+FetchContent_MakeAvailable(GTest)
 
 enable_testing()
 
