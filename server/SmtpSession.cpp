@@ -183,15 +183,28 @@ bool SmtpSession::SaveMessage()
         rec.type       = RecipientType::To;
         m_message_repo->addRecipient(rec);
 
-
-        if (mime_ok && !parsed_email.recipient.empty() &&
-            parsed_email.recipient != recipient_addr)
+        if (mime_ok)
         {
-            Recipient mime_to;
-            mime_to.message_id = msg.id.value();
-            mime_to.address    = parsed_email.recipient;
-            mime_to.type       = RecipientType::To;
-            m_message_repo->addRecipient(mime_to);
+            auto add_mime_recipients = [&](const std::vector<std::string>& addrs, RecipientType type)
+            {
+                for (const auto& addr : addrs)
+                {
+                    if (addr.empty())
+                        continue;
+                    if (type == RecipientType::To && addr == recipient_addr)
+                        continue; // already added above
+
+                    Recipient mime_rec;
+                    mime_rec.message_id = msg.id.value();
+                    mime_rec.address    = addr;
+                    mime_rec.type       = type;
+                    m_message_repo->addRecipient(mime_rec);
+                }
+            };
+
+            add_mime_recipients(parsed_email.to, RecipientType::To);
+            add_mime_recipients(parsed_email.cc, RecipientType::Cc);
+            add_mime_recipients(parsed_email.bcc, RecipientType::Bcc);
         }
 
         any_saved = true;
