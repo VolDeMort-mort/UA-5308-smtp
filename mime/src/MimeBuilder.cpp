@@ -13,7 +13,7 @@
 namespace SmtpClient {
 
 bool MimeBuilder::BuildEmail(const Email& email_data, std::string& out_mime,
-							 Logger& logger)
+							 ILogger& logger)
 {
 	if (!ValidateEmail(email_data, logger)) return false;
 
@@ -41,7 +41,7 @@ bool MimeBuilder::BuildEmail(const Email& email_data, std::string& out_mime,
 	return true;
 }
 
-bool MimeBuilder::ValidateEmail(const Email& email_data, Logger& logger)
+bool MimeBuilder::ValidateEmail(const Email& email_data, ILogger& logger)
 {
 	if (StringUtils::Trim(email_data.sender).empty())
 	{

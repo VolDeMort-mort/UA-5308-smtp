@@ -31,7 +31,7 @@ std::string ToLower(std::string s)
 } // anonymous namespace
 
 bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
-							Logger& logger)
+							ILogger& logger)
 {
 	if (raw_mime.empty())
 	{
@@ -45,8 +45,9 @@ bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
 	ParseMainHeaders(top_headers, out_email, logger);
 
 	std::string content_type = GetHeaderValue(top_headers, "Content-Type:");
+	std::string ct_lower     = ToLower(content_type);
 
-	if (ToLower(content_type).find("multipart") != std::string::npos)
+	if (ct_lower.find("multipart") != std::string::npos)
 	{
 		std::string boundary = ExtractBoundary(content_type);
 
@@ -57,12 +58,21 @@ bool MimeParser::ParseEmail(const std::string& raw_mime, Email& out_email,
 			return false;
 		}
 
+		if (ct_lower.find("multipart/mixed") != std::string::npos)
+			out_email.boundary_mixed = boundary;
+		else if (ct_lower.find("multipart/alternative") != std::string::npos)
+			out_email.boundary_alternative = boundary;
+
 		logger.Log(DEBUG, "MimeParser: boundary [" + boundary + "]");
 		ParseMultipartBody(body, boundary, out_email, logger);
 	}
 	else
 	{
 		std::string encoding = ToLower(GetHeaderValue(top_headers, "Content-Transfer-Encoding:"));
+		out_email.plain_text_encoding = encoding.empty() ? "7bit" : encoding;
+
+		std::string cs = ExtractCharset(content_type);
+		if (!cs.empty()) out_email.charset = cs;
 
 		if (encoding.find("quoted-printable") != std::string::npos)
 		{
@@ -150,7 +160,34 @@ std::string MimeParser::ExtractBoundary(const std::string& content_type_header)
 	return StringUtils::Trim(boundary);
 }
 
-void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email, Logger& logger)
+std::string MimeParser::ExtractCharset(const std::string& content_type_header)
+{
+	std::string lower = ToLower(content_type_header);
+	size_t pos = lower.find("charset=");
+	if (pos == std::string::npos) return "";
+
+	pos += 8;
+	if (pos >= content_type_header.length()) return "";
+
+	std::string charset;
+	if (content_type_header[pos] == '"')
+	{
+		pos++;
+		size_t end = content_type_header.find('"', pos);
+		if (end != std::string::npos)
+			charset = content_type_header.substr(pos, end - pos);
+	}
+	else
+	{
+		size_t end = content_type_header.find_first_of(" ;\r\n", pos);
+		charset    = (end != std::string::npos) ? content_type_header.substr(pos, end - pos)
+		                                        : content_type_header.substr(pos);
+	}
+
+	return StringUtils::Trim(charset);
+}
+
+void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_email, ILogger& logger)
 {
 	out_email.sender     = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "From:"),    &logger);
 	out_email.recipient  = MimeDecoder::DecodeEncodedWord(GetHeaderValue(top_headers, "To:"),      &logger);
@@ -162,7 +199,7 @@ void MimeParser::ParseMainHeaders(const std::string& top_headers, Email& out_ema
 }
 
 void MimeParser::ParseMultipartBody(const std::string& body, const std::string& boundary,
-									Email& out_email, Logger& logger)
+									Email& out_email, ILogger& logger)
 {
 	std::string delimiter = "--" + boundary;
 	size_t      start_pos = body.find(delimiter);
@@ -188,7 +225,7 @@ void MimeParser::ParseMultipartBody(const std::string& body, const std::string& 
 }
 
 void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
-								 Logger& logger)
+								 ILogger& logger)
 {
 	std::string part_headers, part_body;
 	SplitHeadersAndBody(part_raw, part_headers, part_body);
@@ -206,6 +243,9 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 		std::string nested_boundary = ExtractBoundary(GetHeaderValue(part_headers, "Content-Type:"));
 		if (!nested_boundary.empty())
 		{
+			if (content_type.find("multipart/alternative") != std::string::npos)
+				out_email.boundary_alternative = nested_boundary;
+
 			logger.Log(DEBUG, "MimeParser: nested multipart (" + content_type + ")");
 			ParseMultipartBody(part_body, nested_boundary, out_email, logger);
 		}
@@ -235,6 +275,11 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 	}
 	else if (content_type.find("text/plain") != std::string::npos)
 	{
+		out_email.plain_text_encoding = encoding.empty() ? "7bit" : encoding;
+
+		std::string cs = ExtractCharset(GetHeaderValue(part_headers, "Content-Type:"));
+		if (!cs.empty()) out_email.charset = cs;
+
 		if (encoding.find("base64") != std::string::npos)
 		{
 			part_body.erase(std::remove(part_body.begin(), part_body.end(), '\r'), part_body.end());
@@ -262,6 +307,8 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 	}
 	else if (content_type.find("text/html") != std::string::npos)
 	{
+		out_email.html_text_encoding = encoding.empty() ? "7bit" : encoding;
+
 		if (encoding.find("base64") != std::string::npos)
 		{
 			part_body.erase(std::remove(part_body.begin(), part_body.end(), '\r'), part_body.end());
@@ -289,7 +336,7 @@ void MimeParser::ProcessMimePart(const std::string& part_raw, Email& out_email,
 	}
 }
 
-std::string MimeParser::ExtractFileName(const std::string& part_headers, Logger& logger)
+std::string MimeParser::ExtractFileName(const std::string& part_headers, ILogger& logger)
 {
 	std::string file_name;
 
