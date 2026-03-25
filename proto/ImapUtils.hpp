@@ -50,4 +50,8 @@ std::string BuildBodystructureFromMimePart(const SmtpClient::MimePart& part);
 
 std::string GetBodyContent(const Message& msg);
 
+std::string GetBodySection(const Message& msg, const std::string& section);
+
+std::string ExtractPartBySection(const std::string& raw_mime, const std::string& boundary, int part_num);
+
 } // namespace IMAP_UTILS

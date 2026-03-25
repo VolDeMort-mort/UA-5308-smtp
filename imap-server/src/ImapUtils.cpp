@@ -10,6 +10,7 @@
 #include "MimeBuilder.h"
 #include "MimePart.h"
 #include "Repository/MessageRepository.h"
+#include "StringUtils.h"
 
 namespace IMAP_UTILS
 {
@@ -498,6 +499,197 @@ std::string GetBodyContent(const Message& msg)
 	}
 
 	return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+std::string ExtractPartBySection(const std::string& raw_mime, const std::string& boundary, int part_num)
+{
+	std::string delimiter = "--" + boundary;
+	size_t pos = 0;
+	int current_part = 0;
+
+	while (current_part < part_num)
+	{
+		size_t next_delim = raw_mime.find(delimiter, pos);
+		if (next_delim == std::string::npos) break;
+
+		size_t header_start = next_delim + delimiter.length();
+		size_t sep_len = 4;
+		size_t header_end = raw_mime.find("\r\n\r\n", header_start);
+
+		if (header_end == std::string::npos)
+		{
+			header_end = raw_mime.find("\n\n", header_start);
+			sep_len = 2;
+		}
+
+		if (header_end == std::string::npos) break;
+
+		// whether is CRLF separator was used or just LF
+		size_t body_start = header_end + sep_len;
+		size_t next_delim2 = raw_mime.find(delimiter, body_start);
+
+		if (current_part == part_num - 1)
+		{
+			std::string result;
+			if (next_delim2 != std::string::npos)
+			{
+				size_t body_len = next_delim2 - body_start;
+				if (body_len >= 2 && raw_mime[next_delim2 - 2] == '\r' && raw_mime[next_delim2 - 1] == '\n')
+				{
+					body_len -= 2;
+				}
+				else if (body_len >= 1 && raw_mime[next_delim2 - 1] == '\n')
+				{
+					body_len -= 1;
+				}
+
+				result = raw_mime.substr(body_start, body_len);
+			}
+			else
+			{
+				result = raw_mime.substr(body_start);
+			}
+
+			// Strip leading CRLF/LF from body (after headers there's a blank line)
+			while (!result.empty() && (result.front() == '\r' || result.front() == '\n'))
+			{
+				result.erase(result.begin());
+			}
+			return result;
+		}
+
+		pos = next_delim2;
+		current_part++;
+	}
+	return "";
+}
+
+std::string GetBodySection(const Message& msg, const std::string& section)
+{
+	std::string raw_mime = GetBodyContent(msg);
+	if (raw_mime.empty()) return "";
+
+	std::string headers, body;
+	SmtpClient::MimeParser::SplitHeadersAndBody(raw_mime, headers, body);
+
+	std::string upper_section = section;
+	for (char& c : upper_section)
+	{
+		c = toupper(c);
+	}
+
+	if (upper_section == "HEADER")
+	{
+		return headers + "\r\n\r\n";
+	}
+	else if (upper_section == "TEXT")
+	{
+		return body;
+	}
+	else if (upper_section == "MIME")
+	{
+		return headers + "\r\n\r\n";
+	}
+	else if (upper_section.find("HEADER.") == 0)
+	{
+		return headers + "\r\n\r\n";
+	}
+
+	if (isdigit(upper_section[0]))
+	{
+		std::string top_ct = SmtpClient::MimeParser::GetHeaderValue(headers, "Content-Type:");
+		bool is_multipart = (top_ct.find("multipart") != std::string::npos);
+
+		size_t suffix_pos = 0;
+		for (size_t i = 0; i < upper_section.length(); ++i)
+		{
+			if (std::isalpha(upper_section[i]) && i > 0 && upper_section[i - 1] == '.')
+			{
+				suffix_pos = i - 1;
+				break;
+			}
+		}
+
+		std::string path_str = (suffix_pos > 0) ? upper_section.substr(0, suffix_pos) : upper_section;
+		std::string suffix = (suffix_pos > 0) ? upper_section.substr(suffix_pos) : "";
+
+		std::vector<int> path;
+		size_t start = 0;
+		while (start < path_str.length())
+		{
+			size_t dot_pos = path_str.find('.', start);
+			std::string num_str =
+				(dot_pos == std::string::npos) ? path_str.substr(start) : path_str.substr(start, dot_pos - start);
+			path.push_back(std::stoi(num_str));
+			if (dot_pos == std::string::npos) break;
+			start = dot_pos + 1;
+		}
+
+		if (!is_multipart)
+		{
+			if (path.size() > 1 || (!path.empty() && path[0] > 1))
+			{
+				return "";
+			}
+
+			if (path.size() == 1 && path[0] == 1)
+			{
+				if (suffix == ".HEADER")
+				{
+					return headers + "\r\n\r\n";
+				}
+				else if (suffix == ".MIME")
+				{
+					return headers + "\r\n\r\n";
+				}
+				return body;
+			}
+
+			return "";
+		}
+
+		std::string current_body = body;
+		std::string current_headers = headers;
+
+		for (size_t i = 0; i < path.size(); ++i)
+		{
+			int part_num = path[i];
+
+			std::string content_type = SmtpClient::MimeParser::GetHeaderValue(current_headers, "Content-Type:");
+			std::string boundary = SmtpClient::MimeParser::ExtractBoundary(content_type);
+
+			if (boundary.empty())
+			{
+				if (i < path.size() - 1)
+				{
+					return "";
+				}
+				break;
+			}
+
+			std::string part_content = ExtractPartBySection(current_body, boundary, part_num);
+			if (part_content.empty()) return "";
+
+			SmtpClient::MimeParser::SplitHeadersAndBody(part_content, current_headers, current_body);
+		}
+
+		if (suffix == ".HEADER")
+		{
+			return current_headers + "\r\n\r\n";
+		}
+		else if (suffix == ".MIME")
+		{
+			return current_headers + "\r\n\r\n";
+		}
+		else if (suffix == ".TEXT")
+		{
+			return current_body;
+		}
+
+		return current_headers + "\r\n\r\n" + current_body;
+	}
+
+	return raw_mime;
 }
 
 } // namespace IMAP_UTILS

@@ -528,6 +528,23 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					{
 						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
 					}
+					else if (item.rfind("BODY[", 0) == 0 || item.rfind("BODY.PEEK[", 0) == 0)
+					{
+						bool is_peek = (item.rfind("BODY.PEEK[", 0) == 0);
+						// 10 is the index of number in BODY.PEEK[*..., 5 - BODY[*..
+						size_t bracket_start = is_peek ? 10 : 5;
+						size_t bracket_end = item.find(']', bracket_start);
+						if (bracket_end == std::string::npos)
+						{
+							throw std::invalid_argument("Invalid BODY section: " + item);
+						}
+						std::string section = item.substr(bracket_start, bracket_end - bracket_start);
+
+						std::string body_content = IMAP_UTILS::GetBodySection(msg, section);
+						std::string item_name = is_peek ? "BODY.PEEK[" + section + "]" : "BODY[" + section + "]";
+						fetch_response +=
+							item_name + " {" + std::to_string(body_content.size()) + "}\r\n" + body_content + " ";
+					}
 					else if (item == "UID")
 					{
 						fetch_response += "UID " + std::to_string(msg.uid) + " ";
@@ -1070,6 +1087,22 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					else if (item == "BODY")
 					{
 						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+					}
+					else if (item.rfind("BODY[", 0) == 0 || item.rfind("BODY.PEEK[", 0) == 0)
+					{
+						bool is_peek = (item.rfind("BODY.PEEK[", 0) == 0);
+						size_t bracket_start = is_peek ? 10 : 5;
+						size_t bracket_end = item.find(']', bracket_start);
+						if (bracket_end == std::string::npos)
+						{
+							throw std::invalid_argument("Invalid BODY section: " + item);
+						}
+						std::string section = item.substr(bracket_start, bracket_end - bracket_start);
+
+						std::string body_content = IMAP_UTILS::GetBodySection(msg, section);
+						std::string item_name = is_peek ? "BODY.PEEK[" + section + "]" : "BODY[" + section + "]";
+						fetch_response +=
+							item_name + " {" + std::to_string(body_content.size()) + "}\r\n" + body_content + " ";
 					}
 					else if (item == "UID")
 					{
