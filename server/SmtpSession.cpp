@@ -200,7 +200,7 @@ std::string SmtpSession::HandleMail(const SmtpCommand& command)
 
     if (!m_authenticated) return SmtpResponse::AuthRequired();
 
-    m_sender = command.argument;
+    m_sender = ExtractUsername(command.argument);
 
     m_state = SmtpState::WAIT_RCPT;
 
@@ -212,7 +212,7 @@ std::string SmtpSession::HandleRcpt(const SmtpCommand& command)
     if (m_state != SmtpState::WAIT_RCPT)
         return SmtpResponse::BadSequence();
 
-    m_recipients.push_back(command.argument);
+    m_recipients.push_back(ExtractUsername(command.argument));
 
     return SmtpResponse::Ok();
 }
@@ -313,7 +313,7 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 
 		if (first_nul == std::string::npos || second_nul == std::string::npos) return SmtpResponse::AuthFailed();
 
-		std::string username = blob.substr(first_nul + 1, second_nul - first_nul - 1);
+		std::string username = ExtractUsername(blob.substr(first_nul + 1, second_nul - first_nul - 1));
 		std::string password = blob.substr(second_nul + 1);
 
 		if (!m_user_repo->authorize(username, password)) return SmtpResponse::AuthFailed();
@@ -327,18 +327,20 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 
 std::string SmtpSession::HandleAuthLine(const std::string& line)
 {
+	std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(line);
+
+	if (decoded.empty() && !line.empty())
+	{
+		m_state = SmtpState::WAIT_MAIL;
+		m_auth_username.clear();
+		return SmtpResponse::AuthFailed();
+	}
+
 	// AUTH LOGIN step 1: username
 	if (m_state == SmtpState::AUTH_WAIT_USER)
 	{
-		std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(line);
-
-		if (decoded.empty() && !line.empty())
-		{
-			m_state = SmtpState::WAIT_MAIL;
-			return SmtpResponse::AuthFailed();
-		}
-
-		m_auth_username.assign(reinterpret_cast<char*>(decoded.data()), decoded.size());
+		std::string name(reinterpret_cast<char*>(decoded.data()), decoded.size());
+		m_auth_username = ExtractUsername(name);
 
 		m_state = SmtpState::AUTH_WAIT_PASS;
 
@@ -350,15 +352,6 @@ std::string SmtpSession::HandleAuthLine(const std::string& line)
 	// AUTH LOGIN step 2: password or AUTH PLAIN: username and password
 	if (m_state == SmtpState::AUTH_WAIT_PASS)
 	{
-		std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(line);
-
-		if (decoded.empty() && !line.empty())
-		{
-			m_state = SmtpState::WAIT_MAIL;
-			m_auth_username.clear();
-			return SmtpResponse::AuthFailed();
-		}
-
 		std::string value(reinterpret_cast<char*>(decoded.data()), decoded.size());
 
 		// If m_auth_username is empty we arrived here from AUTH PLAIN, if not - AUTH LOGIN
@@ -373,7 +366,7 @@ std::string SmtpSession::HandleAuthLine(const std::string& line)
 				return SmtpResponse::AuthFailed();
 			}
 
-			std::string username = value.substr(first_nul + 1, second_nul - first_nul - 1);
+			std::string username = ExtractUsername(value.substr(first_nul + 1, second_nul - first_nul - 1));
 			std::string password = value.substr(second_nul + 1);
 
 			m_state = SmtpState::WAIT_MAIL;
