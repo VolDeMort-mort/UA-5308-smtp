@@ -1,6 +1,8 @@
 #include "ImapCommandDispatcher.hpp"
 
 #include <algorithm>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
 
 #include "Entity/Folder.h"
@@ -393,6 +395,9 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 			auto data_items_str = IMAP_UTILS::TrimParentheses(cmd.m_args[1]);
 			auto data_items = IMAP_UTILS::SplitArgs(data_items_str);
 
+			// Combine split BODY[HEADER.FIELDS ...] sections
+			data_items = IMAP_UTILS::CombineSplitBodySections(data_items);
+
 			// expanding macroes
 			std::vector<std::string> expanded_items;
 			for (const auto& item : data_items)
@@ -527,6 +532,48 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					else if (item == "BODY")
 					{
 						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+					}
+					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
+					{
+						std::string raw_mime = IMAP_UTILS::GetBodyContent(msg);
+						if (raw_mime.empty()) return "";
+
+						std::string headers, body;
+						SmtpClient::MimeParser::SplitHeadersAndBody(raw_mime, headers, body);
+						std::string headers_list = IMAP_UTILS::TrimParentheses(cmd.m_args[2]);
+
+						std::vector<std::string> requested_headers;
+						std::istringstream iss(headers_list);
+						std::string h;
+						while (iss >> h)
+						{
+							requested_headers.push_back(h);
+						}
+
+						std::string result;
+						for (const auto& req : requested_headers)
+						{
+							std::string value = SmtpClient::MimeParser::GetHeaderValue(headers, req + ":");
+							if (!value.empty())
+							{
+								result += req + ": " + value + "\r\n";
+							}
+						}
+
+						result += "\r\n";
+
+						std::string item_name = item;
+						if (item_name.back() == ']')
+						{
+							item_name.pop_back();
+							item_name += " (" + headers_list + ")]";
+						}
+						else
+						{
+							item_name += " (" + headers_list + ")";
+						}
+
+						fetch_response += item_name + " {" + std::to_string(result.size()) + "}\r\n" + result + " ";
 					}
 					else if (item.rfind("BODY[", 0) == 0 || item.rfind("BODY.PEEK[", 0) == 0)
 					{
@@ -941,6 +988,9 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 			auto all_messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
 			auto data_items_str = IMAP_UTILS::TrimParentheses(cmd.m_args[1]);
 			auto data_items = IMAP_UTILS::SplitArgs(data_items_str);
+
+			// Combine split BODY[HEADER.FIELDS ...] sections
+			data_items = IMAP_UTILS::CombineSplitBodySections(data_items);
 
 			std::vector<std::string> expanded_items;
 			for (const auto& item : data_items)

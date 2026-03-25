@@ -512,56 +512,86 @@ std::string ExtractPartBySection(const std::string& raw_mime, const std::string&
 		size_t next_delim = raw_mime.find(delimiter, pos);
 		if (next_delim == std::string::npos) break;
 
-		size_t header_start = next_delim + delimiter.length();
-		size_t sep_len = 4;
-		size_t header_end = raw_mime.find("\r\n\r\n", header_start);
+		size_t part_start = next_delim + delimiter.length();
 
-		if (header_end == std::string::npos)
-		{
-			header_end = raw_mime.find("\n\n", header_start);
-			sep_len = 2;
-		}
+		if (part_start < raw_mime.length() && raw_mime[part_start] == '\r') part_start++;
+		if (part_start < raw_mime.length() && raw_mime[part_start] == '\n') part_start++;
 
-		if (header_end == std::string::npos) break;
-
-		// whether is CRLF separator was used or just LF
-		size_t body_start = header_end + sep_len;
-		size_t next_delim2 = raw_mime.find(delimiter, body_start);
+		size_t next_delim2 = raw_mime.find(delimiter, part_start);
 
 		if (current_part == part_num - 1)
 		{
-			std::string result;
+			size_t part_end;
 			if (next_delim2 != std::string::npos)
 			{
-				size_t body_len = next_delim2 - body_start;
-				if (body_len >= 2 && raw_mime[next_delim2 - 2] == '\r' && raw_mime[next_delim2 - 1] == '\n')
-				{
-					body_len -= 2;
-				}
-				else if (body_len >= 1 && raw_mime[next_delim2 - 1] == '\n')
-				{
-					body_len -= 1;
-				}
-
-				result = raw_mime.substr(body_start, body_len);
+				part_end = next_delim2;
 			}
 			else
 			{
-				result = raw_mime.substr(body_start);
+				part_end = raw_mime.length();
 			}
 
-			// Strip leading CRLF/LF from body (after headers there's a blank line)
-			while (!result.empty() && (result.front() == '\r' || result.front() == '\n'))
+			size_t result_len = part_end - part_start;
+			if (result_len >= 2 && raw_mime[part_end - 2] == '\r' && raw_mime[part_end - 1] == '\n')
 			{
-				result.erase(result.begin());
+				result_len -= 2;
 			}
-			return result;
+			else if (result_len >= 1 && raw_mime[part_end - 1] == '\n')
+			{
+				result_len -= 1;
+			}
+
+			return raw_mime.substr(part_start, result_len);
 		}
 
 		pos = next_delim2;
 		current_part++;
 	}
 	return "";
+}
+
+std::vector<std::string> CombineSplitBodySections(const std::vector<std::string>& items)
+{
+	std::vector<std::string> combined;
+
+	for (size_t i = 0; i < items.size(); ++i)
+	{
+		std::string item = items[i];
+
+		std::string upper_item = item;
+		for (char& c : upper_item)
+			c = toupper(c);
+
+		// Check if this is BODY[HEADER.FIELDS (split by spaces)
+		if (upper_item.rfind("BODY[HEADER.FIELDS", 0) == 0 || upper_item.rfind("BODY.PEEK[HEADER.FIELDS", 0) == 0)
+		{
+			bool is_peek = (upper_item.rfind("BODY.PEEK[", 0) == 0);
+			size_t prefix_len = is_peek ? 10 : 5; // "BODY.PEEK[" or "BODY["
+
+			std::string section_content = item.substr(prefix_len);
+
+			while (!section_content.empty() && section_content.back() != ']')
+			{
+				if (i + 1 >= items.size()) break;
+				++i;
+				section_content += " " + items[i];
+			}
+
+			// Ensure closing bracket exists (it was split off by whitespace)
+			if (!section_content.empty() && section_content.back() != ']')
+			{
+				section_content += "]";
+			}
+
+			combined.push_back((is_peek ? "BODY.PEEK[" : "BODY[") + section_content);
+		}
+		else
+		{
+			combined.push_back(item);
+		}
+	}
+
+	return combined;
 }
 
 std::string GetBodySection(const Message& msg, const std::string& section)
@@ -671,6 +701,12 @@ std::string GetBodySection(const Message& msg, const std::string& section)
 			if (part_content.empty()) return "";
 
 			SmtpClient::MimeParser::SplitHeadersAndBody(part_content, current_headers, current_body);
+
+			// Strip leading CRLF/LF from body after splitting headers
+			while (!current_body.empty() && (current_body.front() == '\r' || current_body.front() == '\n'))
+			{
+				current_body.erase(current_body.begin());
+			}
 		}
 
 		if (suffix == ".HEADER")
@@ -686,7 +722,8 @@ std::string GetBodySection(const Message& msg, const std::string& section)
 			return current_body;
 		}
 
-		return current_headers + "\r\n\r\n" + current_body;
+		// No suffix - return just body (BODY[1] should return body, not headers)
+		return current_body;
 	}
 
 	return raw_mime;
