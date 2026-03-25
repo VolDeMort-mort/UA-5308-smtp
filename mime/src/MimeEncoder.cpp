@@ -1,7 +1,7 @@
-#include "../include/MimeEncoder.h"
-
 #include <vector>
 
+#include "Config.h"
+#include "../include/MimeEncoder.h"
 #include "../../base64/include/Base64Encoder.hpp"
 #include "../../common/utils/StringUtils.h"
 
@@ -29,10 +29,11 @@ std::string MimeEncoder::EncodeHeader(const std::string& text, const std::string
 
 	std::string result;
 	size_t length = text.length();
+	int chunk = SmtpClient::Config::Instance().GetMime().header_chunk_size;
 
 	for (size_t i = 0; i < length;)
 	{
-		size_t end = StringUtils::FindUtf8SafeEnd(text, i, MIME_HEADER_CHUNK_SIZE);
+		size_t end = StringUtils::FindUtf8SafeEnd(text, i, chunk);
 		std::string chunk      = text.substr(i, end - i);
 		std::string base64_chunk = ToBase64(chunk);
 
