@@ -21,6 +21,13 @@ public:
     bool updatePassword(int64_t id, const std::string& new_password_hash);
     bool hardDelete(int64_t id);
 
+    bool updateProfile(int64_t id, const std::optional<std::string>& first_name, const std::optional<std::string>& last_name,
+                        const std::optional<std::string>& birthdate);
+    bool updateAvatar(int64_t id, const std::optional<std::string>& avatar_b64);
+    std::optional<std::string> getAvatar(int64_t id) const;
+    bool existsByUsername(const std::string& username) const;
+    int64_t count() const;
+
     const std::string& getLastError() const;
 private:
     sqlite3* m_db;

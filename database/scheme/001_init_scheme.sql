@@ -4,7 +4,11 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL
+    password_hash TEXT NOT NULL,
+    first_name    TEXT,
+    last_name     TEXT,
+    birthdate     TEXT,
+    avatar_b64    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS folders (
@@ -43,10 +47,9 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_folder_uid ON messages(folder_id, uid);
-
-CREATE INDEX IF NOT EXISTS idx_messages_user_id       ON messages(user_id);
-CREATE INDEX IF NOT EXISTS idx_messages_msg_id_header ON messages(message_id_header);
-CREATE INDEX IF NOT EXISTS idx_folders_user_id        ON folders(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_user_id           ON messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_msg_id_header     ON messages(message_id_header);
+CREATE INDEX IF NOT EXISTS idx_folders_user_id            ON folders(user_id);
 
 CREATE TABLE IF NOT EXISTS recipients (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,

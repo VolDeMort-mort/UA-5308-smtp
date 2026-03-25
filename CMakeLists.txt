@@ -15,11 +15,12 @@ endif()
 include(FetchContent)
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
-    GTest
     GIT_REPOSITORY https://github.com/google/googletest.git
     GIT_TAG        v1.14.0
     OVERRIDE_FIND_PACKAGE
 )
+
+find_package(GTest CONFIG REQUIRED)
 
 find_package(Boost REQUIRED)
 
@@ -30,17 +31,17 @@ option(BUILD_IMAP     "Build the IMAP server"     ON)
 option(BUILD_MUA      "Build the Mail User Agent"  ON)
 option(BUILD_DATABASE "Build the Database"         ON)
 
-add_subdirectory(common)
-add_subdirectory(base64)
+#add_subdirectory(common)
+#add_subdirectory(base64)
 add_subdirectory(logger)
-add_subdirectory(mime)
+#add_subdirectory(mime)
 
 if(BUILD_SERVER OR BUILD_IMAP OR BUILD_MUA)
-    add_subdirectory(proto)
+#    add_subdirectory(proto)
 endif()
 
 if(BUILD_SERVER)
-   add_subdirectory(server)
+#   add_subdirectory(server)
 endif()
 
 if(BUILD_IMAP OR BUILD_DATABASE)
@@ -48,9 +49,9 @@ if(BUILD_IMAP OR BUILD_DATABASE)
 endif()
 
 if(BUILD_IMAP)
-   add_subdirectory(imap-server)
+#   add_subdirectory(imap-server)
 endif()
 
 if(BUILD_MUA)
-   add_subdirectory(mua)
+#   add_subdirectory(mua)
 endif()
