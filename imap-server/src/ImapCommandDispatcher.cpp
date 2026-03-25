@@ -649,87 +649,62 @@ std::string ImapCommandDispatcher::HandleStore(const ImapCommand& cmd)
 	{
 		try
 		{
-			auto messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
-			auto lists_ids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], messages.size());
+			// db doesn`t support custom flags
+			auto raw_flags = IMAP_UTILS::SplitArgs(IMAP_UTILS::TrimParentheses(cmd.m_args[2]));
+			const std::set<std::string> valid_system_flags = {"\\Seen",		"\\Deleted", "\\Draft",
+															  "\\Answered", "\\Flagged", "\\Recent"};
 
-			std::vector<Message> selected_messages;
-			selected_messages.reserve(lists_ids.size());
-
-			for (int seq_num : lists_ids)
+			for (const auto& f : raw_flags)
 			{
-				if (seq_num > 0 && seq_num <= static_cast<int>(messages.size()))
+				if (valid_system_flags.find(f) == valid_system_flags.end())
 				{
-					// seq_num is coming from IMAP so it is 1-based, while vector is 0-based, so we need to subtract 1
-					selected_messages.push_back(messages[seq_num - 1]);
+					return ImapResponse::Bad(cmd.m_tag, "Unknown flag: " + f);
 				}
 			}
 
-			auto flags = IMAP_UTILS::SplitArgs(IMAP_UTILS::TrimParentheses(cmd.m_args[2]));
-			bool silence = cmd.m_args[1].find(".SILENT") != std::string::npos;
-			if (cmd.m_args[1][0] == '+' || cmd.m_args[1][0] == '-')
-			{
-				for (size_t i = 0; i < selected_messages.size(); ++i)
-				{
-					auto prefixed_flags = flags;
-					for (auto& f : prefixed_flags)
-					{
-						f = cmd.m_args[1][0] + f;
-					}
-					m_messRepo.setFlags(selected_messages[i].id.value(), prefixed_flags);
+			char operation = cmd.m_args[1][0]; // '+', '-' or 'F'
+			bool is_silence = cmd.m_args[1].find(".SILENT") != std::string::npos;
 
-					if (!silence)
-					{
-						auto updated_msg = m_messRepo.findByID(selected_messages[i].id.value());
-						std::string flagsStr = "(FLAGS (";
-						if (updated_msg && updated_msg->is_seen) flagsStr += "\\Seen ";
-						if (updated_msg && updated_msg->is_deleted) flagsStr += "\\Deleted ";
-						if (updated_msg && updated_msg->is_draft) flagsStr += "\\Draft ";
-						if (updated_msg && updated_msg->is_answered) flagsStr += "\\Answered ";
-						if (updated_msg && updated_msg->is_flagged) flagsStr += "\\Flagged ";
-						if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
-						if (flagsStr.back() == ' ') flagsStr.pop_back();
-						flagsStr += "))";
-						response += ImapResponse::Fetch(lists_ids[i], flagsStr);
-					}
+			auto all_messages = m_messRepo.findByFolder(m_currentMailbox.m_id.value());
+			auto seq_ids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], all_messages.size());
+
+			std::string fetch_responses = "";
+
+			for (int seq_num : seq_ids)
+			{
+				if (seq_num < 1 || seq_num > all_messages.size())
+				{
+					continue;
 				}
-			}
-			else
-			{
-				for (size_t i = 0; i < selected_messages.size(); ++i)
-				{
-					std::vector<std::string> clean_flags;
-					for (const auto& f : flags)
-					{
-						std::string clean = f;
-						if (!clean.empty() && (clean[0] == '+' || clean[0] == '-')) clean = clean.substr(1);
-						clean_flags.push_back(clean);
-					}
-					m_messRepo.setFlags(selected_messages[i].id.value(), clean_flags);
 
-					if (!silence)
+				auto& msg = all_messages[seq_num - 1];
+
+				// repository format
+				std::vector<std::string> flags_to_send = raw_flags;
+				if (operation == '+' || operation == '-')
+				{
+					for (auto& f : flags_to_send)
+						f = operation + f;
+				}
+
+				if (m_messRepo.setFlags(msg.id.value(), flags_to_send))
+				{
+					if (!is_silence)
 					{
-						auto updated_msg = m_messRepo.findByID(selected_messages[i].id.value());
-						std::string flagsStr = "(FLAGS (";
-						if (updated_msg && updated_msg->is_seen) flagsStr += "\\Seen ";
-						if (updated_msg && updated_msg->is_deleted) flagsStr += "\\Deleted ";
-						if (updated_msg && updated_msg->is_draft) flagsStr += "\\Draft ";
-						if (updated_msg && updated_msg->is_answered) flagsStr += "\\Answered ";
-						if (updated_msg && updated_msg->is_flagged) flagsStr += "\\Flagged ";
-						if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
-						if (flagsStr.back() == ' ') flagsStr.pop_back();
-						flagsStr += "))";
-						response += ImapResponse::Fetch(lists_ids[i], flagsStr);
+						auto updated = m_messRepo.findByID(msg.id.value());
+						if (updated)
+						{
+							fetch_responses += ImapResponse::Fetch(seq_num, IMAP_UTILS::FormatFlagsResponse(*updated));
+						}
 					}
 				}
 			}
 
-			response += ImapResponse::Ok(cmd.m_tag, "Store completed");
+			response = fetch_responses + ImapResponse::Ok(cmd.m_tag, "Store completed");
 		}
 		catch (const std::exception& ex)
 		{
-			response = ImapResponse::Bad(cmd.m_tag, "Invalid message sequence");
-			m_logger.Log(PROD, "ImapCommandDispatcher::HandleStore - Invalid STORE usage, exception: " +
-								   std::string(ex.what()));
+			response = ImapResponse::Bad(cmd.m_tag, "Error processing STORE");
 		}
 	}
 
@@ -1211,41 +1186,61 @@ std::string ImapCommandDispatcher::HandleUidStore(const ImapCommand& cmd)
 	{
 		try
 		{
-			auto uids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], INT64_MAX);
+			// db doesn`t support custom flags
+			auto raw_flags = IMAP_UTILS::SplitArgs(IMAP_UTILS::TrimParentheses(cmd.m_args[2]));
+			const std::set<std::string> valid_system_flags = {"\\Seen",		"\\Deleted", "\\Draft",
+															  "\\Answered", "\\Flagged", "\\Recent"};
 
-			auto flags = IMAP_UTILS::SplitArgs(IMAP_UTILS::TrimParentheses(cmd.m_args[2]));
-			bool silence = cmd.m_args[1].find(".SILENT") != std::string::npos;
-
-			for (int i{0}; i < uids.size(); i++)
+			bool all_flags_valid = true;
+			for (const auto& f : raw_flags)
 			{
-				int64_t uid = uids[i];
-				auto msg_opt = m_messRepo.findByUID(m_currentMailbox.m_id.value(), uid);
-				if (!msg_opt.has_value()) continue;
-
-				auto prefixed_flags = flags;
-				for (auto& f : prefixed_flags)
+				if (valid_system_flags.find(f) == valid_system_flags.end())
 				{
-					f = cmd.m_args[1][0] + f;
-				}
-				m_messRepo.setFlags(msg_opt->id.value(), prefixed_flags);
-
-				if (!silence)
-				{
-					auto updated_msg = m_messRepo.findByID(msg_opt->id.value());
-					std::string flagsStr = "(UID " + std::to_string(msg_opt->uid) + " FLAGS (";
-					if (updated_msg && updated_msg->is_seen) flagsStr += "\\Seen ";
-					if (updated_msg && updated_msg->is_deleted) flagsStr += "\\Deleted ";
-					if (updated_msg && updated_msg->is_draft) flagsStr += "\\Draft ";
-					if (updated_msg && updated_msg->is_answered) flagsStr += "\\Answered ";
-					if (updated_msg && updated_msg->is_flagged) flagsStr += "\\Flagged ";
-					if (updated_msg && updated_msg->is_recent) flagsStr += "\\Recent ";
-					if (flagsStr.back() == ' ') flagsStr.pop_back();
-					flagsStr += "))";
-					response += ImapResponse::Fetch(i + 1, flagsStr);
+					response = ImapResponse::Bad(cmd.m_tag, "Unknown flag: " + f);
+					all_flags_valid = false;
+					break;
 				}
 			}
 
-			response += ImapResponse::Ok(cmd.m_tag, "Uid Store completed");
+			if (all_flags_valid)
+			{
+				char operation = cmd.m_args[1][0]; // '+', '-' or 'F'
+				bool is_silence = cmd.m_args[1].find(".SILENT") != std::string::npos;
+
+				auto uids = IMAP_UTILS::ParseSequenceSet(cmd.m_args[0], INT64_MAX);
+				std::string fetch_responses = "";
+
+				for (size_t i = 0; i < uids.size(); ++i)
+				{
+					int64_t uid = uids[i];
+					auto msg_opt = m_messRepo.findByUID(m_currentMailbox.m_id.value(), uid);
+					if (!msg_opt.has_value()) continue;
+
+					// repository format
+					std::vector<std::string> flags_to_send = raw_flags;
+					if (operation == '+' || operation == '-')
+					{
+						for (auto& f : flags_to_send)
+							f = operation + f;
+					}
+
+					if (m_messRepo.setFlags(msg_opt->id.value(), flags_to_send))
+					{
+						if (!is_silence)
+						{
+							auto updated = m_messRepo.findByID(msg_opt->id.value());
+							if (updated)
+							{
+								// UID STORE response must include UID token
+								std::string flags_body = "(UID " + std::to_string(updated->uid) + " " +
+														 IMAP_UTILS::FormatFlagsResponse(*updated) + ")";
+								fetch_responses += ImapResponse::Fetch(i + 1, flags_body);
+							}
+						}
+					}
+				}
+				response = fetch_responses + ImapResponse::Ok(cmd.m_tag, "Uid Store completed");
+			}
 		}
 		catch (const std::exception& ex)
 		{

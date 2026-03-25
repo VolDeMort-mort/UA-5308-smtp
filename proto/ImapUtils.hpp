@@ -54,4 +54,6 @@ std::string GetBodySection(const Message& msg, const std::string& section);
 
 std::vector<std::string> CombineSplitBodySections(const std::vector<std::string>& items);
 
+std::string FormatFlagsResponse(const Message& msg);
+
 } // namespace IMAP_UTILS

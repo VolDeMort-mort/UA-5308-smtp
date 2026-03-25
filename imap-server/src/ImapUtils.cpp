@@ -729,4 +729,19 @@ std::string GetBodySection(const Message& msg, const std::string& section)
 	return raw_mime;
 }
 
+std::string FormatFlagsResponse(const Message& msg)
+{
+	std::string f = "(FLAGS (";
+	if (msg.is_seen) f += "\\Seen ";
+	if (msg.is_deleted) f += "\\Deleted ";
+	if (msg.is_draft) f += "\\Draft ";
+	if (msg.is_answered) f += "\\Answered ";
+	if (msg.is_flagged) f += "\\Flagged ";
+	if (msg.is_recent) f += "\\Recent ";
+	if (f.back() == ' ') f.pop_back();
+	f += "))";
+
+	return f;
+}
+
 } // namespace IMAP_UTILS
