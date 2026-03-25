@@ -490,7 +490,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 							}
 
 							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
-									 (cc_rec == "" ? "" : ("Cc:" + cc_rec + "\r\n")) +
+									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) +
 									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
 									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
 						}
@@ -536,7 +536,10 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
 					{
 						std::string raw_mime = IMAP_UTILS::GetBodyContent(msg);
-						if (raw_mime.empty()) return "";
+						if (raw_mime.empty())
+						{
+							throw std::runtime_error("File doesn`t have content");
+						}
 
 						std::string headers, body;
 						SmtpClient::MimeParser::SplitHeadersAndBody(raw_mime, headers, body);
@@ -614,6 +617,10 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 			response += ImapResponse::Ok(cmd.m_tag, "Fetch completed");
 		}
 		catch (const std::invalid_argument& ex)
+		{
+			response = ImapResponse::Bad(cmd.m_tag, ex.what());
+		}
+		catch (const std::runtime_error& ex)
 		{
 			response = ImapResponse::Bad(cmd.m_tag, ex.what());
 		}
@@ -1070,7 +1077,7 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 							}
 
 							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
-									 (cc_rec == "" ? "" : ("Cc:" + cc_rec + "\r\n")) +
+									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) +
 									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
 									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
 						}
@@ -1113,6 +1120,51 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					{
 						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
 					}
+					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
+					{
+						std::string raw_mime = IMAP_UTILS::GetBodyContent(msg);
+						if (raw_mime.empty())
+						{
+							throw std::runtime_error("File doesn`t have content");
+						}
+
+						std::string headers, body;
+						SmtpClient::MimeParser::SplitHeadersAndBody(raw_mime, headers, body);
+						std::string headers_list = IMAP_UTILS::TrimParentheses(cmd.m_args[2]);
+
+						std::vector<std::string> requested_headers;
+						std::istringstream iss(headers_list);
+						std::string h;
+						while (iss >> h)
+						{
+							requested_headers.push_back(h);
+						}
+
+						std::string result;
+						for (const auto& req : requested_headers)
+						{
+							std::string value = SmtpClient::MimeParser::GetHeaderValue(headers, req + ":");
+							if (!value.empty())
+							{
+								result += req + ": " + value + "\r\n";
+							}
+						}
+
+						result += "\r\n";
+
+						std::string item_name = item;
+						if (item_name.back() == ']')
+						{
+							item_name.pop_back();
+							item_name += " (" + headers_list + ")]";
+						}
+						else
+						{
+							item_name += " (" + headers_list + ")";
+						}
+
+						fetch_response += item_name + " {" + std::to_string(result.size()) + "}\r\n" + result + " ";
+					}
 					else if (item.rfind("BODY[", 0) == 0 || item.rfind("BODY.PEEK[", 0) == 0)
 					{
 						bool is_peek = (item.rfind("BODY.PEEK[", 0) == 0);
@@ -1151,6 +1203,10 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 			response += ImapResponse::Ok(cmd.m_tag, "Uid Fetch completed");
 		}
 		catch (const std::invalid_argument& ex)
+		{
+			response = ImapResponse::Bad(cmd.m_tag, ex.what());
+		}
+		catch (const std::runtime_error& ex)
 		{
 			response = ImapResponse::Bad(cmd.m_tag, ex.what());
 		}

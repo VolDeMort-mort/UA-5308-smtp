@@ -1,3 +1,4 @@
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
@@ -118,11 +119,26 @@ protected:
 		auto addMsg = [&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject,
 						  bool flagged, bool answered)
 		{
+			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::ofstream file(filepath);
+			file << "From: " << from << "\r\n";
+			file << "To: recipient@test.com\r\n";
+			file << "Cc: cc@test.com\r\n";
+			file << "Subject: " << subject << "\r\n";
+			file << "Date: Thu, 19 Mar 2026 12:00:00 +0200\r\n";
+			file << "Message-ID: <" << filepath << ">\r\n";
+			file << "MIME-Version: 1.0\r\n";
+			file << "Content-Type: text/plain; charset=\"utf-8\"\r\n";
+			file << "\r\n";
+			file << "This is the body of the message.\r\n";
+			file << "It contains multiple lines.\r\n";
+			file.close();
+
 			Message msg;
 			msg.user_id = userId;
 			msg.from_address = from;
 			msg.subject = subject;
-			msg.raw_file_path = "/tmp/test_msg_" + subject + ".eml";
+			msg.raw_file_path = filepath;
 			msg.size_bytes = 21;
 			msg.is_seen = false;
 			msg.is_flagged = flagged;
@@ -134,10 +150,50 @@ protected:
 			messRepo->deliver(msg, folderId);
 		};
 
+		auto addMultipartMsg =
+			[&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject)
+		{
+			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::ofstream file(filepath);
+			file << "From: " << from << "\r\n";
+			file << "To: recipient@test.com\r\n";
+			file << "Subject: " << subject << "\r\n";
+			file << "Date: Thu, 19 Mar 2026 12:00:00 +0200\r\n";
+			file << "Message-ID: <" << filepath << ">\r\n";
+			file << "MIME-Version: 1.0\r\n";
+			file << "Content-Type: multipart/alternative; boundary=\"test-boundary-123\"\r\n";
+			file << "\r\n";
+			file << "--test-boundary-123\r\n";
+			file << "Content-Type: text/plain; charset=\"utf-8\"\r\n";
+			file << "\r\n";
+			file << "Plain text version.\r\n";
+			file << "--test-boundary-123\r\n";
+			file << "Content-Type: text/html; charset=\"utf-8\"\r\n";
+			file << "<html><body><p>HTML version.</p></body></html>\r\n";
+			file << "--test-boundary-123--\r\n";
+			file.close();
+
+			Message msg;
+			msg.user_id = userId;
+			msg.from_address = from;
+			msg.subject = subject;
+			msg.raw_file_path = filepath;
+			msg.size_bytes = 21;
+			msg.is_seen = false;
+			msg.is_flagged = false;
+			msg.is_answered = false;
+			msg.is_deleted = false;
+			msg.is_draft = false;
+			msg.is_recent = true;
+			msg.internal_date = "2024-01-01 12:00:00";
+			messRepo->deliver(msg, folderId);
+		};
+
 		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Hello Bob", false, false);
 		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Re: Project", true, true);
 		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Third message", false, false);
 		addMsg(1, aliceSent->id.value(), "alice@test.com", "Hi Bob", false, false);
+		addMultipartMsg(1, aliceInbox->id.value(), "alice@test.com", "MultipartMsg");
 
 		addMsg(2, bobInbox->id.value(), "bob@test.com", "Hi Alice", false, false);
 		addMsg(2, bobInbox->id.value(), "bob@test.com", "Hi Charlie", true, false);
@@ -223,15 +279,15 @@ TEST_F(CmdHandlerTests, HandleSelect_Success)
 	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)\r\n"
 						   "* OK [UIDVALIDITY 1]\r\n"
 						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n"
-						   "* OK [UNSEEN 3]\r\n"
-						   "* 3 EXISTS\r\n"
-						   "* OK [UIDNEXT 4]\r\n"
-						   "* 3 RECENT\r\n"
+						   "* OK [UNSEEN 4]\r\n"
+						   "* 4 EXISTS\r\n"
+						   "* OK [UIDNEXT 5]\r\n"
+						   "* 4 RECENT\r\n"
 						   "A002 OK [READ-WRITE] Select completed\r\n";
 	EXPECT_EQ(response, expected);
 	EXPECT_EQ(dispatcher->get_State(), SessionState::Selected);
 	EXPECT_EQ(dispatcher->get_MailboxState().m_name, "INBOX");
-	EXPECT_EQ(dispatcher->get_MailboxState().m_exists, 3);
+	EXPECT_EQ(dispatcher->get_MailboxState().m_exists, 4);
 }
 
 TEST_F(CmdHandlerTests, HandleSelect_SuccessDifferentFolder)
@@ -357,7 +413,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Messages)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* STATUS INBOX (MESSAGES 3)\r\nA001 OK Status completed\r\n";
+	std::string expected = "* STATUS INBOX (MESSAGES 4)\r\nA001 OK Status completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -372,8 +428,8 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Unseen)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 3"));
-	EXPECT_THAT(response, testing::HasSubstr("UNSEEN 3"));
+	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 4"));
+	EXPECT_THAT(response, testing::HasSubstr("UNSEEN 4"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -388,7 +444,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Recent)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	EXPECT_THAT(response, testing::HasSubstr("RECENT 3"));
+	EXPECT_THAT(response, testing::HasSubstr("RECENT 4"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -1481,7 +1537,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_UIDNEXT)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* STATUS INBOX (UIDNEXT 4)\r\nA001 OK Status completed\r\n";
+	std::string expected = "* STATUS INBOX (UIDNEXT 5)\r\nA001 OK Status completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -1511,8 +1567,8 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_AllItems)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 3"));
-	EXPECT_THAT(response, testing::HasSubstr("UIDNEXT 4"));
+	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 4"));
+	EXPECT_THAT(response, testing::HasSubstr("UIDNEXT 5"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -1854,4 +1910,240 @@ TEST_F(CmdHandlerTests, HandleUidCopy_ToSelf)
 
 	std::string expected = "A002 OK Uid Copy completed\r\n";
 	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODYTEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY[TEXT]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[TEXT]"));
+	EXPECT_THAT(response, testing::HasSubstr("This is the body of the message"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODYHEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY[HEADER]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[HEADER]"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("To: recipient@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODY1_MIME)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"4", "BODY[1.MIME]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[1.MIME]"));
+	EXPECT_THAT(response, testing::HasSubstr("Content-Type: text/plain"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODY1)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"4", "BODY[1]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[1]"));
+	EXPECT_THAT(response, testing::HasSubstr("Plain text version"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODYPEEKHeaderFields)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT)]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY.PEEK[HEADER.FIELDS"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("To: recipient@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_MultipleDataItems)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "(FLAGS UID RFC822.SIZE)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS"));
+	EXPECT_THAT(response, testing::HasSubstr("UID"));
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_SequenceRange)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1:3", "FLAGS"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("1 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("2 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("3 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODYSTRUCTURE)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODYSTRUCTURE"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODYSTRUCTURE"));
+	EXPECT_THAT(response, testing::HasSubstr("\"text\" \"plain\""));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_RFC822)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "RFC822"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_RFC822HEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "RFC822.HEADER"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.HEADER"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_RFC822TEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "RFC822.TEXT"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.TEXT"));
+	EXPECT_THAT(response, testing::HasSubstr("This is the body of the message"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODYTEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODY[TEXT]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[TEXT]"));
+	EXPECT_THAT(response, testing::HasSubstr("This is the body of the message"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODYHEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODY[HEADER]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[HEADER]"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("To: recipient@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_MultipleDataItems)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "(FLAGS RFC822.SIZE ENVELOPE)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS"));
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE"));
+	EXPECT_THAT(response, testing::HasSubstr("ENVELOPE"));
+	EXPECT_THAT(response, testing::HasSubstr("Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
 }
