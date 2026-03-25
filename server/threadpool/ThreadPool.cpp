@@ -3,24 +3,20 @@
 TasksQueue::~TasksQueue() { clear(); }
 
 bool TasksQueue::empty() {
-    std::shared_lock lock(m_mutex);
     return m_tasks.empty();
 }
 
 std::size_t TasksQueue::size() {
-    std::shared_lock lock(m_mutex);
     return m_tasks.size();
 }
 
 void TasksQueue::clear() {
-    std::unique_lock lock(m_mutex);
     while (!m_tasks.empty()) {
         m_tasks.pop();
     }
 }
 
 bool TasksQueue::pop(Task& task) {
-    std::unique_lock lock(m_mutex);
     if (m_tasks.empty()) return false;
     task = std::move(const_cast<Task&>(m_tasks.top()));
     m_tasks.pop();
@@ -29,9 +25,12 @@ bool TasksQueue::pop(Task& task) {
 
 bool TasksQueue::push(int taskId, Priority priority, std::function<void()> func) {
     Task newTask(taskId, priority, std::move(func));
-    std::unique_lock lock(m_mutex);
     m_tasks.push(std::move(newTask));
     return true;
+}
+
+void ThreadPool::log(LogLevel level, const std::string& msg) {
+    if (m_logger) m_logger->Log(level, msg);
 }
 
 bool ThreadPool::is_working_unsafe() const {
@@ -77,11 +76,9 @@ void ThreadPool::routine(int worker_id) {
         }
 
         if (is_task_popped) {
-            if (m_logger) m_logger->Log(LogLevel::TRACE,
-                "[Worker " + std::to_string(worker_id) + "] executing task " + std::to_string(task.id));
+            log(LogLevel::TRACE, "[Worker " + std::to_string(worker_id) + "] executing task " + std::to_string(task.id));
             task.func();
-            if (m_logger) m_logger->Log(LogLevel::TRACE,
-                "[Worker " + std::to_string(worker_id) + "] finished task " + std::to_string(task.id));
+            log(LogLevel::TRACE, "[Worker " + std::to_string(worker_id) + "] finished task " + std::to_string(task.id));
         }
     }
 }
@@ -90,7 +87,7 @@ void ThreadPool::pause() {
     std::lock_guard<std::mutex> lock(m_pool_state_mutex);
     if (!m_is_initialized.load() || m_is_terminated.load()) return;
     m_is_paused = true;
-    if (m_logger) m_logger->Log(LogLevel::PROD, "[ThreadPool] Paused.");
+    log(LogLevel::PROD, "[ThreadPool] Paused.");
 }
 
 void ThreadPool::unpause() {
@@ -102,7 +99,7 @@ void ThreadPool::unpause() {
         }
         m_is_paused = false;
         should_notify = true;
-        if (m_logger) m_logger->Log(LogLevel::PROD, "[ThreadPool] Unpaused.");
+        log(LogLevel::PROD, "[ThreadPool] Unpaused.");
     } // releasing m_pool_state_mutex
 
     if (should_notify) {
@@ -119,7 +116,7 @@ void ThreadPool::terminate() {
         m_is_terminated = true;
         m_is_paused = false;
         should_notify = true;
-        if (m_logger) m_logger->Log(LogLevel::PROD, "[ThreadPool] Terminating...");
+        log(LogLevel::PROD, "[ThreadPool] Terminating...");
     }
 
     if (should_notify) {
@@ -137,5 +134,5 @@ void ThreadPool::terminate() {
     m_is_initialized = false;
     m_is_paused = false;
     m_total_tasks = 0;
-    if (m_logger) m_logger->Log(LogLevel::PROD, "[ThreadPool] Terminated.");
+    log(LogLevel::PROD, "[ThreadPool] Terminated.");
 }

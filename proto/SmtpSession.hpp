@@ -6,6 +6,7 @@
 #include "SmtpCommand.hpp"
 #include "MessageRepository.h"
 #include "UserRepository.h"
+#include "Logger.h"
 #include "Base64Decoder.hpp"
 #include "Base64Encoder.hpp"
 
@@ -28,7 +29,8 @@ public:
 
     explicit SmtpSession(std::string domain,
 			MessageRepository* message_repo,
-			UserRepository* user_repo);
+			UserRepository* user_repo,
+			Logger* logger = nullptr);
 
     std::string Greeting() const;
 
@@ -93,4 +95,6 @@ private:
 	MessageRepository* m_message_repo;
 
 	UserRepository* m_user_repo;
+
+	Logger* m_logger{nullptr};
 };

@@ -2,49 +2,119 @@
 
 #include "SmtpParser.hpp"
 #include "SmtpResponse.hpp"
+#include "MimeParser.h"
+#include "Email.h"
+#include "Recipient.h"
+#include <chrono>
+#include <ctime>
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+#include <random>
 
-SmtpSession::SmtpSession(std::string domain, MessageRepository* message_repo, UserRepository* user_repo)
+SmtpSession::SmtpSession(std::string domain, MessageRepository* message_repo, UserRepository* user_repo, Logger* logger)
     : m_domain(std::move(domain)),
       m_message_repo(message_repo),
-      m_user_repo(user_repo)
+      m_user_repo(user_repo),
+      m_logger(logger)
 {
 }
 
 std::string SmtpSession::ExtractUsername(const std::string& email)
 {
-    std::string clean = email;
-
-    if (!clean.empty() && clean.front() == '<')
-        clean.erase(0, 1);
-
-    if (!clean.empty() && clean.back() == '>')
-        clean.pop_back();
-
-    auto pos = clean.find('@');
-
+    const auto pos = email.find('@');
     if (pos == std::string::npos)
-        return clean;
-
-    return clean.substr(0, pos);
+        return email;
+    return email.substr(0, pos);
 }
+
+namespace
+{
+    std::string CurrentUtcTimestamp()
+    {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::gmtime(&t));
+        return buf;
+    }
+
+
+    std::string GenerateMailFilename()
+    {
+        auto now = std::chrono::system_clock::now().time_since_epoch();
+        auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+
+        std::random_device               rd;
+        std::mt19937                     gen(rd());
+        std::uniform_int_distribution<>  dist(0, 15);
+        const char* hex = "0123456789abcdef";
+        std::string rnd;
+        for (int i = 0; i < 16; ++i) { rnd += hex[dist(gen)]; }
+
+        return std::to_string(ms) + "_" + rnd + ".eml";
+    }
+
+
+    std::string WriteMailToFile(const std::string& mail_dir, const std::string& body)
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(mail_dir, ec);
+        if (ec) return {};
+
+        std::string path = mail_dir + "/" + GenerateMailFilename();
+        std::ofstream ofs(path, std::ios::binary);
+        if (!ofs) return {};
+
+        ofs.write(body.data(), static_cast<std::streamsize>(body.size()));
+        return ofs ? path : std::string{};
+    }
+} // anonymous namespace
 
 bool SmtpSession::SaveMessage()
 {
     if (m_recipients.empty())
         return false;
 
+
+    SmtpClient::Email parsed_email;
+    bool mime_ok = false;
+    if (m_logger)
+        mime_ok = SmtpClient::MimeParser::ParseEmail(m_body, parsed_email, *m_logger);
+
+
+
+    std::string mime_structure;
+    if (mime_ok)
+    {
+        if (!parsed_email.attachments.empty())
+        {
+            mime_structure = "multipart/mixed; parts=" +
+                std::to_string(1 + static_cast<int>(parsed_email.attachments.size())) +
+                "; attachments=" + std::to_string(parsed_email.attachments.size());
+        }
+        else if (parsed_email.HasHtml())
+        {
+            mime_structure = "multipart/alternative; parts=2; attachments=0";
+        }
+        else
+        {
+            mime_structure = "text/plain";
+        }
+    }
+
     bool any_saved = false;
 
-    for (const auto& recipient : m_recipients)
+    for (const auto& recipient_addr : m_recipients)
     {
-        std::string username = ExtractUsername(recipient);
+        std::string username = ExtractUsername(recipient_addr);
 
         auto user = m_user_repo->findByUsername(username);
 
         if (!user)
         {
             User new_user;
-            new_user.username = username;
+            new_user.username      = username;
             new_user.password_hash = "smtp_auto";
 
             if (!m_user_repo->registerUser(new_user, ""))
@@ -60,15 +130,82 @@ bool SmtpSession::SaveMessage()
         if (!inbox || !inbox->id)
             continue;
 
+
+        std::string mail_dir = "mailstore/" + username;
+        std::string file_path = WriteMailToFile(mail_dir, m_body);
+        if (file_path.empty())
+        {
+            if (m_logger)
+                m_logger->Log(PROD, "SaveMessage: failed to write mail file for user " + username);
+            continue;
+        }
+
+
         Message msg;
-        msg.user_id = user->id.value();
-        msg.from_address = m_sender;
-        msg.raw_file_path = m_body; 
-        msg.size_bytes = static_cast<int64_t>(m_body.size());
-        msg.internal_date = "";
+        msg.user_id       = user->id.value();
+        msg.raw_file_path = file_path;
+        msg.size_bytes    = static_cast<int64_t>(m_body.size());
+        msg.internal_date = CurrentUtcTimestamp();
+
+        msg.from_address = (mime_ok && !parsed_email.sender.empty())
+                               ? parsed_email.sender
+                               : m_sender;
+
+        if (mime_ok)
+        {
+            if (!parsed_email.subject.empty())
+                msg.subject = parsed_email.subject;
+
+            if (!parsed_email.message_id.empty())
+                msg.message_id_header = parsed_email.message_id;
+
+            if (!parsed_email.in_reply_to.empty())
+                msg.in_reply_to = parsed_email.in_reply_to;
+
+            if (!parsed_email.references.empty())
+                msg.references_header = parsed_email.references;
+
+            if (!parsed_email.date.empty())
+                msg.date_header = parsed_email.date;
+        }
+
+        if (!mime_structure.empty())
+            msg.mime_structure = mime_structure;
+
 
         if (!m_message_repo->deliver(msg, inbox->id.value()))
             continue;
+		
+
+        Recipient rec;
+        rec.message_id = msg.id.value();
+        rec.address    = recipient_addr;
+        rec.type       = RecipientType::To;
+        m_message_repo->addRecipient(rec);
+
+        if (mime_ok)
+        {
+            auto add_mime_recipients = [&](const std::vector<std::string>& addrs, RecipientType type)
+            {
+                for (const auto& addr : addrs)
+                {
+                    if (addr.empty())
+                        continue;
+                    if (type == RecipientType::To && addr == recipient_addr)
+                        continue; // already added above
+
+                    Recipient mime_rec;
+                    mime_rec.message_id = msg.id.value();
+                    mime_rec.address    = addr;
+                    mime_rec.type       = type;
+                    m_message_repo->addRecipient(mime_rec);
+                }
+            };
+
+            add_mime_recipients(parsed_email.to, RecipientType::To);
+            add_mime_recipients(parsed_email.cc, RecipientType::Cc);
+            add_mime_recipients(parsed_email.bcc, RecipientType::Bcc);
+        }
 
         any_saved = true;
     }

@@ -10,7 +10,7 @@ class MimeBuilder
 {
 public:
 	static bool BuildEmail(const Email& email_data, std::string& out_mime,
-						   Logger& logger);
+						   ILogger& logger);
 	//  requirements from https://www.rfc-editor.org/rfc/rfc2046#section-5.1.1
 	//  length 1-70
 	//  allowed to use numbers, letters, space, and symbols: ' ( ) + _ , - . / : = ?
@@ -23,7 +23,7 @@ public:
 
 
 private:
-	static bool        ValidateEmail(const Email& email_data, Logger& logger);
+	static bool        ValidateEmail(const Email& email_data, ILogger& logger);
 	static void        AppendMainHeaders(const Email& email_data, std::string& out);
 	static void        AppendBodyContent(const Email& email_data, const std::string& boundary,
 										 std::string& out);
