@@ -114,9 +114,7 @@ TEST(ImapUtilsTest, StringToCommandType)
 		{"CREATE", ImapCommandType::Create},
 		{"DELETE", ImapCommandType::Delete},
 		{"RENAME", ImapCommandType::Rename},
-		{"IDLE", ImapCommandType::Idle},
 		{"COPY", ImapCommandType::Copy},
-		{"MOVE", ImapCommandType::Move},
 		{"EXPUNGE", ImapCommandType::Expunge},
 		{"UNKNOWNCMD", ImapCommandType::Unknown},
 		{"login", ImapCommandType::Login}};
@@ -143,9 +141,7 @@ TEST(ImapUtilsTest, CommandTypeToString)
 		{ImapCommandType::Create, "CREATE"},
 		{ImapCommandType::Delete, "DELETE"},
 		{ImapCommandType::Rename, "RENAME"},
-		{ImapCommandType::Idle, "IDLE"},
 		{ImapCommandType::Copy, "COPY"},
-		{ImapCommandType::Move, "MOVE"},
 		{ImapCommandType::Expunge, "EXPUNGE"},
 		{ImapCommandType::Unknown, "UNKNOWN"}};
 

@@ -1,10 +1,12 @@
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "Entity/Message.h"
 #include "ImapCommand.hpp"
 #include "MimeParser.h"
+#include "MimePart.h"
 
 class MessageRepository;
 
@@ -39,7 +41,12 @@ std::optional<SmtpClient::Email> GetParsedEmail(const Message& msg, ILogger& log
 std::string BuildEnvelope(const Message& msg, const std::optional<SmtpClient::Email>& email_opt,
 						  MessageRepository& messRepo);
 
-std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClient::Email>& email_opt);
+std::string BuildBodystructure(const Message& msg, const std::optional<SmtpClient::Email>& email_opt,
+							   const std::optional<SmtpClient::MimePart>& mime_part = std::nullopt);
+
+std::optional<SmtpClient::MimePart> GetParsedMimePart(const Message& msg, ILogger& logger);
+
+std::string BuildBodystructureFromMimePart(const SmtpClient::MimePart& part);
 
 std::string GetBodyContent(const Message& msg);
 

@@ -431,6 +431,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				size_t seq_num = lists_ids[i];
 
 				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+				auto mime_part_otp = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
 
 				std::string fetch_response = "(";
 				for (const auto& item : expanded_items)
@@ -469,7 +470,22 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 						std::string header;
 						if (email_opt)
 						{
-							header = "From: " + email_opt->sender + "\r\n" + "To: " + email_opt->recipient + "\r\n" +
+							std::string to_rec;
+							for (const auto& rec : email_opt->to)
+							{
+								if (!to_rec.empty()) to_rec += ", ";
+								to_rec += rec;
+							}
+
+							std::string cc_rec;
+							for (const auto& rec : email_opt->cc)
+							{
+								if (!cc_rec.empty()) cc_rec += ", ";
+								cc_rec += rec;
+							}
+
+							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
+									 (cc_rec == "" ? "" : ("Cc:" + cc_rec + "\r\n")) +
 									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
 									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
 						}
@@ -477,11 +493,27 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 						{
 							auto sender_user = m_userRepo.findByID(msg.user_id);
 							std::string sender = sender_user ? sender_user->username : "unknown";
+
 							auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
-							auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
-													   [](Recipient rec) { return rec.type == RecipientType::To; });
-							header = "From: " + sender + "@test.com\r\n" +
-									 "To: " + (rec_to != all_receipients.end() ? rec_to->address : "") + "\r\n" +
+							std::string to_addresses;
+							std::string cc_addresses;
+
+							for (const auto& rec : all_receipients)
+							{
+								if (rec.type == RecipientType::To)
+								{
+									if (!to_addresses.empty()) to_addresses += ", ";
+									to_addresses += rec.address;
+								}
+								else if (rec.type == RecipientType::Cc)
+								{
+									if (!cc_addresses.empty()) cc_addresses += ", ";
+									cc_addresses += rec.address;
+								}
+							}
+
+							header = "From: " + sender + "@test.com\r\n" + "To: " + to_addresses + "\r\n" +
+									 (cc_addresses == "" ? "" : ("Cc: " + cc_addresses + "\r\n")) +
 									 "Subject: " + (msg.subject.has_value() ? msg.subject.value() : "") + "\r\n" +
 									 "Date: " + msg.internal_date + "\r\n" + "\r\n";
 						}
@@ -489,11 +521,12 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "BODYSTRUCTURE")
 					{
-						fetch_response += "BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+						fetch_response +=
+							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
 					}
 					else if (item == "BODY")
 					{
-						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
 					}
 					else if (item == "UID")
 					{
@@ -931,6 +964,7 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 				const auto& msg = msg_opt.value();
 
 				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+				auto mime_part_otp = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
 
 				size_t seq_num = 0;
 				for (size_t i = 0; i < all_messages.size(); ++i)
@@ -979,7 +1013,22 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 						std::string header;
 						if (email_opt)
 						{
-							header = "From: " + email_opt->sender + "\r\n" + "To: " + email_opt->recipient + "\r\n" +
+							std::string to_rec;
+							for (const auto& rec : email_opt->to)
+							{
+								if (!to_rec.empty()) to_rec += ", ";
+								to_rec += rec;
+							}
+
+							std::string cc_rec;
+							for (const auto& rec : email_opt->cc)
+							{
+								if (!cc_rec.empty()) cc_rec += ", ";
+								cc_rec += rec;
+							}
+
+							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
+									 (cc_rec == "" ? "" : ("Cc:" + cc_rec + "\r\n")) +
 									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
 									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
 						}
@@ -987,11 +1036,27 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 						{
 							auto sender_user = m_userRepo.findByID(msg.user_id);
 							std::string sender = sender_user ? sender_user->username : "unknown";
+
 							auto all_receipients = m_messRepo.findRecipientsByMessage(msg.id.value());
-							auto rec_to = std::find_if(all_receipients.begin(), all_receipients.end(),
-													   [](Recipient rec) { return rec.type == RecipientType::To; });
-							header = "From: " + sender + "@test.com\r\n" +
-									 "To: " + (rec_to != all_receipients.end() ? rec_to->address : "") + "\r\n" +
+							std::string to_addresses;
+							std::string cc_addresses;
+
+							for (const auto& rec : all_receipients)
+							{
+								if (rec.type == RecipientType::To)
+								{
+									if (!to_addresses.empty()) to_addresses += ", ";
+									to_addresses += rec.address;
+								}
+								else if (rec.type == RecipientType::Cc)
+								{
+									if (!cc_addresses.empty()) cc_addresses += ", ";
+									cc_addresses += rec.address;
+								}
+							}
+
+							header = "From: " + sender + "@test.com\r\n" + "To: " + to_addresses + "\r\n" +
+									 (cc_addresses == "" ? "" : ("Cc: " + cc_addresses + "\r\n")) +
 									 "Subject: " + (msg.subject.has_value() ? msg.subject.value() : "") + "\r\n" +
 									 "Date: " + msg.internal_date + "\r\n" + "\r\n";
 						}
@@ -999,11 +1064,12 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					}
 					else if (item == "BODYSTRUCTURE")
 					{
-						fetch_response += "BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+						fetch_response +=
+							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
 					}
 					else if (item == "BODY")
 					{
-						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt) + " ";
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
 					}
 					else if (item == "UID")
 					{

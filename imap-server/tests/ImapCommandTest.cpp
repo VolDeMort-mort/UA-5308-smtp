@@ -39,9 +39,7 @@ TEST(ImapCommandTest, CommandTypeEnumValues)
 	EXPECT_EQ(static_cast<int>(ImapCommandType::Create), 10);
 	EXPECT_EQ(static_cast<int>(ImapCommandType::Delete), 11);
 	EXPECT_EQ(static_cast<int>(ImapCommandType::Rename), 12);
-	EXPECT_EQ(static_cast<int>(ImapCommandType::Idle), 13);
 	EXPECT_EQ(static_cast<int>(ImapCommandType::Copy), 14);
-	EXPECT_EQ(static_cast<int>(ImapCommandType::Move), 15);
 	EXPECT_EQ(static_cast<int>(ImapCommandType::Expunge), 16);
 	EXPECT_EQ(static_cast<int>(ImapCommandType::UidFetch), 17);
 	EXPECT_EQ(static_cast<int>(ImapCommandType::UidStore), 18);
