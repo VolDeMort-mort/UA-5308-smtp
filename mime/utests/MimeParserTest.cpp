@@ -42,9 +42,10 @@ TEST(MimeParserTest, ParseEmail_SimpleTextEmail)
 	auto  logger = MakeLogger();
 	Email email;
 	ASSERT_TRUE(MimeParser::ParseEmail(kSimpleRaw, email, logger));
-	EXPECT_EQ(email.sender,     "alice@example.com");
-	EXPECT_EQ(email.recipient,  "bob@example.com");
-	EXPECT_EQ(email.subject,    "Hello");
+	EXPECT_EQ(email.sender,  "alice@example.com");
+	ASSERT_EQ(email.to.size(), 1u);
+	EXPECT_EQ(email.to[0],   "bob@example.com");
+	EXPECT_EQ(email.subject, "Hello");
 	EXPECT_EQ(email.date,       "Mon, 01 Mar 2025 10:00:00 +0200");
 	EXPECT_EQ(email.message_id, "<test.001@example.com>");
 	EXPECT_NE(email.plain_text.find("Body text here."), std::string::npos);
@@ -92,9 +93,10 @@ TEST(MimeParserTest, ParseEmail_CaseInsensitiveHeaders)
 		"Body.";
 
 	ASSERT_TRUE(MimeParser::ParseEmail(raw, email, logger));
-	EXPECT_EQ(email.sender,    "alice@example.com");
-	EXPECT_EQ(email.recipient, "bob@example.com");
-	EXPECT_EQ(email.subject,   "Test");
+	EXPECT_EQ(email.sender,  "alice@example.com");
+	ASSERT_EQ(email.to.size(), 1u);
+	EXPECT_EQ(email.to[0],   "bob@example.com");
+	EXPECT_EQ(email.subject, "Test");
 }
 
 
@@ -248,7 +250,7 @@ TEST(MimeParserTest, RoundTrip_PlainText)
 	auto logger = MakeLogger();
 	Email original;
 	original.sender     = "alice@example.com";
-	original.recipient  = "bob@example.com";
+	original.to         = { "bob@example.com" };
 	original.subject    = "Round-trip test";
 	original.plain_text = "Hello from round-trip!";
 
@@ -258,9 +260,10 @@ TEST(MimeParserTest, RoundTrip_PlainText)
 	Email parsed;
 	ASSERT_TRUE(MimeParser::ParseEmail(mime, parsed, logger));
 
-	EXPECT_EQ(parsed.sender,    original.sender);
-	EXPECT_EQ(parsed.recipient, original.recipient);
-	EXPECT_EQ(parsed.subject,   original.subject);
+	EXPECT_EQ(parsed.sender,  original.sender);
+	ASSERT_EQ(parsed.to.size(), 1u);
+	EXPECT_EQ(parsed.to[0],   original.to[0]);
+	EXPECT_EQ(parsed.subject, original.subject);
 	EXPECT_NE(parsed.plain_text.find(original.plain_text), std::string::npos);
 }
 
@@ -269,7 +272,7 @@ TEST(MimeParserTest, RoundTrip_CyrillicSubject)
 	auto  logger   = MakeLogger();
 	Email original;
 	original.sender     = "alice@example.com";
-	original.recipient  = "bob@example.com";
+	original.to         = { "bob@example.com" };
 	original.subject    = "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82";
 	original.plain_text = "Body text";
 
@@ -286,7 +289,7 @@ TEST(MimeParserTest, RoundTrip_WithHtml)
 	auto logger = MakeLogger();
 	Email original;
 	original.sender     = "alice@example.com";
-	original.recipient  = "bob@example.com";
+	original.to         = { "bob@example.com" };
 	original.subject    = "HTML test";
 	original.plain_text = "Plain text";
 	original.html_text  = "<p>HTML text</p>";
@@ -305,7 +308,7 @@ TEST(MimeParserTest, RoundTrip_WithAttachment)
 	auto logger = MakeLogger();
 	Email original;
 	original.sender     = "alice@example.com";
-	original.recipient  = "bob@example.com";
+	original.to         = { "bob@example.com" };
 	original.subject    = "Attachment test";
 	original.plain_text = "See attachment";
 	original.AddAttachment("hello.txt", "text/plain", "SGVsbG8gV29ybGQh");
@@ -324,9 +327,9 @@ TEST(MimeParserTest, RoundTrip_ThreadingHeaders)
 {
 	auto logger = MakeLogger();
 	Email original;
-	original.sender       = "alice@example.com";
-	original.recipient    = "bob@example.com";
-	original.subject      = "Thread test";
+	original.sender     = "alice@example.com";
+	original.to         = { "bob@example.com" };
+	original.subject    = "Thread test";
 	original.plain_text   = "Body";
 	original.message_id   = "<orig.001@test.com>";
 	original.in_reply_to  = "<prev.001@test.com>";

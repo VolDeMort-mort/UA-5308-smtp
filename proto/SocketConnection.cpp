@@ -61,7 +61,10 @@ bool SocketConnection::Receive(std::string& out_data)
 {
 	if (!m_socket.is_open()) return false;
 
-	if (!WaitForEvent(true)) return false;
+	if (m_buffer.size() == 0) 
+	{
+		if (!WaitForEvent(true)) return false;
+	}
 
 	boost::system::error_code error;
 
