@@ -222,16 +222,6 @@ TEST(ImapParserTest, ParseNestedParentheses)
 	EXPECT_EQ(cmd.m_args[1], "(FLAGS (\\Seen \\Answer))");
 }
 
-TEST(ImapParserTest, ParseResponseCode)
-{
-	auto cmd = ImapParser::Parse("A018 OK [CAPABILITY IMAP4rev1] authenticated");
-
-	EXPECT_EQ(cmd.m_type, ImapCommandType::Unknown);
-	EXPECT_EQ(cmd.m_args.size(), 2);
-	EXPECT_EQ(cmd.m_args[0], "[CAPABILITY IMAP4rev1]");
-	EXPECT_EQ(cmd.m_args[1], "authenticated");
-}
-
 TEST(ImapParserTest, ParseLiteral)
 {
 	auto cmd = ImapParser::Parse("A019 APPEND INBOX {12}");

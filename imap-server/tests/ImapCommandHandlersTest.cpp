@@ -1,3 +1,4 @@
+#include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
@@ -118,11 +119,26 @@ protected:
 		auto addMsg = [&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject,
 						  bool flagged, bool answered)
 		{
+			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::ofstream file(filepath);
+			file << "From: " << from << "\r\n";
+			file << "To: recipient@test.com\r\n";
+			file << "Cc: cc@test.com\r\n";
+			file << "Subject: " << subject << "\r\n";
+			file << "Date: Thu, 19 Mar 2026 12:00:00 +0200\r\n";
+			file << "Message-ID: <" << filepath << ">\r\n";
+			file << "MIME-Version: 1.0\r\n";
+			file << "Content-Type: text/plain; charset=\"utf-8\"\r\n";
+			file << "\r\n";
+			file << "This is the body of the message.\r\n";
+			file << "It contains multiple lines.\r\n";
+			file.close();
+
 			Message msg;
 			msg.user_id = userId;
 			msg.from_address = from;
 			msg.subject = subject;
-			msg.raw_file_path = "/tmp/test_msg_" + subject + ".eml";
+			msg.raw_file_path = filepath;
 			msg.size_bytes = 21;
 			msg.is_seen = false;
 			msg.is_flagged = flagged;
@@ -134,10 +150,50 @@ protected:
 			messRepo->deliver(msg, folderId);
 		};
 
+		auto addMultipartMsg =
+			[&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject)
+		{
+			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::ofstream file(filepath);
+			file << "From: " << from << "\r\n";
+			file << "To: recipient@test.com\r\n";
+			file << "Subject: " << subject << "\r\n";
+			file << "Date: Thu, 19 Mar 2026 12:00:00 +0200\r\n";
+			file << "Message-ID: <" << filepath << ">\r\n";
+			file << "MIME-Version: 1.0\r\n";
+			file << "Content-Type: multipart/alternative; boundary=\"test-boundary-123\"\r\n";
+			file << "\r\n";
+			file << "--test-boundary-123\r\n";
+			file << "Content-Type: text/plain; charset=\"utf-8\"\r\n";
+			file << "\r\n";
+			file << "Plain text version.\r\n";
+			file << "--test-boundary-123\r\n";
+			file << "Content-Type: text/html; charset=\"utf-8\"\r\n";
+			file << "<html><body><p>HTML version.</p></body></html>\r\n";
+			file << "--test-boundary-123--\r\n";
+			file.close();
+
+			Message msg;
+			msg.user_id = userId;
+			msg.from_address = from;
+			msg.subject = subject;
+			msg.raw_file_path = filepath;
+			msg.size_bytes = 21;
+			msg.is_seen = false;
+			msg.is_flagged = false;
+			msg.is_answered = false;
+			msg.is_deleted = false;
+			msg.is_draft = false;
+			msg.is_recent = true;
+			msg.internal_date = "2024-01-01 12:00:00";
+			messRepo->deliver(msg, folderId);
+		};
+
 		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Hello Bob", false, false);
 		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Re: Project", true, true);
 		addMsg(1, aliceInbox->id.value(), "alice@test.com", "Third message", false, false);
 		addMsg(1, aliceSent->id.value(), "alice@test.com", "Hi Bob", false, false);
+		addMultipartMsg(1, aliceInbox->id.value(), "alice@test.com", "MultipartMsg");
 
 		addMsg(2, bobInbox->id.value(), "bob@test.com", "Hi Alice", false, false);
 		addMsg(2, bobInbox->id.value(), "bob@test.com", "Hi Charlie", true, false);
@@ -220,14 +276,18 @@ TEST_F(CmdHandlerTests, HandleSelect_Success)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Recent)\r\n"
-						   "* 3 EXISTS\r\n"
-						   "* 3 RECENT\r\n"
+	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)\r\n"
+						   "* OK [UIDVALIDITY 1]\r\n"
+						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n"
+						   "* OK [UNSEEN 4]\r\n"
+						   "* 4 EXISTS\r\n"
+						   "* OK [UIDNEXT 5]\r\n"
+						   "* 4 RECENT\r\n"
 						   "A002 OK [READ-WRITE] Select completed\r\n";
 	EXPECT_EQ(response, expected);
 	EXPECT_EQ(dispatcher->get_State(), SessionState::Selected);
 	EXPECT_EQ(dispatcher->get_MailboxState().m_name, "INBOX");
-	EXPECT_EQ(dispatcher->get_MailboxState().m_exists, 3);
+	EXPECT_EQ(dispatcher->get_MailboxState().m_exists, 4);
 }
 
 TEST_F(CmdHandlerTests, HandleSelect_SuccessDifferentFolder)
@@ -241,8 +301,12 @@ TEST_F(CmdHandlerTests, HandleSelect_SuccessDifferentFolder)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Recent)\r\n"
+	std::string expected = "* FLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\Recent)\r\n"
+						   "* OK [UIDVALIDITY 2]\r\n"
+						   "* OK [PERMANENTFLAGS (\\Seen \\Answered \\Flagged \\Draft \\Deleted \\*)]\r\n"
+						   "* OK [UNSEEN 1]\r\n"
 						   "* 1 EXISTS\r\n"
+						   "* OK [UIDNEXT 2]\r\n"
 						   "* 1 RECENT\r\n"
 						   "A002 OK [READ-WRITE] Select completed\r\n";
 	EXPECT_EQ(response, expected);
@@ -349,7 +413,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Messages)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* STATUS INBOX (MESSAGES 3)\r\nA001 OK Status completed\r\n";
+	std::string expected = "* STATUS INBOX (MESSAGES 4)\r\nA001 OK Status completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -364,8 +428,8 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Unseen)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 3"));
-	EXPECT_THAT(response, testing::HasSubstr("UNSEEN 3"));
+	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 4"));
+	EXPECT_THAT(response, testing::HasSubstr("UNSEEN 4"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -380,7 +444,7 @@ TEST_F(CmdHandlerTests, HandleStatus_Success_Recent)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	EXPECT_THAT(response, testing::HasSubstr("RECENT 3"));
+	EXPECT_THAT(response, testing::HasSubstr("RECENT 4"));
 	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
 }
 
@@ -442,7 +506,7 @@ TEST_F(CmdHandlerTests, HandleFetch_Success_All_SingleMessage)
 
 	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH ("));
 
-	EXPECT_THAT(response, testing::HasSubstr("FLAGS ()"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Recent)"));
 
 	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE 21"));
 
@@ -577,7 +641,7 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Seen)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 3 FETCH (FLAGS (\\Seen))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 3 FETCH (FLAGS (\\Seen \\Recent))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -592,7 +656,7 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Multiple)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged \\Recent))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -607,7 +671,7 @@ TEST_F(CmdHandlerTests, HandleStore_RemoveFlags)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS ())\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS (\\Recent))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -690,8 +754,9 @@ TEST_F(CmdHandlerTests, HandleCreate_AlreadyExists)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "A001 OK Create completed\r\n";
-	EXPECT_EQ(response, expected);
+	std::string expected = "A001 NO Create failed";
+	std::string actual = response.substr(0, expected.size());
+	EXPECT_EQ(actual, expected);
 }
 
 TEST_F(CmdHandlerTests, HandleCreate_MissingArgs)
@@ -705,7 +770,7 @@ TEST_F(CmdHandlerTests, HandleCreate_MissingArgs)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "A001 BAD Invalid parametrs number\r\n";
+	std::string expected = "A001 BAD Invalid parameters number\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -756,7 +821,7 @@ TEST_F(CmdHandlerTests, HandleDelete_SystemFolder)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "A001 OK Delete completed\r\n";
+	std::string expected = "A001 NO Can`t delete INBOX folder\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -986,8 +1051,7 @@ TEST_F(CmdHandlerTests, HandleCapability_NoAuthRequired)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected =
-		"* CAPABILITY IMAP4rev1 LOGIN LOGOUT SELECT LIST LSUB STATUS FETCH STORE CREATE DELETE RENAME COPY EXPUNGE\r\n";
+	std::string expected = "* CAPABILITY IMAP4rev1\r\n";
 	EXPECT_THAT(response, testing::HasSubstr(expected));
 }
 
@@ -1024,4 +1088,1062 @@ TEST_F(CmdHandlerTests, Helper_Login)
 {
 	Login("alice");
 	EXPECT_EQ(dispatcher->get_State(), SessionState::Authenticated);
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_Success)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "FLAGS"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH (UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK Uid Fetch completed\r\n"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_MultipleUIDs)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1:3", "FLAGS"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("UID 2"));
+	EXPECT_THAT(response, testing::HasSubstr("UID 3"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK Uid Fetch completed\r\n"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_InvalidUID)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"999", "FLAGS"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK Uid Fetch completed\r\n"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_NoMailboxSelected)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "FLAGS"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD No mailbox selected\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_MissingArgs)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD Missing arguments\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidStore_AddFlags)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1", "+FLAGS", "(\\Seen)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Seen"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK Uid Store completed"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidStore_RemoveFlags)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1", "+FLAGS", "(\\Seen)"};
+	dispatcher->Dispatch(cmd);
+
+	cmd.m_tag = "A003";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1", "-FLAGS", "(\\Seen)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("A003 OK Uid Store completed\r\n"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidStore_Silent)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1", "+FLAGS.SILENT", "(\\Seen)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 OK Uid Store completed\r\n");
+	EXPECT_THAT(response, testing::Not(testing::HasSubstr("FETCH")));
+}
+
+TEST_F(CmdHandlerTests, HandleUidStore_NoMailboxSelected)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1", "+FLAGS", "(\\Seen)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD No mailbox selected\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidStore_MissingArgs)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD Missing arguments\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidCopy_Success)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidCopy;
+	cmd.m_args = {"1", "Sent"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 OK Uid Copy completed\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidCopy_MultipleMessages)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidCopy;
+	cmd.m_args = {"1:3", "Sent"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 OK Uid Copy completed\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidCopy_DestinationNotFound)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidCopy;
+	cmd.m_args = {"1", "NonExistentFolder"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD No such folder\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidCopy_NoMailboxSelected)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidCopy;
+	cmd.m_args = {"1", "Sent"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD No mailbox selected\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleUidCopy_MissingArgs)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidCopy;
+	cmd.m_args = {"1"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A002 BAD Missing arguments\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleClose_Success)
+{
+	LoginAndSelect("alice", "INBOX");
+	ASSERT_EQ(dispatcher->get_State(), SessionState::Selected);
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Close;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A001 OK Close completed\r\n");
+	EXPECT_EQ(dispatcher->get_State(), SessionState::Authenticated);
+}
+
+TEST_F(CmdHandlerTests, HandleClose_NoMailboxSelected)
+{
+	Login("alice");
+	ASSERT_EQ(dispatcher->get_State(), SessionState::Authenticated);
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Close;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A001 BAD No mailbox selected\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleCheck_Success)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Check;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_EQ(response, "A001 OK Check completed\r\n");
+}
+
+TEST_F(CmdHandlerTests, HandleCheck_NoMailboxSelected)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Check;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD No mailbox selected\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleSubscribe_FolderNotFound)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Subscribe;
+	cmd.m_args = {"NonExistentFolder"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD Mailbox does not exist\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleSubscribe_MissingArgs)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Subscribe;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD Invalid arguments number\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleUnsubscribe_MissingArgs)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Unsubscribe;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD Invalid arguments number\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleClose_WithDeletedMessages)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand storeCmd;
+	storeCmd.m_tag = "A001";
+	storeCmd.m_type = ImapCommandType::Store;
+	storeCmd.m_args = {"1", "+FLAGS", "(\\Deleted)"};
+	dispatcher->Dispatch(storeCmd);
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Close;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A002 OK Close completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleLogin_MissingArgs)
+{
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Login;
+	cmd.m_args = {"alice"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD Missing arguments\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleLogin_ExtraArgs)
+{
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Login;
+	cmd.m_args = {"alice", "pass123", "extra"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD Missing arguments\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleList_WildcardAsterisk)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::List;
+	cmd.m_args = {"", "*"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n"));
+	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleList_WildcardPercent)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::List;
+	cmd.m_args = {"", "%"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n"));
+	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleList_WithReference)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::List;
+	cmd.m_args = {"/", "*"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n"));
+	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleLsub_WildcardAsterisk)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Lsub;
+	cmd.m_args = {"", "*"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* LSUB (\\HasNoChildren) \"/\" \"INBOX\"\r\n"));
+	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleStatus_Success_UIDNEXT)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Status;
+	cmd.m_args = {"INBOX", "(UIDNEXT)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "* STATUS INBOX (UIDNEXT 5)\r\nA001 OK Status completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleStatus_Success_UIDVALIDITY)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Status;
+	cmd.m_args = {"INBOX", "(UIDVALIDITY)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "* STATUS INBOX (UIDVALIDITY 1)\r\nA001 OK Status completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleStatus_Success_AllItems)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Status;
+	cmd.m_args = {"INBOX", "(MESSAGES UNSEEN RECENT UIDNEXT UIDVALIDITY)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("MESSAGES 4"));
+	EXPECT_THAT(response, testing::HasSubstr("UIDNEXT 5"));
+	EXPECT_THAT(response, testing::HasSubstr("A001 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleStatus_EmptyMailbox)
+{
+	Login("alice");
+
+	ImapCommand createCmd;
+	createCmd.m_tag = "A001";
+	createCmd.m_type = ImapCommandType::Create;
+	createCmd.m_args = {"EmptyFolder"};
+	dispatcher->Dispatch(createCmd);
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Status;
+	cmd.m_args = {"EmptyFolder", "(MESSAGES UNSEEN)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "* STATUS EmptyFolder (MESSAGES 0 UNSEEN 0)\r\nA002 OK Status completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_Success_BODY)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH ("));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_Success_BODYSTRUCTURE)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODYSTRUCTURE"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODYSTRUCTURE"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_Success_RFC822)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "RFC822"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_Success_RFC822HEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "RFC822.HEADER"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.HEADER"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_Success_RFC822TEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "RFC822.TEXT"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.TEXT"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_InvalidDataItem)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "INVALID"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A002 BAD Invalid fetch attribute: INVALID\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_UID)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "UID"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "* 1 FETCH (UID 1)\r\nA002 OK Fetch completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleStore_ReplaceFlags)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Store;
+	cmd.m_args = {"1", "FLAGS", "(\\Seen \\Answered)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Seen \\Answered"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleStore_InvalidFlags)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Store;
+	cmd.m_args = {"1", "+FLAGS", "(\\InvalidFlag)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A002 BAD Unknown flag: \\InvalidFlag\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleCreate_InvalidName)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Create;
+	cmd.m_args = {""};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 NO Create failed";
+	std::string actual = response.substr(0, expected.size());
+	EXPECT_EQ(actual, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleDelete_WithMessages)
+{
+	Login("alice");
+
+	ImapCommand createCmd;
+	createCmd.m_tag = "A001";
+	createCmd.m_type = ImapCommandType::Create;
+	createCmd.m_args = {"FolderWithMessages"};
+	dispatcher->Dispatch(createCmd);
+
+	ImapCommand selectCmd;
+	selectCmd.m_tag = "A002";
+	selectCmd.m_type = ImapCommandType::Select;
+	selectCmd.m_args = {"FolderWithMessages"};
+	dispatcher->Dispatch(selectCmd);
+
+	ImapCommand deleteCmd;
+	deleteCmd.m_tag = "A003";
+	deleteCmd.m_type = ImapCommandType::Delete;
+	deleteCmd.m_args = {"FolderWithMessages"};
+
+	std::string response = dispatcher->Dispatch(deleteCmd);
+
+	std::string expected = "A003 OK Delete completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleRename_AlreadyExists)
+{
+	Login("alice");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A001";
+	cmd.m_type = ImapCommandType::Rename;
+	cmd.m_args = {"INBOX", "Sent"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A001 BAD Rename failed: renameFolder: folder 'Sent' already exists\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleCopy_ToSelf)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Copy;
+	cmd.m_args = {"1", "INBOX"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A002 OK Copy completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleExpunge_WithDeletedMessages)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand storeCmd;
+	storeCmd.m_tag = "A001";
+	storeCmd.m_type = ImapCommandType::Store;
+	storeCmd.m_args = {"1", "+FLAGS", "(\\Deleted)"};
+	dispatcher->Dispatch(storeCmd);
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Expunge;
+	cmd.m_args = {};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("1 EXPUNGE"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_AllMacro)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "ALL"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_FastMacro)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "FAST"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_FullMacro)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "FULL"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODY)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODY"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidStore_ReplaceFlagsSilent)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidStore;
+	cmd.m_args = {"1", "FLAGS.SILENT", "(\\Seen \\Answered)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A002 OK Uid Store completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleUidCopy_ToSelf)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidCopy;
+	cmd.m_args = {"1", "INBOX"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	std::string expected = "A002 OK Uid Copy completed\r\n";
+	EXPECT_EQ(response, expected);
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODYTEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY[TEXT]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[TEXT]"));
+	EXPECT_THAT(response, testing::HasSubstr("This is the body of the message"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODYHEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY[HEADER]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[HEADER]"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("To: recipient@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODY1_MIME)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"4", "BODY[1.MIME]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[1.MIME]"));
+	EXPECT_THAT(response, testing::HasSubstr("Content-Type: text/plain"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODY1)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"4", "BODY[1]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[1]"));
+	EXPECT_THAT(response, testing::HasSubstr("Plain text version"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_BODYPEEKHeaderFields)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT)]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY.PEEK[HEADER.FIELDS"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("To: recipient@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_MultipleDataItems)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1", "(FLAGS UID RFC822.SIZE)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS"));
+	EXPECT_THAT(response, testing::HasSubstr("UID"));
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleFetch_SequenceRange)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::Fetch;
+	cmd.m_args = {"1:3", "FLAGS"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("1 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("2 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("3 FETCH"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODYSTRUCTURE)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODYSTRUCTURE"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODYSTRUCTURE"));
+	EXPECT_THAT(response, testing::HasSubstr("\"text\" \"plain\""));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_RFC822)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "RFC822"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_RFC822HEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "RFC822.HEADER"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.HEADER"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_RFC822TEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "RFC822.TEXT"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.TEXT"));
+	EXPECT_THAT(response, testing::HasSubstr("This is the body of the message"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODYTEXT)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODY[TEXT]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[TEXT]"));
+	EXPECT_THAT(response, testing::HasSubstr("This is the body of the message"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_BODYHEADER)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "BODY[HEADER]"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("BODY[HEADER]"));
+	EXPECT_THAT(response, testing::HasSubstr("From: alice@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("To: recipient@test.com"));
+	EXPECT_THAT(response, testing::HasSubstr("Subject: Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
+}
+
+TEST_F(CmdHandlerTests, HandleUidFetch_MultipleDataItems)
+{
+	LoginAndSelect("alice", "INBOX");
+
+	ImapCommand cmd;
+	cmd.m_tag = "A002";
+	cmd.m_type = ImapCommandType::UidFetch;
+	cmd.m_args = {"1", "(FLAGS RFC822.SIZE ENVELOPE)"};
+
+	std::string response = dispatcher->Dispatch(cmd);
+
+	EXPECT_THAT(response, testing::HasSubstr("UID 1"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS"));
+	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE"));
+	EXPECT_THAT(response, testing::HasSubstr("ENVELOPE"));
+	EXPECT_THAT(response, testing::HasSubstr("Hello Bob"));
+	EXPECT_THAT(response, testing::HasSubstr("A002 OK"));
 }

@@ -1,9 +1,14 @@
 #include "ImapSession.hpp"
 
-#include "ImapParser.hpp"
+#include <istream>
 
-ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, UserDAL& u_dal)
-	: m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db.getDB(), u_dal)
+#include "ImapParser.hpp"
+#include "ImapResponse.hpp"
+
+ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, UserDAL& u_dal,
+						 ThreadPool& pool, ImapConfig& config)
+	: m_config(config), m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db.getDB(), u_dal),
+	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(socket.get_executor())
 {
 	m_logger.Log(PROD, "New ImapSession created");
 	m_logger.Log(TRACE, "ImapSession::ImapSession - socket accepted");
@@ -14,7 +19,7 @@ ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, D
 void ImapSession::Start()
 {
 	m_logger.Log(DEBUG, "ImapSession::Start - Start");
-	SendBanner();
+	boost::asio::post(m_strand, [this, self = shared_from_this()]() { SendBanner(); });
 	m_logger.Log(DEBUG, "ImapSession::Start - End");
 }
 
@@ -30,30 +35,51 @@ void ImapSession::SendBanner()
 void ImapSession::ReadCommand()
 {
 	m_logger.Log(DEBUG, "ImapSession::ReadCommand - Start");
+
 	auto self = shared_from_this();
-	boost::asio::async_read_until(m_socket, m_buffer, "\r\n",
-								  [this, self](std::error_code ec, std::size_t)
-								  {
-									  if (!ec)
-									  {
-										  std::istream is(&m_buffer);
-										  std::string line;
-										  std::getline(is, line);
-										  if (!line.empty() && line.back() == '\r')
-										  {
-											  line.pop_back();
-										  }
-										  m_logger.Log(DEBUG, "ImapSession::ReadCommand - Acquired: " + line);
-										  m_logger.Log(TRACE, "ImapSession::ReadCommand - Calling HandleCommand");
-										  HandleCommand(line);
-									  }
-									  else
-									  {
-										  m_logger.Log(PROD, "ImapSession::ReadCommand - Error: " + ec.message());
-										  m_socket.close();
-									  }
-									  m_logger.Log(DEBUG, "ImapSession::ReadCommand - End");
-								  });
+
+	m_timer.expires_after(std::chrono::minutes(m_config.TIMEOUT_MINS));
+	m_timer.async_wait(
+		boost::asio::bind_executor(m_strand,
+								   [this, self](boost::system::error_code ec)
+								   {
+									   // the timer was cancelled after session received new command
+									   if (ec == boost::asio::error::operation_aborted || !m_socket.is_open())
+									   {
+										   return;
+									   }
+									   WriteResponse(ImapResponse::Untagged("BYE Autologout; idle for too long"));
+									   m_logger.Log(DEBUG, "Closing socket due to timeout");
+									   m_socket.close();
+								   }));
+
+	boost::asio::async_read_until(
+		m_socket, m_buffer, "\r\n",
+		boost::asio::bind_executor(m_strand,
+								   [this, self](boost::system::error_code ec, std::size_t)
+								   {
+									   if (!ec)
+									   {
+										   m_timer.cancel();
+
+										   std::istream is(&m_buffer);
+										   std::string line;
+										   std::getline(is, line);
+										   if (!line.empty() && line.back() == '\r')
+										   {
+											   line.pop_back();
+										   }
+										   m_logger.Log(DEBUG, "ImapSession::ReadCommand - Acquired: " + line);
+										   m_logger.Log(TRACE, "ImapSession::ReadCommand - Calling HandleCommand");
+										   HandleCommand(line);
+									   }
+									   else
+									   {
+										   m_logger.Log(PROD, "ImapSession::ReadCommand - Error: " + ec.message());
+										   m_socket.close();
+									   }
+									   m_logger.Log(DEBUG, "ImapSession::ReadCommand - End");
+								   }));
 }
 
 void ImapSession::HandleCommand(const std::string& line)
@@ -85,16 +111,34 @@ void ImapSession::HandleCommand(const std::string& line)
 		return;
 	}
 
-	auto response = m_dispatcher->Dispatch(cmd);
-	WriteResponse(response);
+	auto self = shared_from_this();
 
-	m_logger.Log(TRACE, "ImapSession::HandleCommand - Out: " + response);
+	m_thread_pool.add_task(
+		[this, self, cmd]()
+		{
+			std::string response;
+			try
+			{
+				response = m_dispatcher->Dispatch(cmd);
+			}
+			catch (const std::exception& ex)
+			{
+				m_logger.Log(PROD, std::string("Exception in command dispatch: ") + ex.what());
+				response = "BAD Internal server error\r\n";
+			}
+			boost::asio::post(m_strand,
+							  [this, self, response, cmd_type = cmd.m_type]()
+							  {
+								  WriteResponse(response);
+
+								  if (cmd_type != ImapCommandType::Logout)
+								  {
+									  ReadCommand();
+								  }
+							  });
+		});
+
 	m_logger.Log(DEBUG, "ImapSession::HandleCommand - End");
-
-	if (cmd.m_type != ImapCommandType::Logout)
-	{
-		ReadCommand();
-	}
 }
 
 void ImapSession::WriteResponse(const std::string& msg)
@@ -102,19 +146,48 @@ void ImapSession::WriteResponse(const std::string& msg)
 	m_logger.Log(TRACE, "ImapSession::WriteResponse - In: msg length=" + std::to_string(msg.size()));
 	m_logger.Log(DEBUG, "ImapSession::WriteResponse - Start");
 
+	m_write_queue.push(msg);
+	if (!m_is_writing)
+	{
+		Write();
+	}
+
+	m_logger.Log(DEBUG, "ImapSession::WriteResponse - End");
+}
+
+void ImapSession::Write()
+{
+	m_logger.Log(DEBUG, "ImapSession::Write - Start");
+
+	m_is_writing = true;
 	auto self = shared_from_this();
-	boost::asio::async_write(m_socket, boost::asio::buffer(msg),
-							 [this, self](std::error_code ec, std::size_t bytes_transferred)
-							 {
-								 if (ec)
-								 {
-									 m_logger.Log(PROD, "ImapSession::WriteResponse - Error: " + ec.message());
-								 }
-								 else
-								 {
-									 m_logger.Log(DEBUG, "ImapSession::WriteResponse - Sent " +
-															 std::to_string(bytes_transferred) + " bytes");
-								 }
-								 m_logger.Log(DEBUG, "ImapSession::WriteResponse - End");
-							 });
+	auto payload = std::make_shared<std::string>(m_write_queue.front());
+
+	boost::asio::async_write(
+		m_socket, boost::asio::buffer(*payload),
+		boost::asio::bind_executor(m_strand,
+								   [this, self, payload](boost::system::error_code ec, std::size_t bytes_transferred)
+								   {
+									   if (ec)
+									   {
+										   m_logger.Log(PROD, "ImapSession::Write - Error: " + ec.message());
+										   m_socket.close();
+										   return;
+									   }
+
+									   m_logger.Log(DEBUG, "ImapSession::Write - Sent " +
+															   std::to_string(bytes_transferred) + " bytes");
+
+									   m_write_queue.pop();
+									   if (!m_write_queue.empty())
+									   {
+										   Write();
+									   }
+									   else
+									   {
+										   m_is_writing = false;
+									   }
+								   }));
+
+	m_logger.Log(DEBUG, "ImapSession::Write - End");
 }
