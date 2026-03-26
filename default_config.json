@@ -1,0 +1,40 @@
+{
+    "server": {
+        "port": 25000,
+        "domain": "localhost",
+        "worker_threads": 4,
+        "db_path": "mail.db",
+        "migration_path": "../../database/scheme/001_init_scheme.sql"
+    },
+    "imap": {
+        "port": 2553,
+        "db_path": "prod.db",
+        "migration_path": "../../database/scheme/001_init_scheme.sql",
+        "timeout_mins": 30
+    },
+    "logging": {
+        "log_level": "PROD",
+        "file_path": "log.txt",
+        "old_file_path": "old_log.txt",
+        "max_file_size_mb": 10,
+        "batch_size": 50,
+        "flush_interval_secs": 2
+    },
+    "proto": {
+        "max_line_size": 8192,
+        "socket_timeout_secs": 30,
+        "max_message_size_mb": 10
+    },
+    "database": {
+        "default_page_limit": 50
+    },
+    "mime": {
+        "header_chunk_size": 45,
+        "default_domain": "localhost"
+    },
+    "base64": {
+        "max_file_size_mb": 15,
+        "chunk_size_bytes": 3072,
+        "line_length": 76
+    }
+}

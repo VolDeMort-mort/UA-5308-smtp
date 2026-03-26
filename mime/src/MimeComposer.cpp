@@ -11,7 +11,7 @@ Email MimeComposer::CreateNew(const std::string& from, const std::string& to, co
 {
 	Email email;
 	email.sender     = from;
-	email.recipient  = to;
+	email.to = { to };
 	email.subject    = subject;
 	email.plain_text = body_text;
 	return email;
@@ -21,8 +21,8 @@ Email MimeComposer::CreateReply(const Email& original, const std::string& from,
 								const std::string& reply_text)
 {
 	Email email;
-	email.sender    = from;
-	email.recipient = original.sender;
+	email.sender = from;
+	email.to     = { original.sender };
 
 	if (StartsWithIgnoreCase(original.subject, "re:"))
 		email.subject = original.subject;
@@ -42,8 +42,8 @@ Email MimeComposer::CreateForward(const Email& original, const std::string& from
 								  const std::string& to, const std::string& comment_text)
 {
 	Email email;
-	email.sender    = from;
-	email.recipient = to;
+	email.sender = from;
+	email.to = { to };
 
 	if (StartsWithIgnoreCase(original.subject, "fwd:") ||
 		StartsWithIgnoreCase(original.subject, "fw:"))
@@ -84,7 +84,13 @@ std::string MimeComposer::BuildForwardHeader(const Email& original)
 	std::ostringstream oss;
 	oss << "---------- Forwarded message ----------\n";
 	oss << "From: " << original.sender << "\n";
-	oss << "To: "   << original.recipient << "\n";
+	std::string to_str;
+	for (std::size_t i = 0; i < original.to.size(); ++i)
+	{
+		if (i > 0) to_str += ", ";
+		to_str += original.to[i];
+	}
+	oss << "To: " << to_str << "\n";
 	oss << "Date: " << original.date << "\n";
 	oss << "Subject: " << original.subject << "\n";
 	oss << "---------------------------------------\n\n";

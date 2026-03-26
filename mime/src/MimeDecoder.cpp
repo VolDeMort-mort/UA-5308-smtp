@@ -83,7 +83,7 @@ std::string DecodeQEncoding(const std::string& text)
 } // anonymous namespace
 
 
-std::string MimeDecoder::DecodeEncodedWord(const std::string& input, Logger* logger)
+std::string MimeDecoder::DecodeEncodedWord(const std::string& input, ILogger* logger)
 {
 	std::string result;
 	size_t pos = 0;
