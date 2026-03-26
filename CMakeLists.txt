@@ -30,6 +30,7 @@ option(BUILD_IMAP     "Build the IMAP server"     ON)
 option(BUILD_MUA      "Build the Mail User Agent"  ON)
 option(BUILD_DATABASE "Build the Database"         ON)
 
+add_subdirectory(config)
 add_subdirectory(common)
 add_subdirectory(base64)
 add_subdirectory(logger)

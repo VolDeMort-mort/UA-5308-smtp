@@ -16,3 +16,7 @@ cmake-build-debug/
 cmake-build-release/
 .cache/
 .vscode/
+
+vcpkg.json
+
+config.json

@@ -1,5 +1,3 @@
-#include "../include/MimeBuilder.h"
-
 #include <unordered_map> 
 #include <algorithm>     
 #include <string>        
@@ -7,6 +5,8 @@
 #include <random>
 #include <sstream>
 
+#include "Config.h"
+#include "../include/MimeBuilder.h"
 #include "../include/MimeEncoder.h"
 #include  "../../common/utils/TimeUtils.h"
 #include  "../../common/utils/StringUtils.h"
@@ -250,8 +250,8 @@ std::string MimeBuilder::GenerateMessageId(const std::string& sender)
 	for (int i = 0; i < 32; ++i)
 		unique_id += hex_chars[dist(gen)];
 
-	std::string domain = "localhost";
-	size_t      at_pos = sender.find('@');
+	std::string domain =  SmtpClient::Config::Instance().GetMime().default_domain;
+	size_t at_pos = sender.find('@');
 	if (at_pos != std::string::npos)
 		domain = sender.substr(at_pos + 1);
 
