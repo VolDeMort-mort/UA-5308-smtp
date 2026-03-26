@@ -640,7 +640,7 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 		// with name like parent/child doesn`t handle well, because we don`t support hierarchy in schema,
 		// so we just create folder with such name without parent-child relation
 
-		Folder f{std::nullopt, m_authenticatedUserID.value(), cmd.m_args[0]};
+		Folder f{std::nullopt, m_authenticatedUserID.value(), std::nullopt, cmd.m_args[0]};
 		m_messRepo.createFolder(f);
 		response = Ok(cmd.m_tag, "Create completed");
 	}

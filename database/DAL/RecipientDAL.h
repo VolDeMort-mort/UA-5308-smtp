@@ -7,11 +7,12 @@
 #include <sqlite3.h>
 
 #include "../Entity/Recipient.h"
+#include "../ConnectionPool.h"
 
 class RecipientDAL
 {
 public:
-    explicit RecipientDAL(sqlite3* db);
+    explicit RecipientDAL(sqlite3* write_conn, ConnectionPool& pool);
 
     std::optional<Recipient> findByID(int64_t id) const;
     std::vector<Recipient> findByMessage(int64_t message_id) const;
@@ -23,8 +24,9 @@ public:
     const std::string& getLastError() const;
 
 private:
-    sqlite3* m_db;
-    std::string m_last_error;
+    sqlite3* m_write_conn;
+    ConnectionPool& m_pool;
+    mutable std::string m_last_error;
 
     bool setError(const char* sqlite_errmsg);
     std::vector<Recipient> fetchRows(sqlite3_stmt* stmt) const;

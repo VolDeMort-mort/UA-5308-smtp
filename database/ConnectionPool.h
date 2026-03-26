@@ -7,12 +7,10 @@
 #include <condition_variable>
 #include <stdexcept>
 
-#define THREAD_COUNT 8
-
 class ConnectionPool
 {
 public:
-    explicit ConnectionPool(const std::string& db_path, int pool_size = THREAD_COUNT);
+    explicit ConnectionPool(const std::string& db_path, int pool_size = 0);
     ~ConnectionPool();
 
     ConnectionPool(const ConnectionPool&) = delete;
@@ -22,7 +20,7 @@ public:
     void release(sqlite3* conn);
 
 private:
-    struct Slot{ sqlite3* conn = nullptr; bool in_use = false; };
+    struct Slot { sqlite3* conn = nullptr; bool in_use = false; };
 
     std::vector<Slot> m_slots;
     std::mutex m_mutex;
@@ -33,12 +31,13 @@ class ReadGuard
 {
 public:
     explicit ReadGuard(ConnectionPool& pool) : m_pool(pool), m_conn(pool.acquire()) {}
-    ~ReadGuard() {m_pool.release(m_conn);}
+    ~ReadGuard() { m_pool.release(m_conn); }
 
-    sqlite3* db() const {return m_conn;};
+    sqlite3* db() const { return m_conn; }
 
     ReadGuard(const ReadGuard&) = delete;
     ReadGuard& operator=(const ReadGuard&) = delete;
+
 private:
     ConnectionPool& m_pool;
     sqlite3* m_conn;

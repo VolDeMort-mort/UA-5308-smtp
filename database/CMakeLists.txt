@@ -11,6 +11,7 @@ endif()
 
 add_library(db_lib STATIC
     DataBaseManager.cpp
+    ConnectionPool.cpp
     Entity/Recipient.cpp
     DAL/UserDAL.cpp
     DAL/FolderDAL.cpp

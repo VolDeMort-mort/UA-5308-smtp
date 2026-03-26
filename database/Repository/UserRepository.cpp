@@ -1,10 +1,11 @@
 #include "UserRepository.h"
 
-UserRepository::UserRepository(sqlite3* db, UserDAL& user_dal)
+UserRepository::UserRepository(DataBaseManager& db)
     : m_db(db)
-    , m_user_dal(user_dal)
-    , m_folder_dal(db)
-{}
+    , m_user_dal(db.getDB(), db.pool())
+    , m_folder_dal(db.getDB(), db.pool())
+{
+}
 
 bool UserRepository::setError(const std::string& error) const
 {
@@ -49,6 +50,8 @@ bool UserRepository::registerUser(User& user, const std::string& password)
     if (user.password_hash.empty())
         return setError("registerUser: password hashing failed");
 
+    auto lock = m_db.writeLock();
+
     if (!m_user_dal.insert(user))
         return setError(m_user_dal.getLastError());
 
@@ -69,13 +72,10 @@ bool UserRepository::registerUser(User& user, const std::string& password)
 bool UserRepository::authorize(const std::string& username, const std::string& password)
 {
     auto user = m_user_dal.findByUsername(username);
-
     if (!user.has_value())
         return setError("authorize: user not found");
 
-    if (crypto_pwhash_str_verify(
-            user->password_hash.c_str(),
-            password.c_str(), password.size()) != 0)
+    if (crypto_pwhash_str_verify(user->password_hash.c_str(), password.c_str(), password.size()) != 0)
         return setError("authorize: invalid credentials");
 
     return true;
@@ -86,6 +86,8 @@ bool UserRepository::changePassword(int64_t id, const std::string& new_password)
     if (!m_user_dal.findByID(id).has_value())
         return setError("changePassword: user not found");
 
+    auto lock = m_db.writeLock();
+
     if (!m_user_dal.updatePassword(id, hashPassword(new_password)))
         return setError(m_user_dal.getLastError());
 
@@ -94,6 +96,7 @@ bool UserRepository::changePassword(int64_t id, const std::string& new_password)
 
 bool UserRepository::update(const User& user)
 {
+    auto lock = m_db.writeLock();
     if (!m_user_dal.update(user))
         return setError(m_user_dal.getLastError());
     return true;
@@ -104,10 +107,35 @@ bool UserRepository::hardDelete(int64_t id)
     if (!m_user_dal.findByID(id).has_value())
         return setError("hardDelete: user not found");
 
+    auto lock = m_db.writeLock();
+
     if (!m_user_dal.hardDelete(id))
         return setError(m_user_dal.getLastError());
 
     return true;
+}
+
+bool UserRepository::updateProfile(int64_t id, const std::optional<std::string>& first_name,
+                                   const std::optional<std::string>& last_name,
+                                   const std::optional<std::string>& birthdate)
+{
+    auto lock = m_db.writeLock();
+    if (!m_user_dal.updateProfile(id, first_name, last_name, birthdate))
+        return setError(m_user_dal.getLastError());
+    return true;
+}
+
+bool UserRepository::updateAvatar(int64_t id, const std::optional<std::string>& avatar_b64)
+{
+    auto lock = m_db.writeLock();
+    if (!m_user_dal.updateAvatar(id, avatar_b64))
+        return setError(m_user_dal.getLastError());
+    return true;
+}
+
+std::optional<std::string> UserRepository::getAvatar(int64_t id) const
+{
+    return m_user_dal.getAvatar(id);
 }
 
 std::string UserRepository::hashPassword(const std::string& password) const

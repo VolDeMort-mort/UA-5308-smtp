@@ -1,6 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
+#include <sodium.h>
 
 #include "DAL/FolderDAL.h"
 #include "DAL/UserDAL.h"
@@ -28,9 +29,13 @@ class CmdHandlerTests : public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		db = std::make_unique<DataBaseManager>(":memory:", SCHEMA_PATH);
-		userDal = std::make_unique<UserDAL>(db->getDB());
-		userRepo = std::make_unique<UserRepository>(db->getDB(), *userDal);
+		if (sodium_init() < 0) {
+			FAIL() << "Failed to initialize libsodium";
+		}
+
+		db = std::make_unique<DataBaseManager>("/tmp/test_imap.db", SCHEMA_PATH);
+		userDal = std::make_unique<UserDAL>(db->getDB(), db->pool());
+		userRepo = std::make_unique<UserRepository>(*db);;
 		messRepo = std::make_unique<MessageRepository>(*db);
 		dispatcher = std::make_unique<ImapCommandDispatcher>(mockLogger, *userRepo, *messRepo);
 		SeedDB();
@@ -51,6 +56,7 @@ protected:
 		}
 		dispatcher.reset();
 		db.reset();
+		std::remove("/tmp/test_imap.db");
 	}
 
 	::testing::NiceMock<MockLogger> mockLogger;
@@ -91,22 +97,22 @@ protected:
 		charlie.username = "charlie";
 		dave.username = "dave";
 
-		userRepo->registerUser(alice, pass);
-		userRepo->registerUser(bob, pass);
-		userRepo->registerUser(charlie, pass);
-		userRepo->registerUser(dave, pass);
+		ASSERT_TRUE(userRepo->registerUser(alice, pass)) << userRepo->getLastError();
+		ASSERT_TRUE(userRepo->registerUser(bob, pass)) << userRepo->getLastError();
+		ASSERT_TRUE(userRepo->registerUser(charlie, pass)) << userRepo->getLastError();
+		ASSERT_TRUE(userRepo->registerUser(dave, pass)) << userRepo->getLastError();
 
-		FolderDAL folderDal(db->getDB());
+		FolderDAL folderDal(db->getDB(), db->pool());
 
-		auto bobSpam = Folder{std::nullopt, 2, "Spam", 1, true};
-		auto bobWork = Folder{std::nullopt, 2, "Work", 1, true};
-		auto charlieFamily = Folder{std::nullopt, 3, "Family", 1, true};
-		auto aliceArchive = Folder{std::nullopt, 1, "Archive", 1, true};
+		auto bobSpam = Folder{std::nullopt, 2, std::nullopt, "Spam", 1, true};
+		auto bobWork = Folder{std::nullopt, 2, std::nullopt, "Work", 1, true};
+		auto charlieFamily = Folder{std::nullopt, 3, std::nullopt, "Family", 1, true};
+		auto aliceArchive = Folder{std::nullopt, 1, std::nullopt, "Archive", 1, true};
 
-		folderDal.insert(bobSpam);
-		folderDal.insert(bobWork);
-		folderDal.insert(charlieFamily);
-		folderDal.insert(aliceArchive);
+		ASSERT_TRUE(folderDal.insert(bobSpam)) << folderDal.getLastError();
+		ASSERT_TRUE(folderDal.insert(bobWork)) << folderDal.getLastError();
+		ASSERT_TRUE(folderDal.insert(charlieFamily)) << folderDal.getLastError();
+		ASSERT_TRUE(folderDal.insert(aliceArchive)) << folderDal.getLastError();
 
 		auto aliceInbox = folderDal.findByName(1, "INBOX");
 		auto aliceSent = folderDal.findByName(1, "Sent");
@@ -114,6 +120,13 @@ protected:
 		auto bobWorkFolder = folderDal.findByName(2, "Work");
 		auto charlieInbox = folderDal.findByName(3, "INBOX");
 		auto charlieFamilyFolder = folderDal.findByName(3, "Family");
+
+		ASSERT_TRUE(aliceInbox.has_value()) << "Alice INBOX not found";
+		ASSERT_TRUE(aliceSent.has_value()) << "Alice Sent not found";
+		ASSERT_TRUE(bobInbox.has_value()) << "Bob INBOX not found";
+		ASSERT_TRUE(bobWorkFolder.has_value()) << "Bob Work not found";
+		ASSERT_TRUE(charlieInbox.has_value()) << "Charlie INBOX not found";
+		ASSERT_TRUE(charlieFamilyFolder.has_value()) << "Charlie Family not found";
 
 		auto addMsg = [&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject,
 						  bool flagged, bool answered)

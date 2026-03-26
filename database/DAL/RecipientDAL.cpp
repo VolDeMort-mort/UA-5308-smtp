@@ -4,7 +4,10 @@
     "SELECT id, message_id, address, type " \
     "FROM recipients "
 
-RecipientDAL::RecipientDAL(sqlite3* db) : m_db(db) {}
+RecipientDAL::RecipientDAL(sqlite3* write_conn, ConnectionPool& pool)
+    : m_write_conn(write_conn)
+    , m_pool(pool)
+{}
 
 bool RecipientDAL::setError(const char* sqlite_errmsg)
 {
@@ -49,10 +52,11 @@ std::vector<Recipient> RecipientDAL::fetchRows(sqlite3_stmt* stmt) const
 
 std::optional<Recipient> RecipientDAL::findByID(int64_t id) const
 {
+    ReadGuard g(m_pool);
     const char* sql = RECIPIENT_SELECT "WHERE id = ? LIMIT 1;";
 
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(g.db(), sql, -1, &stmt, nullptr) != SQLITE_OK)
         return std::nullopt;
 
     sqlite3_bind_int64(stmt, 1, id);
@@ -67,10 +71,11 @@ std::optional<Recipient> RecipientDAL::findByID(int64_t id) const
 
 std::vector<Recipient> RecipientDAL::findByMessage(int64_t message_id) const
 {
+    ReadGuard g(m_pool);
     const char* sql = RECIPIENT_SELECT "WHERE message_id = ?;";
 
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(g.db(), sql, -1, &stmt, nullptr) != SQLITE_OK)
         return {};
 
     sqlite3_bind_int64(stmt, 1, message_id);
@@ -84,18 +89,18 @@ bool RecipientDAL::insert(Recipient& recipient)
         "VALUES (?, ?, ?);";
 
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-        return setError(sqlite3_errmsg(m_db));
+    if (sqlite3_prepare_v2(m_write_conn, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return setError(sqlite3_errmsg(m_write_conn));
 
     sqlite3_bind_int64(stmt, 1, recipient.message_id);
-    sqlite3_bind_text (stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text (stmt, 3, Recipient::typeToString(recipient.type).c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, Recipient::typeToString(recipient.type).c_str(), -1, SQLITE_TRANSIENT);
 
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
     if (ok)
-        recipient.id = sqlite3_last_insert_rowid(m_db);
+        recipient.id = sqlite3_last_insert_rowid(m_write_conn);
     else
-        setError(sqlite3_errmsg(m_db));
+        setError(sqlite3_errmsg(m_write_conn));
 
     sqlite3_finalize(stmt);
     return ok;
@@ -111,16 +116,16 @@ bool RecipientDAL::update(const Recipient& recipient)
         "WHERE id = ?;";
 
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-        return setError(sqlite3_errmsg(m_db));
+    if (sqlite3_prepare_v2(m_write_conn, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return setError(sqlite3_errmsg(m_write_conn));
 
     sqlite3_bind_int64(stmt, 1, recipient.message_id);
-    sqlite3_bind_text (stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text (stmt, 3, Recipient::typeToString(recipient.type).c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, recipient.address.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, Recipient::typeToString(recipient.type).c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, 4, recipient.id.value());
 
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
-    if (!ok) setError(sqlite3_errmsg(m_db));
+    if (!ok) setError(sqlite3_errmsg(m_write_conn));
 
     sqlite3_finalize(stmt);
     return ok;
@@ -131,13 +136,13 @@ bool RecipientDAL::hardDelete(int64_t id)
     const char* sql = "DELETE FROM recipients WHERE id = ?;";
 
     sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK)
-        return setError(sqlite3_errmsg(m_db));
+    if (sqlite3_prepare_v2(m_write_conn, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return setError(sqlite3_errmsg(m_write_conn));
 
     sqlite3_bind_int64(stmt, 1, id);
 
     bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
-    if (!ok) setError(sqlite3_errmsg(m_db));
+    if (!ok) setError(sqlite3_errmsg(m_write_conn));
 
     sqlite3_finalize(stmt);
     return ok;
