@@ -14,7 +14,7 @@ static Email MakeValidEmail(const std::string& plain_text = "Hello World")
 {
 	Email e;
 	e.sender     = "alice@example.com";
-	e.recipient  = "bob@example.com";
+	e.to         = { "bob@example.com" };
 	e.subject    = "Test Subject";
 	e.plain_text = plain_text;
 	return e;
@@ -50,13 +50,45 @@ TEST(MimeBuilderTest, BuildEmail_FailsWithEmptySender)
 	EXPECT_FALSE(MimeBuilder::BuildEmail(e, mime, logger));
 }
 
-TEST(MimeBuilderTest, BuildEmail_FailsWithEmptyRecipient)
+TEST(MimeBuilderTest, BuildEmail_FailsWithEmptyTo)
 {
 	auto  logger = MakeLogger();
 	Email e = MakeValidEmail();
-	e.recipient = "";
+	e.to.clear();
 	std::string mime;
 	EXPECT_FALSE(MimeBuilder::BuildEmail(e, mime, logger));
+}
+
+TEST(MimeBuilderTest, BuildEmail_MultipleToAddresses)
+{
+	auto  logger = MakeLogger();
+	Email e = MakeValidEmail();
+	e.to = { "bob@example.com", "carol@example.com" };
+	std::string mime;
+	ASSERT_TRUE(MimeBuilder::BuildEmail(e, mime, logger));
+	EXPECT_NE(mime.find("bob@example.com"), std::string::npos);
+	EXPECT_NE(mime.find("carol@example.com"), std::string::npos);
+}
+
+TEST(MimeBuilderTest, BuildEmail_WithCcHeader)
+{
+	auto  logger = MakeLogger();
+	Email e = MakeValidEmail();
+	e.cc = { "dave@example.com" };
+	std::string mime;
+	ASSERT_TRUE(MimeBuilder::BuildEmail(e, mime, logger));
+	EXPECT_NE(mime.find("Cc: dave@example.com"), std::string::npos);
+}
+
+TEST(MimeBuilderTest, BuildEmail_NoBccInOutput)
+{
+	auto  logger = MakeLogger();
+	Email e = MakeValidEmail();
+	e.bcc = { "secret@example.com" };
+	std::string mime;
+	ASSERT_TRUE(MimeBuilder::BuildEmail(e, mime, logger));
+	EXPECT_EQ(mime.find("Bcc:"), std::string::npos);
+	EXPECT_EQ(mime.find("secret@example.com"), std::string::npos);
 }
 
 TEST(MimeBuilderTest, BuildEmail_FailsWithEmptyBody)

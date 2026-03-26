@@ -18,10 +18,15 @@ enum class ImapCommandType
 	Create,
 	Delete,
 	Rename,
-	Idle,
 	Copy,
-	Move,
 	Expunge,
+	UidFetch,
+	UidStore,
+	UidCopy,
+	Subscribe,
+	Unsubscribe,
+	Close,
+	Check,
 	Unknown
 };
 

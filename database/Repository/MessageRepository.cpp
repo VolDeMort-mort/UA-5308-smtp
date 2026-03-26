@@ -316,9 +316,9 @@ bool MessageRepository::setFlags(int64_t id, const std::vector<std::string>& fla
         bool value = true;
         std::string name = flag;
 
-        if (!flag.empty() && flag[0] == '-')
+        if (!flag.empty() && (flag[0] == '+' || flag[0] == '-'))
         {
-            value = false;
+            value = (flag[0] == '+');
             name  = flag.substr(1);
         }
 
@@ -350,6 +350,7 @@ bool MessageRepository::incrementNextUID(int64_t folder_id)
     return true;
 }
 
+// FIX: Doesn`t copy recipients along the message now
 std::optional<Message> MessageRepository::copy(int64_t id, int64_t target_folder_id)
 {
     auto msg = m_message_dal.findByID(id);

@@ -1,5 +1,6 @@
 find_path(SODIUM_INCLUDE_DIR sodium.h)
 find_library(SODIUM_LIBRARY NAMES sodium libsodium)
+find_package(Boost REQUIRED)
 
 add_library(smtp_proto STATIC
     SocketAcceptor.cpp

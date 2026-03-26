@@ -18,9 +18,9 @@ static Logger MakeLogger()
 static Email MakeOriginal()
 {
 	Email e;
-	e.sender = "charlie@example.com";
-	e.recipient = "alice@example.com";
-	e.subject = "Question";
+	e.sender     = "charlie@example.com";
+	e.to         = { "alice@example.com" };
+	e.subject    = "Question";
 	e.date = "Tue, 04 Mar 2025 09:00:00 +0200";
 	e.message_id = "<original.001@example.com>";
 	e.plain_text = "Can you explain how this works?";
@@ -34,8 +34,9 @@ TEST(MimeComposerTest, CreateNew_SetsBasicFields)
 {
 	Email e = MimeComposer::CreateNew("alice@example.com", "bob@example.com",
 									 "Hello", "Body text");
-	EXPECT_EQ(e.sender, "alice@example.com");
-	EXPECT_EQ(e.recipient, "bob@example.com");
+	EXPECT_EQ(e.sender,  "alice@example.com");
+	ASSERT_EQ(e.to.size(), 1u);
+	EXPECT_EQ(e.to[0],   "bob@example.com");
 	EXPECT_EQ(e.subject, "Hello");
 	EXPECT_EQ(e.plain_text, "Body text");
 }
@@ -67,7 +68,8 @@ TEST(MimeComposerTest, CreateReply_RecipientIsOriginalSender)
 {
 	Email original = MakeOriginal();
 	Email reply = MimeComposer::CreateReply(original, "alice@example.com", "Sure!");
-	EXPECT_EQ(reply.recipient, original.sender);
+	ASSERT_EQ(reply.to.size(), 1u);
+	EXPECT_EQ(reply.to[0], original.sender);
 }
 
 TEST(MimeComposerTest, CreateReply_SenderSetCorrectly)
@@ -154,7 +156,8 @@ TEST(MimeComposerTest, CreateForward_RecipientSetCorrectly)
 	Email original = MakeOriginal();
 	Email fwd = MimeComposer::CreateForward(original, "alice@example.com",
 												  "dave@example.com", "FYI");
-	EXPECT_EQ(fwd.recipient, "dave@example.com");
+	ASSERT_EQ(fwd.to.size(), 1u);
+	EXPECT_EQ(fwd.to[0], "dave@example.com");
 }
 
 TEST(MimeComposerTest, CreateForward_SenderSetCorrectly)

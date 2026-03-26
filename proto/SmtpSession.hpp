@@ -6,6 +6,9 @@
 #include "SmtpCommand.hpp"
 #include "MessageRepository.h"
 #include "UserRepository.h"
+#include "Logger.h"
+#include "Base64Decoder.hpp"
+#include "Base64Encoder.hpp"
 
 enum class SmtpState
 {
@@ -15,7 +18,9 @@ enum class SmtpState
 	WAIT_DATA,
 	RECEIVING_DATA,
 	CLOSED,
-	STARTTLS
+	STARTTLS,
+	AUTH_WAIT_USER,
+	AUTH_WAIT_PASS
 };
 
 class SmtpSession
@@ -24,7 +29,8 @@ public:
 
     explicit SmtpSession(std::string domain,
 			MessageRepository* message_repo,
-			UserRepository* user_repo);
+			UserRepository* user_repo,
+			Logger* logger = nullptr);
 
     std::string Greeting() const;
 
@@ -33,6 +39,8 @@ public:
     bool IsClosed() const noexcept;
 
 	SmtpState getState() const noexcept { return m_state; }
+
+    void SetSecure(bool secure) { m_secure = secure; }
 
     void ResetToHelo();
 
@@ -57,6 +65,10 @@ private:
 
     std::string HandleStartTLS();
 
+	std::string HandleAuth(const SmtpCommand& command);
+
+	std::string HandleAuthLine(const std::string& line);
+
     void ResetMessage();
 
 private:
@@ -74,7 +86,15 @@ private:
 
     std::string m_body;
 
+    bool m_authenticated{false};
+
+	bool m_secure{false};
+
+	std::string m_auth_username; 
+
 	MessageRepository* m_message_repo;
 
 	UserRepository* m_user_repo;
+
+	Logger* m_logger{nullptr};
 };

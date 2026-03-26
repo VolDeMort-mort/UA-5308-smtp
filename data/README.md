@@ -1,0 +1,1 @@
+Purpose of data/ folder is to be single place for containing app`s data(db, logs, emails)
