@@ -83,4 +83,18 @@ private:
 	 * before writing, formatting the raw message from queue
 	 */
 	void WorkQueue();
+
+	/**
+	 * @brief Report logger info
+	 * @details Writing to console a log info
+	 * @param msg Message of the log
+	 */
+	void ReportSystemInfo(const std::string& msg);
+
+	/**
+	 * @brief Report logger error
+	 * @details Writing to console a log error
+	 * @param msg Message of the log
+	 */
+	void ReportError(const std::string& msg);
 };

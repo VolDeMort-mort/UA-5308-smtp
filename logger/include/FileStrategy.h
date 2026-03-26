@@ -61,12 +61,12 @@ public:
 	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n) override;
 	void Rotate(); // rotate file to new one, when current_size > MAX_FILE_SIZE
 
+	std::string get_name() const;
 private:
 	int m_current_file_size;
 	std::ofstream m_file;
 	std::string m_current_path;
 	std::string m_old_path;
-	LogLevel m_default_log_level;
 
 	bool OpenFile();				 // open file & check for valid
 	bool CanWrite(int message_size); // check current_size + msg_size <= MAX_FILE_SIZE

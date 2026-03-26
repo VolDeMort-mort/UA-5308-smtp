@@ -8,6 +8,7 @@
 
 Logger::Logger(std::shared_ptr<ILoggerStrategy> strategy)
 {
+	ReportSystemInfo("Logger start working");
 	set_strategy(std::move(strategy));
 	m_running_flag = true;
 	m_flush = false;
@@ -20,9 +21,30 @@ void Logger::set_strategy(std::shared_ptr<ILoggerStrategy> strategy)
 	std::lock_guard<std::mutex> lock(m_strategy_mtx);
 	if (!strategy) return;
 	if (strategy->IsValid())
+	{
 		m_strategy = std::move(strategy);
+		ReportSystemInfo(m_strategy->get_name() + " output is enabled");
+	}
 	else
-		m_strategy = std::make_shared<ConsoleStrategy>();
+	{
+		std::string error = "Invalid strategy";
+		if (strategy)
+		{
+			std::string error_message = strategy->get_last_error();
+			if (!error_message.empty())
+				error = error_message;
+		}
+		else
+			error = "No strategy";
+
+		ReportError("Failed to initialize strategy: " + error);
+
+		LogLevel level = (m_strategy != nullptr) ? m_strategy->get_current_level() : LogLevel::PROD;
+
+		m_strategy = std::make_shared<ConsoleStrategy>(level);
+
+		ReportSystemInfo("Console output with log level " + std::to_string(level) + " is enabled");
+	}
 }
 
 void Logger::WorkQueue()
@@ -34,7 +56,7 @@ void Logger::WorkQueue()
 			std::unique_lock<std::mutex> lock(m_queue_mtx);
 			// wait for batch size, flush request from Read(), or timeout
 			m_cv.wait_for(lock, ISXLoggerConfig::Timeout, [this] {
-				return m_queue.size() >= ISXLoggerConfig::LogsForBatch || m_flush || !m_running_flag.load(); });
+					return m_queue.size() >= ISXLoggerConfig::LogsForBatch || m_flush || !m_running_flag.load(); });
 
 			// trigger on Read(), when queue empty
 			if (m_flush && m_queue.empty())
@@ -43,9 +65,7 @@ void Logger::WorkQueue()
 				m_cv.notify_all(); // notify Read() that logs are pushed
 
 				// wait for !m_flush from Read(), logs in queue or shutdown, also prevent loop
-				m_cv.wait(lock, [this] {
-					return !m_flush || !m_queue.empty() || !m_running_flag.load();
-					});
+				m_cv.wait(lock, [this] { return !m_flush || !m_queue.empty() || !m_running_flag.load(); });
 			}
 			if (m_queue.empty() && m_running_flag.load())
 				continue;
@@ -66,8 +86,9 @@ void Logger::WorkQueue()
 			if (!local_strategy || !local_strategy->IsValid()) // if path is invalid,logs can`t be pushed into file
 			{
 				std::lock_guard<std::mutex> strategy_lock(m_strategy_mtx);
-				std::cerr << "Log strategy failure.\n";
-				m_strategy = std::make_shared<ConsoleStrategy>(); // set console output to prevent logs leaks
+				ReportError("Log strategy failure");
+				m_strategy = std::make_shared<ConsoleStrategy>(m_strategy->get_current_level()); // set console output to prevent logs leaks
+				ReportSystemInfo("Console output is enabled");
 				local_strategy = m_strategy;
 			}
 			while (!local_queue.empty())
@@ -80,11 +101,13 @@ void Logger::WorkQueue()
 					local_queue.pop();
 					continue;
 				}
+
 				if (!local_strategy->Write(formatted_message))
 				{
 					std::lock_guard<std::mutex> strategy_lock(m_strategy_mtx);
-					std::cerr << "Log strategy failure.\n";
-					m_strategy = std::make_shared<ConsoleStrategy>();
+					ReportError("Log strategy writing failure. " + m_strategy->get_last_error());
+					m_strategy = std::make_shared<ConsoleStrategy>(m_strategy->get_current_level());
+					ReportSystemInfo("Console output is enabled");
 					local_strategy = m_strategy;
 					continue;
 				}
@@ -104,6 +127,7 @@ void Logger::WorkQueue()
 
 void Logger::Log(LogLevel lvl, const std::string& msg)
 {
+	if (lvl == NONE) return;
 	if (!m_running_flag.load()) return;
 	std::lock_guard<std::mutex> lock(m_queue_mtx);
 	m_queue.emplace(lvl, msg);
@@ -152,10 +176,20 @@ std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)
 	if (!searchable) return {};
 	return searchable->Search(lvl, limit, read_n);
 }
+void Logger::ReportSystemInfo(const std::string& msg)
+{
+	std::cout << ISXLoggerConfig::Color::Info << "[LOGGER INFO] " << msg << ISXLoggerConfig::Color::Reset << std::endl;
+}
+void Logger::ReportError(const std::string& msg)
+{
+	std::cerr << ISXLoggerConfig::Color::Error << "[LOGGER ERROR] " << msg << ISXLoggerConfig::Color::Reset
+			  << std::endl;
+}
 Logger::~Logger()
 {
 	m_running_flag = false;
 	m_cv.notify_all();
 	if (m_work_thread.joinable())
 		m_work_thread.join();
+	ReportSystemInfo("Logger finished working");
 }

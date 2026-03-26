@@ -26,6 +26,12 @@ protected:
 		strategy = std::make_shared<FileStrategy>(PROD);
 	}
 };
+class BrokenFileStrategy : public FileStrategy
+{
+public:
+	using FileStrategy::FileStrategy;
+	bool IsValid() override { return false; };
+};
 
 TEST_F(LoggerClass, DestructorTest)
 {
@@ -162,4 +168,54 @@ TEST_F(LoggerClass, EmptyFileTest)
 	EXPECT_EQ(read.size(),0);
 	auto search = logger->Search(PROD,10,1000);
 	EXPECT_EQ(search.size(), 0);
+}
+TEST_F(LoggerClass, SetStrategyTest)
+{
+	for (int i = 0; i < 100; ++i)
+	{
+		logger->Log(PROD, "Log #" + std::to_string(i + 1));
+		if (i == 90)
+		{
+			auto read = logger->Read(100);
+			EXPECT_EQ(read.size(), 91);
+			logger->set_strategy(std::make_unique<ConsoleStrategy>(PROD));
+		}
+	}
+	auto read = logger->Read(100);
+	EXPECT_EQ(read.size(), 0);
+}
+TEST(LoggerConsole, ConsoleLevelOutput)
+{
+	Logger logger(std::make_shared<ConsoleStrategy>(TRACE));
+	logger.Log(TRACE, "CONSOLE TRACE MESSAGE");
+	logger.Log(DEBUG, "CONSOLE DEBUG MESSAGE");
+	logger.Log(PROD, "CONSOLE PROD MESSAGE");
+	logger.Log(NONE, "CONSOLE NONE MESSAGE");
+}
+TEST(LoggerSwitchStrategies, MultipleSwitches)
+{
+	Logger logger(std::make_shared<ConsoleStrategy>(TRACE));
+
+	logger.set_strategy(std::make_shared<FileStrategy>(TRACE));
+
+	logger.Log(TRACE, "FILE MESSAGE");
+
+	auto file_logs = logger.Read(1);
+	EXPECT_EQ(file_logs.size(), 1);
+
+	logger.set_strategy(std::make_shared<BrokenFileStrategy>(TRACE));
+
+	logger.Log(TRACE, "CONSOLE MESSAGE");
+
+	auto console_logs = logger.Read(1);
+	EXPECT_EQ(console_logs.size(), 0);
+}
+
+TEST(LoggerPath, FileNotValid)
+{
+	Logger logger(std::make_shared<BrokenFileStrategy>(PROD));
+	logger.Log(PROD, "CONSOLE MESSAGE");
+
+	auto console_logs = logger.Read(1);
+	EXPECT_EQ(console_logs.size(), 0);
 }

@@ -9,7 +9,7 @@
 class ConsoleStrategy : public ILoggerStrategy
 {
 public:
-	ConsoleStrategy();
+	ConsoleStrategy(LogLevel defaultLevel);
 	~ConsoleStrategy() {};
 
 	/**
@@ -34,4 +34,8 @@ public:
 	 * @brief From ILoggerStrategy::Flush
 	 */
 	void Flush() override;
+
+	std::string get_name() const;
+private:
+	LogLevel m_current_level; // level for color output
 };
