@@ -19,6 +19,14 @@ namespace SmtpResponse
         return "250 " + domain + " greets you\r\n";
     }
 
+    inline std::string Ehlo(const std::string& domain, bool tls_active)
+	{
+		std::string r = "250-" + domain + "\r\n";
+		if (!tls_active) r += "250-STARTTLS\r\n";
+		r += "250 AUTH LOGIN PLAIN\r\n";
+		return r;
+	}
+
     inline std::string StartMailInput()
     {
         return "354 End data with <CR><LF>.<CR><LF>\r\n";
@@ -60,7 +68,32 @@ namespace SmtpResponse
 
 	inline std::string ReadyToStartTLS(const std::string& domain)
 	{
-		return "250 " + domain + " STARTTLS\r\n";
+		return "250-" + domain + " STARTTLS\r\n";
 	}
 
+    inline std::string AuthChallenge(const std::string& b64)
+	{
+		return "334 " + b64 + "\r\n";
+	}
+	inline std::string AuthSucceeded()
+	{
+		return "235 Authentication successful\r\n";
+	}
+	inline std::string AuthFailed()
+	{
+		return "535 Authentication credentials invalid\r\n";
+	}
+	inline std::string AuthRequired()
+	{
+		return "530 Authentication required\r\n";
+	}
+	inline std::string EncryptionRequired()
+	{
+		return "538 Encryption required for requested auth mechanism\r\n";
+	}
+
+	inline std::string UnrecognizedAuthMech()
+	{
+		return "504 Unrecognized authentication mechanism\r\n";
+	}
 	}

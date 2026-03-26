@@ -11,6 +11,7 @@ build/
 .qtcreator/
 *.pro.user
 
+CMakeUserPresets.json
 CMakeSettings.json
 cmake-build-debug/
 cmake-build-release/
