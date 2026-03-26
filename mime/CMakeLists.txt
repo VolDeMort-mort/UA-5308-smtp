@@ -1,4 +1,4 @@
-﻿add_library(mime_lib
+add_library(mime_lib
     src/MimeBuilder.cpp
     src/MimeEncoder.cpp
     src/MimeParser.cpp
@@ -16,6 +16,7 @@ target_link_libraries(mime_lib
         base64_lib    
         common_utils_lib 
         logger_lib
+        config_lib
 )
 
 if(BUILD_TESTING)
