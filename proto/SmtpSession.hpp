@@ -7,6 +7,8 @@
 #include "MessageRepository.h"
 #include "UserRepository.h"
 #include "Logger.h"
+#include "Base64Decoder.hpp"
+#include "Base64Encoder.hpp"
 
 enum class SmtpState
 {
@@ -16,7 +18,9 @@ enum class SmtpState
 	WAIT_DATA,
 	RECEIVING_DATA,
 	CLOSED,
-	STARTTLS
+	STARTTLS,
+	AUTH_WAIT_USER,
+	AUTH_WAIT_PASS
 };
 
 class SmtpSession
@@ -35,6 +39,8 @@ public:
     bool IsClosed() const noexcept;
 
 	SmtpState getState() const noexcept { return m_state; }
+
+    void SetSecure(bool secure) { m_secure = secure; }
 
     void ResetToHelo();
 
@@ -59,6 +65,10 @@ private:
 
     std::string HandleStartTLS();
 
+	std::string HandleAuth(const SmtpCommand& command);
+
+	std::string HandleAuthLine(const std::string& line);
+
     void ResetMessage();
 
 private:
@@ -75,6 +85,12 @@ private:
     std::vector<std::string> m_recipients;
 
     std::string m_body;
+
+    bool m_authenticated{false};
+
+	bool m_secure{false};
+
+	std::string m_auth_username; 
 
 	MessageRepository* m_message_repo;
 

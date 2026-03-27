@@ -54,6 +54,13 @@ private:
 	std::string HandleRename(const ImapCommand& cmd);
 	std::string HandleCopy(const ImapCommand& cmd);
 	std::string HandleExpunge(const ImapCommand& cmd);
+	std::string HandleUidFetch(const ImapCommand& cmd);
+	std::string HandleUidStore(const ImapCommand& cmd);
+	std::string HandleUidCopy(const ImapCommand& cmd);
+	std::string HandleSubscribe(const ImapCommand& cmd);
+	std::string HandleUnsubscribe(const ImapCommand& cmd);
+	std::string HandleClose(const ImapCommand& cmd);
+	std::string HandleCheck(const ImapCommand& cmd);
 
 	std::map<ImapCommandType, std::function<std::string(const ImapCommand&)>> m_handlers;
 };

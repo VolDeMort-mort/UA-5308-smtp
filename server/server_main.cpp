@@ -24,7 +24,7 @@ int main()
 
 	try
 	{
-		DataBaseManager db("mail.db", "../../database/scheme/001_init_scheme.sql");
+		DataBaseManager db("mail.db", "../scheme/001_init_scheme.sql");
 		if (!db.isConnected())
 		{
 			std::cerr << "Database connection failed\n";
@@ -104,7 +104,7 @@ int main()
                             std::cerr << "TLS handshake failed\n";
                             break;
                         }
-
+						session.SetSecure(true);
                         session.ResetToHelo();
                     }
 

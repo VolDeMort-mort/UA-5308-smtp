@@ -8,8 +8,8 @@
 #include <gtest/gtest.h>
 
 #include "ThreadPool.h"
-#include "../../logger/Logger.h"
-#include "../../logger/ILoggerStrategy.h"
+#include "Logger.h"
+#include "ILoggerStrategy.h"
 
 struct Captured {
     std::vector<std::string> messages;

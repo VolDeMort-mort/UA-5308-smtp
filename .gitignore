@@ -11,12 +11,15 @@ build/
 .qtcreator/
 *.pro.user
 
+CMakeUserPresets.json
 CMakeSettings.json
 cmake-build-debug/
 cmake-build-release/
 .cache/
 .vscode/
-
-vcpkg.json
-
-config.json
+data/*
+!data/README.md
+!data/mailboxes/
+data/mailboxes/*
+!data/mailboxes/README.md
+*.txt

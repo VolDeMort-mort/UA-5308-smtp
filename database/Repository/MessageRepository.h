@@ -43,8 +43,12 @@ public:
                      bool is_answered, bool is_flagged, bool is_recent);
     bool setFlags(int64_t id, const std::vector<std::string>& flags);
 
+    // TODO: Add clearRecentByFolder(int64_t folder_id) - clears is_recent flag for all messages in folder
+
     bool moveToFolder(int64_t id, int64_t folder_id);
     bool expunge(int64_t folder_id);
+    // TODO for CLOSE: expunge method already exists - call it before closing mailbox
+
     bool hardDelete(int64_t id);
     std::optional<Message> copy(int64_t id, int64_t target_folder_id);
 
@@ -54,6 +58,7 @@ public:
     bool createFolder(Folder& folder);
     bool renameFolder(int64_t id, const std::string& new_name);
     bool deleteFolder(int64_t id);
+    // TODO: Add setSubscribed(int64_t folder_id, bool subscribed)
 
     std::optional<Recipient> findRecipientByID(int64_t id) const;
     std::vector<Recipient> findRecipientsByMessage(int64_t message_id) const;

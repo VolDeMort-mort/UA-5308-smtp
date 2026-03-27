@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <sstream>
 #include <unordered_map>
 
 #include "ImapUtils.hpp"
@@ -50,7 +49,6 @@ std::string ImapParser::ElementParser::ParseElement()
 	char c = m_str[m_pos];
 	if (c == '"') return ParseQuoted();
 	if (c == '(') return ParseList();
-	if (c == '[') return ParseResponse();
 	if (c == '{') return ParseLiteral();
 
 	return ParseAtom();
@@ -218,7 +216,7 @@ std::string ImapParser::ElementParser::ParseAtom()
 	while (m_pos < m_str.size())
 	{
 		char c = m_str[m_pos];
-		if (c == ' ' || c == '(' || c == ')' || c == '[' || c == ']' || c == '"' || c == '{') break;
+		if (c == ' ' || c == '(' || c == ')' || c == '"' || c == '{') break;
 		++m_pos;
 	}
 
@@ -260,8 +258,50 @@ ImapCommand ImapParser::Parse(const std::string& line)
 		argsStr = rest.substr(argStart + 1);
 	}
 
-	cmd.m_args = ParseArguments(argsStr);
-	cmd.m_type = IMAP_UTILS::StringToCommandType(commandStr);
+	std::string upperCommand = IMAP_UTILS::ToUpper(commandStr);
+
+	if (upperCommand == "UID")
+	{
+		cmd.m_type = IMAP_UTILS::StringToCommandType("UID");
+		IMAP_UTILS::TrimParentheses(argsStr);
+		std::string uidArgs = argsStr;
+		size_t spaceInUidArgs = uidArgs.find(' ');
+		if (spaceInUidArgs != std::string::npos)
+		{
+			std::string subCommand = uidArgs.substr(0, spaceInUidArgs);
+			std::string restArgs = uidArgs.substr(spaceInUidArgs + 1);
+
+			std::string upperSub = IMAP_UTILS::ToUpper(subCommand);
+			if (upperSub == "FETCH")
+			{
+				cmd.m_type = ImapCommandType::UidFetch;
+				cmd.m_args = ParseArguments(restArgs);
+			}
+			else if (upperSub == "STORE")
+			{
+				cmd.m_type = ImapCommandType::UidStore;
+				cmd.m_args = ParseArguments(restArgs);
+			}
+			else if (upperSub == "COPY")
+			{
+				cmd.m_type = ImapCommandType::UidCopy;
+				cmd.m_args = ParseArguments(restArgs);
+			}
+			else
+			{
+				cmd.m_type = ImapCommandType::Unknown;
+			}
+		}
+		else
+		{
+			cmd.m_type = ImapCommandType::Unknown;
+		}
+	}
+	else
+	{
+		cmd.m_args = ParseArguments(argsStr);
+		cmd.m_type = IMAP_UTILS::StringToCommandType(commandStr);
+	}
 
 	return cmd;
 }

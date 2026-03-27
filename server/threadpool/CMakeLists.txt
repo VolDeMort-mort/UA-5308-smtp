@@ -6,8 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
 
-#add_subdirectory(../../logger ${CMAKE_CURRENT_BINARY_DIR}/logger)
-
 add_library(threadpool_lib STATIC ThreadPool.cpp)
 
 target_include_directories(threadpool_lib PUBLIC
@@ -21,5 +19,4 @@ target_link_libraries(threadpool_lib PUBLIC
 )
 
 enable_testing()
-#add_subdirectory(Tests)
-
+add_subdirectory(tests)
