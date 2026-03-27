@@ -9,6 +9,7 @@ struct ImapConfig
 public:
 	int PORT = 2553;
 	int TIMEOUT_MINS = 30;
+	int HANDSHAKE_TIMEOUT_SECS = 10;
 	int WORKER_THREADS = 4;
 
 	// returns true if parsed successfully fully, otherwise - false

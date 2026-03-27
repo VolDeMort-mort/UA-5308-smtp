@@ -37,6 +37,7 @@ ImapCommandDispatcher::ImapCommandDispatcher(ILogger& logger, UserRepository& us
 		{ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
 		{ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
 		{ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
+		{ImapCommandType::StartTLS, [this](const ImapCommand& cmd) { return HandleStartTLS(cmd); }}
 	};
 }
 
@@ -62,6 +63,7 @@ bool ImapCommandDispatcher::RequiresAuth(ImapCommandType type) const
 	case ImapCommandType::Logout:
 	case ImapCommandType::Capability:
 	case ImapCommandType::Noop:
+	case ImapCommandType::StartTLS:
 		result = false;
 		break;
 	default:
@@ -1470,5 +1472,17 @@ std::string ImapCommandDispatcher::HandleCheck(const ImapCommand& cmd)
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCheck - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCheck - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleStartTLS(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - In: tag=" + cmd.m_tag);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - Start");
+
+	std::string response = cmd.m_tag + " OK Begin TLS negotiation now\r\n";
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - End");
 	return response;
 }

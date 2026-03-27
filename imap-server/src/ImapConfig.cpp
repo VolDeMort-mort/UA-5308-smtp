@@ -30,6 +30,7 @@ bool ImapConfig::Parse(const mINI::INIStructure& ini, ILogger& logger)
 	log(ParseIntField(imap_vals, "port", PORT), "port");
 	log(ParseIntField(imap_vals, "timeout_mins", TIMEOUT_MINS), "timeout_mins");
 	log(ParseIntField(imap_vals, "worker_threads", WORKER_THREADS), "worker_threads");
+	log(ParseIntField(imap_vals, "handshake_timeout_secs", HANDSHAKE_TIMEOUT_SECS), "handshake_timeout_secs");
 
 	return all_found;
 }
