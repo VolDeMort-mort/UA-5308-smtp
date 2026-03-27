@@ -22,6 +22,7 @@ add_executable(imap_tests
 )
 
 target_link_libraries(imap_tests PRIVATE smtp_proto Threads::Threads GTest::gtest GTest::gtest_main GTest::gmock logger_lib db_lib threadpool_lib mime_lib)
+target_link_libraries(imap_tests PRIVATE config_lib)
 target_include_directories(imap_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include ${mini_SOURCE_DIR}/src)
 
 target_compile_definitions(imap_tests PRIVATE

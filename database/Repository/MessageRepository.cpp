@@ -2,17 +2,10 @@
 #include <climits>
 
 MessageRepository::MessageRepository(DataBaseManager& db)
-    : m_db(db.getDB())
-    , m_message_dal(db.getDB())
-    , m_folder_dal(db.getDB())
-    , m_recipient_dal(db.getDB())
-{}
-
-MessageRepository::MessageRepository(sqlite3* db)
     : m_db(db)
-    , m_message_dal(db)
-    , m_folder_dal(db)
-    , m_recipient_dal(db)
+    , m_message_dal(db.getDB(), db.pool())
+    , m_folder_dal(db.getDB(), db.pool())
+    , m_recipient_dal(db.getDB(), db.pool())
 {}
 
 bool MessageRepository::setError(const std::string& msg) const
@@ -28,16 +21,18 @@ const std::string& MessageRepository::getLastError() const
 
 bool MessageRepository::assignUID(Message& msg, int64_t folder_id)
 {
+    auto lock = m_db.writeLock();
+    Transaction tx(m_db.getDB());
+
+    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
+
+    // Fetch folder INSIDE transaction to prevent race condition
     auto folder = m_folder_dal.findByID(folder_id);
     if (!folder.has_value())
         return setError("assignUID: folder not found");
 
     msg.folder_id = folder_id;
     msg.uid       = folder->next_uid;
-
-    Transaction tx(m_db);
-
-    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
 
     if (!m_message_dal.insert(msg))
         return setError(m_message_dal.getLastError());
@@ -105,10 +100,7 @@ bool MessageRepository::deliver(Message& msg, int64_t folder_id)
     msg.is_recent = true;
     msg.is_draft  = false;
 
-    if (!assignUID(msg, folder_id))
-        return false;
-
-    return true;
+    return assignUID(msg, folder_id);
 }
 
 bool MessageRepository::saveToFolder(Message& msg, int64_t folder_id)
@@ -120,11 +112,13 @@ bool MessageRepository::saveToFolder(Message& msg, int64_t folder_id)
 
 bool MessageRepository::markSeen(int64_t id, bool seen)
 {
+    auto lock = m_db.writeLock();
     return m_message_dal.updateSeen(id, seen);
 }
 
 bool MessageRepository::markDeleted(int64_t id, bool deleted)
 {
+    auto lock = m_db.writeLock();
     return m_message_dal.updateDeleted(id, deleted);
 }
 
@@ -134,6 +128,7 @@ bool MessageRepository::markFlagged(int64_t id, bool flagged)
     if (!msg.has_value())
         return setError("markFlagged: message not found");
 
+    auto lock = m_db.writeLock();
     return m_message_dal.updateFlags(id, msg->is_seen, msg->is_deleted, msg->is_draft,
                                      msg->is_answered, flagged, msg->is_recent);
 }
@@ -144,6 +139,7 @@ bool MessageRepository::markAnswered(int64_t id, bool answered)
     if (!msg.has_value())
         return setError("markAnswered: message not found");
 
+    auto lock = m_db.writeLock();
     return m_message_dal.updateFlags(id, msg->is_seen, msg->is_deleted, msg->is_draft,
                                      answered, msg->is_flagged, msg->is_recent);
 }
@@ -154,6 +150,7 @@ bool MessageRepository::markDraft(int64_t id, bool draft)
     if (!msg.has_value())
         return setError("markDraft: message not found");
 
+    auto lock = m_db.writeLock();
     return m_message_dal.updateFlags(id, msg->is_seen, msg->is_deleted, draft,
                                      msg->is_answered, msg->is_flagged, msg->is_recent);
 }
@@ -161,19 +158,19 @@ bool MessageRepository::markDraft(int64_t id, bool draft)
 bool MessageRepository::updateFlags(int64_t id, bool is_seen, bool is_deleted, bool is_draft,
                                     bool is_answered, bool is_flagged, bool is_recent)
 {
-    return m_message_dal.updateFlags(id, is_seen, is_deleted, is_draft,
-                                     is_answered, is_flagged, is_recent);
+    auto lock = m_db.writeLock();
+    return m_message_dal.updateFlags(id, is_seen, is_deleted, is_draft, is_answered, is_flagged, is_recent);
 }
-
 
 bool MessageRepository::moveToFolder(int64_t id, int64_t folder_id)
 {
-    Transaction tx(m_db);
-    if (!tx.valid()) return setError("moveToFolder: failed to begin transaction");
-
-    auto folder = m_folder_dal.findByID(folder_id);  // inside tx
+    auto folder = m_folder_dal.findByID(folder_id);
     if (!folder.has_value())
         return setError("moveToFolder: folder not found");
+
+    auto lock = m_db.writeLock();
+    Transaction tx(m_db.getDB());
+    if (!tx.valid()) return setError("moveToFolder: failed to begin transaction");
 
     if (!m_message_dal.moveToFolder(id, folder_id, folder->next_uid))
         return setError(m_message_dal.getLastError());
@@ -191,15 +188,13 @@ bool MessageRepository::expunge(int64_t folder_id)
 {
     auto deleted = m_message_dal.findDeleted(folder_id, INT_MAX, 0);
 
-    Transaction tx(m_db);
-
-    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
+    auto lock = m_db.writeLock();
+    Transaction tx(m_db.getDB());
+    if (!tx.valid()) return setError("expunge: failed to begin transaction");
 
     for (const auto& msg : deleted)
     {
-        if (!msg.id.has_value())
-            continue;
-
+        if (!msg.id.has_value()) continue;
         if (!m_message_dal.hardDelete(msg.id.value()))
             return setError(m_message_dal.getLastError());
     }
@@ -215,7 +210,73 @@ bool MessageRepository::hardDelete(int64_t id)
     if (!m_message_dal.findByID(id).has_value())
         return setError("hardDelete: message not found");
 
+    auto lock = m_db.writeLock();
     return m_message_dal.hardDelete(id);
+}
+
+std::optional<Message> MessageRepository::copy(int64_t id, int64_t target_folder_id)
+{
+    auto msg = m_message_dal.findByID(id);
+    if (!msg.has_value())
+    {
+        setError("copy: message not found");
+        return std::nullopt;
+    }
+
+    auto folder = m_folder_dal.findByID(target_folder_id);
+    if (!folder.has_value())
+    {
+        setError("copy: target folder not found");
+        return std::nullopt;
+    }
+
+    auto recipients = m_recipient_dal.findByMessage(id);
+
+    Message copy = msg.value();
+    copy.id = std::nullopt;
+    copy.uid  = 0;
+    copy.folder_id = target_folder_id;
+    copy.uid = folder->next_uid;
+
+    auto lock = m_db.writeLock();
+    Transaction tx(m_db.getDB());
+    if (!tx.valid())
+    {
+        setError("copy: failed to begin transaction");
+        return std::nullopt;
+    }
+
+    if (!m_message_dal.insert(copy))
+    {
+        setError(m_message_dal.getLastError());
+        return std::nullopt;
+    }
+
+    for (auto& r : recipients)
+    {
+        r.id = std::nullopt;
+        r.message_id = copy.id.value();
+
+        if (!m_recipient_dal.insert(r))
+        {
+            setError("copy: failed to copy recipient — " + m_recipient_dal.getLastError());
+            return std::nullopt;
+        }
+    }
+
+    if (!m_folder_dal.incrementNextUID(target_folder_id))
+    {
+        setError(m_folder_dal.getLastError());
+        return std::nullopt;
+    }
+
+    if (!tx.commit())
+    {
+        setError("copy: commit failed");
+        return std::nullopt;
+    }
+
+    return copy;
 }
 
 std::optional<Folder> MessageRepository::findFolderByID(int64_t id) const
@@ -241,6 +302,7 @@ bool MessageRepository::createFolder(Folder& folder)
     if (m_folder_dal.findByName(folder.user_id, folder.name).has_value())
         return setError("createFolder: folder '" + folder.name + "' already exists");
 
+    auto lock = m_db.writeLock();
     return m_folder_dal.insert(folder);
 }
 
@@ -258,6 +320,8 @@ bool MessageRepository::renameFolder(int64_t id, const std::string& new_name)
         return setError("renameFolder: folder '" + new_name + "' already exists");
 
     folder->name = new_name;
+
+    auto lock = m_db.writeLock();
     return m_folder_dal.update(folder.value());
 }
 
@@ -266,6 +330,7 @@ bool MessageRepository::deleteFolder(int64_t id)
     if (!m_folder_dal.findByID(id).has_value())
         return setError("deleteFolder: folder not found");
 
+    auto lock = m_db.writeLock();
     return m_folder_dal.hardDelete(id);
 }
 
@@ -287,6 +352,7 @@ bool MessageRepository::addRecipient(Recipient& recipient)
     if (recipient.address.empty())
         return setError("addRecipient: address cannot be empty");
 
+    auto lock = m_db.writeLock();
     return m_recipient_dal.insert(recipient);
 }
 
@@ -295,6 +361,7 @@ bool MessageRepository::removeRecipient(int64_t id)
     if (!m_recipient_dal.findByID(id).has_value())
         return setError("removeRecipient: recipient not found");
 
+    auto lock = m_db.writeLock();
     return m_recipient_dal.hardDelete(id);
 }
 
@@ -304,33 +371,68 @@ bool MessageRepository::setFlags(int64_t id, const std::vector<std::string>& fla
     if (!msg.has_value())
         return setError("setFlags: message not found");
 
-    bool is_seen = msg->is_seen;
-    bool is_deleted = msg->is_deleted;
-    bool is_draft = msg->is_draft;
+    bool is_seen     = msg->is_seen;
+    bool is_deleted  = msg->is_deleted;
+    bool is_draft    = msg->is_draft;
     bool is_answered = msg->is_answered;
-    bool is_flagged = msg->is_flagged;
-    bool is_recent = msg->is_recent;
+    bool is_flagged  = msg->is_flagged;
+    bool is_recent   = msg->is_recent;
 
+    // Check if any flag has a prefix (+ or -)
+    bool has_prefix = false;
     for (const auto& flag : flags)
     {
-        bool value = true;
-        std::string name = flag;
-
         if (!flag.empty() && (flag[0] == '+' || flag[0] == '-'))
         {
-            value = (flag[0] == '+');
-            name  = flag.substr(1);
+            has_prefix = true;
+            break;
         }
-
-        if      (name == "\\Seen")     is_seen     = value;
-        else if (name == "\\Deleted")  is_deleted  = value;
-        else if (name == "\\Draft")    is_draft    = value;
-        else if (name == "\\Answered") is_answered = value;
-        else if (name == "\\Flagged")  is_flagged  = value;
-        else if (name == "\\Recent")   is_recent   = value;
-        else return setError("setFlags: unknown flag '" + name + "'");
     }
 
+    // If no prefixes, it's a replace operation: clear all flags first
+    if (!has_prefix && !flags.empty())
+    {
+        is_seen = is_deleted = is_draft = is_answered = is_flagged = is_recent = false;
+    }
+
+    // If no flags provided, clear all flags
+    if (flags.empty())
+    {
+        is_seen = is_deleted = is_draft = is_answered = is_flagged = is_recent = false;
+    }
+    else
+    {
+        for (const auto& flag : flags)
+        {
+            bool value = true;
+            std::string name = flag;
+
+            if (!flag.empty())
+            {
+                if (flag[0] == '-')
+                {
+                    value = false;
+                    name  = flag.substr(1);
+                }
+                else if (flag[0] == '+')
+                {
+                    value = true;
+                    name  = flag.substr(1);
+                }
+                // If no prefix, assume set to true (for add or replace)
+            }
+
+            if      (name == "\\Seen")     is_seen     = value;
+            else if (name == "\\Deleted")  is_deleted  = value;
+            else if (name == "\\Draft")    is_draft    = value;
+            else if (name == "\\Answered") is_answered = value;
+            else if (name == "\\Flagged")  is_flagged  = value;
+            else if (name == "\\Recent")   is_recent   = value;
+            else return setError("setFlags: unknown flag '" + name + "'");
+        }
+    }
+
+    auto lock = m_db.writeLock();
     return m_message_dal.updateFlags(id, is_seen, is_deleted, is_draft, is_answered, is_flagged, is_recent);
 }
 
@@ -344,34 +446,50 @@ bool MessageRepository::incrementNextUID(int64_t folder_id)
     if (!m_folder_dal.findByID(folder_id).has_value())
         return setError("incrementNextUID: folder not found");
 
+    auto lock = m_db.writeLock();
     if (!m_folder_dal.incrementNextUID(folder_id))
         return setError(m_folder_dal.getLastError());
 
     return true;
 }
 
-// FIX: Doesn`t copy recipients along the message now
-std::optional<Message> MessageRepository::copy(int64_t id, int64_t target_folder_id)
+bool MessageRepository::clearRecentByFolder(int64_t folder_id)
 {
-    auto msg = m_message_dal.findByID(id);
-    if (!msg.has_value())
-    {
-        setError("copy: message not found");
-        return std::nullopt;
-    }
+    if (!m_folder_dal.findByID(folder_id).has_value())
+        return setError("clearRecentByFolder: folder not found");
 
-    if (!m_folder_dal.findByID(target_folder_id).has_value())
-    {
-        setError("copy: target folder not found");
-        return std::nullopt;
-    }
+    auto lock = m_db.writeLock();
+    if (!m_message_dal.clearRecentByFolder(folder_id))
+        return setError(m_message_dal.getLastError());
 
-    Message copy = msg.value();
-    copy.id  = std::nullopt;
-    copy.uid = 0;
+    return true;
+}
 
-    if (!assignUID(copy, target_folder_id))
-        return std::nullopt;
+bool MessageRepository::closeFolder(int64_t folder_id)
+{
+    if (!expunge(folder_id))
+        return false;
 
-    return copy;
+    auto lock = m_db.writeLock();
+    if (!m_message_dal.clearRecentByFolder(folder_id))
+        return setError(m_message_dal.getLastError());
+
+    return true;
+}
+
+bool MessageRepository::setSubscribed(int64_t folder_id, bool subscribed)
+{
+    if (!m_folder_dal.findByID(folder_id).has_value())
+        return setError("setSubscribed: folder not found");
+
+    auto lock = m_db.writeLock();
+    if (!m_folder_dal.setSubscribed(folder_id, subscribed))
+        return setError(m_folder_dal.getLastError());
+
+    return true;
+}
+
+std::vector<Folder> MessageRepository::findFoldersByParent(int64_t parent_id, int limit, int offset) const
+{
+    return m_folder_dal.findByParent(parent_id, limit, offset);
 }

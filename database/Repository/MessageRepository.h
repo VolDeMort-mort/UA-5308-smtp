@@ -20,7 +20,6 @@ class MessageRepository
 {
 public:
     explicit MessageRepository(DataBaseManager& db);
-    explicit MessageRepository(sqlite3* db);
 
     std::optional<Message> findByID(int64_t id) const;
     std::optional<Message> findByUID(int64_t folder_id, int64_t uid) const;
@@ -30,6 +29,7 @@ public:
     std::vector<Message> findDeleted(int64_t folder_id, int limit = 50, int offset = 0) const;
     std::vector<Message> findFlagged(int64_t folder_id, int limit = 50, int offset = 0) const;
     std::vector<Message> search(int64_t user_id, const std::string& query, int limit = 50, int offset = 0) const;
+    std::vector<Folder> findFoldersByParent(int64_t parent_id, int limit = 50, int offset = 0) const;
 
     bool deliver(Message& msg, int64_t folder_id = 0);
     bool saveToFolder(Message& msg, int64_t folder_id);
@@ -39,7 +39,9 @@ public:
     bool markFlagged(int64_t id, bool flagged);
     bool markAnswered(int64_t id, bool answered);
     bool markDraft(int64_t id, bool draft);
-    bool updateFlags(int64_t id, bool is_seen, bool is_deleted, bool is_draft, bool is_answered, bool is_flagged, bool is_recent);
+    bool updateFlags(int64_t id, bool is_seen, bool is_deleted, bool is_draft,
+                     bool is_answered, bool is_flagged, bool is_recent);
+    bool setFlags(int64_t id, const std::vector<std::string>& flags);
 
     // TODO: Add clearRecentByFolder(int64_t folder_id) - clears is_recent flag for all messages in folder
 
@@ -48,6 +50,7 @@ public:
     // TODO for CLOSE: expunge method already exists - call it before closing mailbox
 
     bool hardDelete(int64_t id);
+    std::optional<Message> copy(int64_t id, int64_t target_folder_id);
 
     std::optional<Folder> findFolderByID(int64_t id) const;
     std::vector<Folder> findFoldersByUser(int64_t user_id, int limit = 50, int offset = 0) const;
@@ -62,16 +65,17 @@ public:
     bool addRecipient(Recipient& recipient);
     bool removeRecipient(int64_t id);
 
-    const std::string& getLastError() const;
-
-    bool setFlags(int64_t id, const std::vector<std::string>& flags);
     bool append(Message& msg, int64_t folder_id);
     bool incrementNextUID(int64_t folder_id);
-    std::optional<Message> copy(int64_t id, int64_t target_folder_id);
+
+    bool clearRecentByFolder(int64_t folder_id);
+    bool closeFolder(int64_t folder_id);
+    bool setSubscribed(int64_t folder_id, bool subscribed);
+
+    const std::string& getLastError() const;
 
 private:
-    sqlite3* m_db;
-
+    DataBaseManager& m_db;
     MessageDAL m_message_dal;
     FolderDAL m_folder_dal;
     RecipientDAL m_recipient_dal;

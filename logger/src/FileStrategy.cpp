@@ -104,7 +104,7 @@ std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 	char buffer[512];
 
 	int headerLen = std::snprintf(
-		buffer, sizeof(buffer), "[%04d-%02d-%02d %02d:%02d:%02d] [%s] ",
+		buffer, sizeof(buffer), "[%04d-%02d-%02d %02d:%02d:%02d] [%s] [tid:%lu] ",
 		tm.tm_year + 1900, // tm struc counts ammount of years passed since 1900(thats why we need +1900 to get 2026)
 		tm.tm_mon + 1,	   // months are indexes, here we convert for normal view
 		tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, levelStr, tid);

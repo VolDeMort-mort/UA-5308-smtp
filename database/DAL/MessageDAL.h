@@ -7,11 +7,12 @@
 #include <sqlite3.h>
 
 #include "../Entity/Message.h"
+#include "../ConnectionPool.h"
 
 class MessageDAL
 {
 public:
-    explicit MessageDAL(sqlite3* db);
+    explicit MessageDAL(sqlite3* write_conn, ConnectionPool& pool);
 
     std::optional<Message> findByID(int64_t id) const;
     std::optional<Message> findByUID(int64_t folder_id, int64_t uid) const;
@@ -30,12 +31,14 @@ public:
                      bool is_answered, bool is_flagged, bool is_recent);
     bool moveToFolder(int64_t id, int64_t folder_id, int64_t new_uid);
     bool hardDelete(int64_t id);
+    bool clearRecentByFolder(int64_t folder_id);
 
     const std::string& getLastError() const;
 
 private:
-    sqlite3* m_db;
-    std::string m_last_error;
+    sqlite3* m_write_conn;
+    ConnectionPool& m_pool;
+    mutable std::string m_last_error;
 
     bool setError(const char* sqlite_errmsg);
     std::vector<Message> fetchRows(sqlite3_stmt* stmt) const;

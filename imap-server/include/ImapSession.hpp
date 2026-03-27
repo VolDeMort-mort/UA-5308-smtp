@@ -24,7 +24,7 @@
 class ImapSession : public std::enable_shared_from_this<ImapSession>
 {
 public:
-	ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, UserDAL& u_dal,
+	ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db,
 				ThreadPool& pool, ImapConfig& config);
 	void Start();
 

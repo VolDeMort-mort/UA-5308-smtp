@@ -10,11 +10,12 @@
 #include "../Entity/Folder.h"
 #include "../DAL/UserDAL.h"
 #include "../DAL/FolderDAL.h"
+#include "../DataBaseManager.h"
 
 class UserRepository
 {
 public:
-    explicit UserRepository(sqlite3* db, UserDAL& user_dal);
+    explicit UserRepository(DataBaseManager& db);
 
     std::optional<User> findByID(int64_t id) const;
     std::optional<User> findByUsername(const std::string& username) const;
@@ -27,12 +28,17 @@ public:
     bool update(const User& user);
     bool hardDelete(int64_t id);
 
+    bool updateProfile(int64_t id, const std::optional<std::string>& first_name,
+                       const std::optional<std::string>& last_name,
+                       const std::optional<std::string>& birthdate);
+    bool updateAvatar(int64_t id, const std::optional<std::string>& avatar_b64);
+    std::optional<std::string> getAvatar(int64_t id) const;
+
     const std::string& getLastError() const;
 
 private:
-    sqlite3* m_db;
-
-    UserDAL& m_user_dal;
+    DataBaseManager& m_db;
+    UserDAL m_user_dal;
     FolderDAL m_folder_dal;
     mutable std::string m_last_error;
 
