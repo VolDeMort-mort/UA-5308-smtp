@@ -1,1 +1,0 @@
-Purpose of data/mailboxes/ folder is to be single place for containing .eml files

@@ -12,7 +12,7 @@
 #include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
 
-int main()
+int main(int argc, char** argv)
 {
 	if (sodium_init() < 0) {
 		std::cerr << "Failed to initialize libsodium\n";
@@ -22,9 +22,24 @@ int main()
 	constexpr uint16_t PORT = 25000;
 	const std::string SERVER_DOMAIN = "localhost";
 
+    std::string path_to_root = "./";
+    if (argc >= 2)
+    {
+        path_to_root = argv[1];
+        // Normalize path: remove trailing slashes and add single forward slash
+        while (!path_to_root.empty() && (path_to_root.back() == '/' || path_to_root.back() == '\\'))
+        {
+            path_to_root.pop_back();
+        }
+        if (!path_to_root.empty())
+        {
+            path_to_root.push_back('/');
+        }
+    }
+
 	try
 	{
-		DataBaseManager db("mail.db", "../scheme/001_init_scheme.sql");
+        DataBaseManager db(path_to_root + "data/mail.db", path_to_root + "database/scheme/001_init_scheme.sql");
 		if (!db.isConnected())
 		{
 			std::cerr << "Database connection failed\n";

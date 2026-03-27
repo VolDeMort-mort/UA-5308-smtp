@@ -360,6 +360,17 @@ bool printResult(const MailResult& result)
             std::cout << "[OK] Attachment saved: " << r.outputPath
                       << " (" << r.bytesWritten << " bytes)\n";
         }
+        else if constexpr (std::is_same_v<T, ReconnectStateResult>)
+        {
+            if (r.reconnecting)
+            {
+                std::cout << "[INFO] Reconnecting (attempt " << r.attempt << "): " << r.message << "\n";
+            }
+            else if (!r.message.empty())
+            {
+                std::cout << "[INFO] " << r.message << "\n";
+            }
+        }
         else if constexpr (std::is_same_v<T, MailActionResult>)
         {
             if (r.success) std::cout << "[OK] Action completed\n";
@@ -376,14 +387,23 @@ bool printResult(const MailResult& result)
 
 bool waitAndPrint(ResultInbox& inbox)
 {
-    const auto result = inbox.waitPop(10000);
-    if (!result.has_value())
+    while (true)
     {
-        std::cout << "[FAIL] Timeout waiting for server response\n";
-        return false;
-    }
+        const auto result = inbox.waitPop(10000);
+        if (!result.has_value())
+        {
+            std::cout << "[FAIL] Timeout waiting for server response\n";
+            return false;
+        }
 
-    return printResult(*result);
+        if (std::holds_alternative<ReconnectStateResult>(*result))
+        {
+            printResult(*result);
+            continue;
+        }
+
+        return printResult(*result);
+    }
 }
 } // namespace
 

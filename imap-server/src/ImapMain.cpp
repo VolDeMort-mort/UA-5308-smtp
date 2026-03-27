@@ -21,29 +21,38 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	const std::string path_to_root = argv[1];
+	std::string path_to_root = argv[1];
+	// Normalize path: remove trailing slashes and add single forward slash
+	while (!path_to_root.empty() && (path_to_root.back() == '/' || path_to_root.back() == '\\'))
+	{
+		path_to_root.pop_back();
+	}
+	if (!path_to_root.empty())
+	{
+		path_to_root.push_back('/');
+	}
 
-	mINI::INIFile file(path_to_root + "./imap-server/imap.config");
+	mINI::INIFile file(path_to_root + "imap-server/imap.config");
 	mINI::INIStructure ini;
 	ImapConfig config;
 
 	if (file.read(ini))
 	{
 		logger.Log(PROD, "Config read successfully");
-		if (config.Parse(ini, logger))
-		{
-			logger.Log(PROD, "Config parsed successfully");
-		}
-		else
-		{
-			logger.Log(PROD, "Config parsed unsuccessfully/partly successfully");
-		}
+	if (config.Parse(ini, logger))
+	{
+		logger.Log(PROD, "Config parsed successfully");
 	}
 	else
 	{
-		logger.Log(PROD, "Couldn`t read config. Terminating the program");
-		return 1;
+		logger.Log(PROD, "Config parsed unsuccessfully/partly successfully");
 	}
+}
+else
+{
+	logger.Log(PROD, "Couldn`t read config. Terminating the program");
+	return 1;
+}
 
 	try
 	{

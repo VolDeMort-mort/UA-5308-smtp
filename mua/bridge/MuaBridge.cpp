@@ -43,6 +43,21 @@ bool MuaBridge::isBusy() const
 	return m_isBusy;
 }
 
+bool MuaBridge::isReconnecting() const
+{
+	return m_isReconnecting;
+}
+
+int MuaBridge::reconnectAttempt() const
+{
+	return m_reconnectAttempt;
+}
+
+QString MuaBridge::reconnectMessage() const
+{
+	return m_reconnectMessage;
+}
+
 QString MuaBridge::lastError() const
 {
 	return m_lastError;
@@ -233,7 +248,10 @@ void MuaBridge::markMailImportant(int mailId, bool important)
 
 void MuaBridge::onResult(MailResult result)
 {
-	setBusy(false);
+	if (!std::holds_alternative<ReconnectStateResult>(result))
+	{
+		setBusy(false);
+	}
 
 	std::visit([this](const auto& r) {
 		using T = std::decay_t<decltype(r)>;
@@ -242,6 +260,12 @@ void MuaBridge::onResult(MailResult result)
 		{
 			if (r.success)
 			{
+				m_isReconnecting = false;
+				m_reconnectAttempt = 0;
+				m_reconnectMessage.clear();
+				emit reconnectingChanged();
+				emit reconnectAttemptChanged();
+				emit reconnectMessageChanged();
 				m_isConnected = true;
 				emit connectionStateChanged();
 				setLastError(QString());
@@ -386,6 +410,43 @@ void MuaBridge::onResult(MailResult result)
 			{
 				setLastError(QString::fromStdString(r.error));
 				emit errorOccurred(QString::fromStdString(r.error));
+			}
+		}
+		else if constexpr (std::is_same_v<T, ReconnectStateResult>)
+		{
+			setBusy(r.reconnecting);
+			const bool reconnectingChanged = (m_isReconnecting != r.reconnecting);
+			const int newAttempt = static_cast<int>(r.attempt);
+			const bool attemptChanged = (m_reconnectAttempt != newAttempt);
+			const QString newMessage = QString::fromStdString(r.message);
+			const bool messageChanged = (m_reconnectMessage != newMessage);
+
+			m_isReconnecting = r.reconnecting;
+			m_reconnectAttempt = newAttempt;
+			m_reconnectMessage = newMessage;
+
+			if (r.reconnecting && m_isConnected)
+			{
+				m_isConnected = false;
+				emit connectionStateChanged();
+			}
+			if (!r.reconnecting && !m_isConnected && !newMessage.isEmpty() && newMessage != "Reconnect canceled")
+			{
+				m_isConnected = true;
+				emit connectionStateChanged();
+			}
+
+			if (reconnectingChanged)
+			{
+				emit reconnectingChanged();
+			}
+			if (attemptChanged)
+			{
+				emit reconnectAttemptChanged();
+			}
+			if (messageChanged)
+			{
+				emit reconnectMessageChanged();
 			}
 		}
 		else if constexpr (std::is_same_v<T, MailActionResult>)

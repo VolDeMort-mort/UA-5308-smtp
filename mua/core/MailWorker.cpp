@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -20,6 +21,26 @@
 
 namespace
 {
+bool WaitForReconnectDelay(std::atomic<bool>& stopRequested, std::chrono::milliseconds delay)
+{
+    constexpr auto kSlice = std::chrono::milliseconds(100);
+    auto waited = std::chrono::milliseconds(0);
+
+    while (waited < delay)
+    {
+        if (stopRequested.load(std::memory_order_relaxed))
+        {
+            return false;
+        }
+
+        const auto step = std::min(kSlice, delay - waited);
+        std::this_thread::sleep_for(step);
+        waited += step;
+    }
+
+    return !stopRequested.load(std::memory_order_relaxed);
+}
+
 std::string QuoteImap(const std::string& value)
 {
     std::string escaped;
@@ -577,11 +598,13 @@ MailWorker::~MailWorker()
 
 void MailWorker::start()
 {
+    m_stopRequested.store(false, std::memory_order_relaxed);
     m_thread = std::thread(&MailWorker::run, this);
 }
 
 void MailWorker::stop()
 {
+    m_stopRequested.store(true, std::memory_order_relaxed);
     m_queue.stop();
     if (m_thread.joinable())
     {
@@ -596,34 +619,68 @@ std::string MailWorker::nextTag()
 
 std::pair<bool, std::vector<std::string>> MailWorker::imapExchange(const std::string& cmd)
 {
-    if (!m_imapConnection)
+    for (int attempt = 0; attempt < 2; ++attempt)
     {
-        return {false, {}};
-    }
+        if (!m_imapConnection)
+        {
+            std::string reconnectError;
+            if (!reconnectSession(reconnectError))
+            {
+                return {false, {}};
+            }
+        }
 
-    const std::string tag = nextTag();
+        const std::string tag = nextTag();
+        if (!m_imapConnection->Send(tag + " " + cmd + "\r\n"))
+        {
+            std::string reconnectError;
+            if (attempt == 0 && reconnectSession(reconnectError))
+            {
+                continue;
+            }
+            return {false, {}};
+        }
 
-    if (!m_imapConnection->Send(tag + " " + cmd + "\r\n"))
-    {
-        return {false, {}};
-    }
+        std::vector<std::string> untagged;
+        bool transportFailure = false;
 
-    std::vector<std::string> untagged;
+        while (true)
+        {
+            std::string line;
+            if (!m_imapConnection->Receive(line))
+            {
+                transportFailure = true;
+                break;
+            }
 
-    while (true)
-    {
-        std::string line;
-        if (!m_imapConnection->Receive(line))
+            if (line.rfind(tag + " OK", 0) == 0)
+            {
+                return {true, untagged};
+            }
+
+            if (line.rfind(tag + " NO", 0) == 0 || line.rfind(tag + " BAD", 0) == 0)
+            {
+                return {false, untagged};
+            }
+
+            untagged.push_back(line);
+        }
+
+        if (!transportFailure)
         {
             return {false, untagged};
         }
 
-        if (line.rfind(tag + " OK", 0) == 0) return {true, untagged};
-        if (line.rfind(tag + " NO", 0) == 0) return {false, untagged};
-        if (line.rfind(tag + " BAD", 0) == 0) return {false, untagged};
+        std::string reconnectError;
+        if (attempt == 0 && reconnectSession(reconnectError))
+        {
+            continue;
+        }
 
-        untagged.push_back(line);
+        return {false, untagged};
     }
+
+    return {false, {}};
 }
 
 void MailWorker::run()
@@ -672,39 +729,28 @@ void MailWorker::run()
     }
 }
 
-void MailWorker::handleConnect(const ConnectCommand& cmd)
+bool MailWorker::authenticateSmtp(SocketConnection& connection,
+                                  const std::string& username,
+                                  const std::string& password,
+                                  std::string& error)
 {
-    m_connector = std::make_unique<SocketConnector>();
-    m_connector->Initialize(m_ioContext);
-
-    m_smtpHost = cmd.SMTPhost;
-    m_smtpPort = cmd.SMTPport;
-    m_smtpUsername = cmd.username;
-    m_smtpPassword = cmd.password;
-
-    if (!m_connector->Connect(cmd.SMTPhost, cmd.SMTPport, m_smtpConnection))
-    {
-        m_onResult(ConnectResult{false, "Failed to connect to SMTP server"});
-        return;
-    }
-
     std::vector<std::string> smtpResponse;
-    if (!ReadSmtpResponse([&](std::string& line) { return m_smtpConnection->Receive(line); }, smtpResponse) ||
+    if (!ReadSmtpResponse([&](std::string& line) { return connection.Receive(line); }, smtpResponse) ||
         GetSmtpCode(smtpResponse) != 220)
     {
-        m_onResult(ConnectResult{false, "SMTP greeting failed"});
-        return;
+        error = "SMTP greeting failed";
+        return false;
     }
 
     auto sendPlainSmtp = [&](const std::string& line, std::initializer_list<int> okCodes) -> bool
     {
-        if (!m_smtpConnection->Send(line + "\r\n"))
+        if (!connection.Send(line + "\r\n"))
         {
             return false;
         }
 
         smtpResponse.clear();
-        if (!ReadSmtpResponse([&](std::string& responseLine) { return m_smtpConnection->Receive(responseLine); }, smtpResponse))
+        if (!ReadSmtpResponse([&](std::string& responseLine) { return connection.Receive(responseLine); }, smtpResponse))
         {
             return false;
         }
@@ -721,23 +767,23 @@ void MailWorker::handleConnect(const ConnectCommand& cmd)
         return false;
     };
 
-    if (!sendPlainSmtp("EHLO " + cmd.username, {250}))
+    if (!sendPlainSmtp("EHLO " + username, {250}))
     {
-        m_onResult(ConnectResult{false, "SMTP EHLO failed: " + JoinSmtpLines(smtpResponse)});
-        return;
+        error = "SMTP EHLO failed: " + JoinSmtpLines(smtpResponse);
+        return false;
     }
 
     if (!sendPlainSmtp("STARTTLS", {220}))
     {
-        m_onResult(ConnectResult{false, "SMTP STARTTLS failed: " + JoinSmtpLines(smtpResponse)});
-        return;
+        error = "SMTP STARTTLS failed: " + JoinSmtpLines(smtpResponse);
+        return false;
     }
 
-    ClientSecureChannel secureSmtp(*m_smtpConnection);
+    ClientSecureChannel secureSmtp(connection);
     if (!secureSmtp.StartTLS())
     {
-        m_onResult(ConnectResult{false, "SMTP TLS handshake failed"});
-        return;
+        error = "SMTP TLS handshake failed";
+        return false;
     }
 
     auto sendSecureSmtp = [&](const std::string& line, std::initializer_list<int> okCodes) -> bool
@@ -765,47 +811,192 @@ void MailWorker::handleConnect(const ConnectCommand& cmd)
         return false;
     };
 
-    if (!sendSecureSmtp("EHLO " + cmd.username, {250}))
+    if (!sendSecureSmtp("EHLO " + username, {250}))
     {
-        m_onResult(ConnectResult{false, "SMTP EHLO after STARTTLS failed: " + JoinSmtpLines(smtpResponse)});
-        return;
+        error = "SMTP EHLO after STARTTLS failed: " + JoinSmtpLines(smtpResponse);
+        return false;
     }
 
     std::string authPayload;
-    if (!BuildSmtpPlainAuthPayload(cmd.username, cmd.password, authPayload))
+    if (!BuildSmtpPlainAuthPayload(username, password, authPayload))
     {
-        m_onResult(ConnectResult{false, "SMTP AUTH payload build failed"});
-        return;
+        error = "SMTP AUTH payload build failed";
+        return false;
     }
 
     if (!sendSecureSmtp("AUTH PLAIN " + authPayload, {235}))
     {
-        m_onResult(ConnectResult{false, "SMTP AUTH failed: " + JoinSmtpLines(smtpResponse)});
-        return;
+        error = "SMTP AUTH failed: " + JoinSmtpLines(smtpResponse);
+        return false;
     }
 
-    m_smtpConnection->Close();
-    m_smtpConnection.reset();
+    return true;
+}
 
-    if (!m_connector->Connect(cmd.IMAPhost, cmd.IMAPport, m_imapConnection))
+bool MailWorker::loginImap(const std::string& host,
+                           uint16_t port,
+                           const std::string& username,
+                           const std::string& password,
+                           std::string& error)
+{
+    if (!m_connector->Connect(host, port, m_imapConnection))
     {
-        m_onResult(ConnectResult{false, "Failed to connect to IMAP server"});
-        return;
+        error = "Failed to connect to IMAP server";
+        return false;
     }
 
     std::string banner;
     if (!m_imapConnection->Receive(banner))
     {
-        m_onResult(ConnectResult{false, "IMAP banner not received"});
-        return;
+        m_imapConnection->Close();
+        m_imapConnection.reset();
+        error = "IMAP banner not received";
+        return false;
     }
 
-    auto [loginOk, _] = imapExchange("LOGIN " + QuoteImap(cmd.username) + " " + QuoteImap(cmd.password));
-    if (!loginOk)
+    const std::string tag = nextTag();
+    if (!m_imapConnection->Send(tag + " LOGIN " + QuoteImap(username) + " " + QuoteImap(password) + "\r\n"))
     {
         m_imapConnection->Close();
         m_imapConnection.reset();
-        m_onResult(ConnectResult{false, "IMAP login failed (server returned NO/BAD)"});
+        error = "IMAP login send failed";
+        return false;
+    }
+
+    while (true)
+    {
+        std::string line;
+        if (!m_imapConnection->Receive(line))
+        {
+            m_imapConnection->Close();
+            m_imapConnection.reset();
+            error = "IMAP login receive failed";
+            return false;
+        }
+
+        if (line.rfind(tag + " OK", 0) == 0)
+        {
+            break;
+        }
+
+        if (line.rfind(tag + " NO", 0) == 0 || line.rfind(tag + " BAD", 0) == 0)
+        {
+            m_imapConnection->Close();
+            m_imapConnection.reset();
+            error = "IMAP login failed (server returned NO/BAD)";
+            return false;
+        }
+    }
+
+    if (!m_imapConnection)
+    {
+        error = "IMAP login failed";
+        return false;
+    }
+
+    return true;
+}
+
+bool MailWorker::reconnectSession(std::string& error)
+{
+    if (m_smtpHost.empty() || m_smtpPort == 0 || m_smtpUsername.empty() || m_imapHost.empty() || m_imapPort == 0)
+    {
+        error = "Reconnection settings are not initialized";
+        return false;
+    }
+
+    if (!m_connector)
+    {
+        m_connector = std::make_unique<SocketConnector>();
+        m_connector->Initialize(m_ioContext);
+    }
+
+    uint32_t attempt = 0;
+    while (!m_stopRequested.load(std::memory_order_relaxed))
+    {
+        ++attempt;
+        reportReconnectState(true, attempt, "Reconnecting...");
+
+        if (m_smtpConnection)
+        {
+            m_smtpConnection->Close();
+            m_smtpConnection.reset();
+        }
+
+        if (m_imapConnection)
+        {
+            m_imapConnection->Close();
+            m_imapConnection.reset();
+        }
+
+        std::unique_ptr<SocketConnection> smtpConn;
+        if (!m_connector->Connect(m_smtpHost, m_smtpPort, smtpConn))
+        {
+            error = "Failed to reconnect to SMTP";
+        }
+        else if (!authenticateSmtp(*smtpConn, m_smtpUsername, m_smtpPassword, error))
+        {
+            smtpConn->Close();
+        }
+        else
+        {
+            smtpConn->Close();
+
+            if (loginImap(m_imapHost, m_imapPort, m_imapUsername, m_imapPassword, error))
+            {
+                m_tagCounter = 0;
+                m_currentFolder.clear();
+                reportReconnectState(false, attempt, "Reconnected");
+                return true;
+            }
+        }
+
+        reportReconnectState(true, attempt, error.empty() ? "Reconnect failed" : error);
+        if (!WaitForReconnectDelay(m_stopRequested, std::chrono::seconds(2)))
+        {
+            break;
+        }
+    }
+
+    error = "Reconnect canceled";
+    reportReconnectState(false, 0, error);
+    return false;
+}
+
+bool MailWorker::ensureImapConnected(std::string& error)
+{
+    if (m_imapConnection)
+    {
+        return true;
+    }
+
+    return reconnectSession(error);
+}
+
+void MailWorker::reportReconnectState(bool reconnecting, uint32_t attempt, const std::string& message)
+{
+    m_onResult(ReconnectStateResult{reconnecting, attempt, message});
+}
+
+void MailWorker::handleConnect(const ConnectCommand& cmd)
+{
+    m_connector = std::make_unique<SocketConnector>();
+    m_connector->Initialize(m_ioContext);
+
+    m_smtpHost = cmd.SMTPhost;
+    m_smtpPort = cmd.SMTPport;
+    m_smtpUsername = cmd.username;
+    m_smtpPassword = cmd.password;
+
+    m_imapHost = cmd.IMAPhost;
+    m_imapPort = cmd.IMAPport;
+    m_imapUsername = cmd.username;
+    m_imapPassword = cmd.password;
+
+    std::string reconnectError;
+    if (!reconnectSession(reconnectError))
+    {
+        m_onResult(ConnectResult{false, reconnectError});
         return;
     }
 
@@ -836,6 +1027,11 @@ void MailWorker::handleDisconnect(const DisconnectCommand&)
     m_smtpPassword.clear();
     m_smtpHost.clear();
     m_smtpPort = 0;
+    m_imapUsername.clear();
+    m_imapPassword.clear();
+    m_imapHost.clear();
+    m_imapPort = 0;
+    reportReconnectState(false, 0, "");
 
     m_onResult(DisconnectResult{true, {}});
 }
@@ -851,8 +1047,12 @@ void MailWorker::handleSendMail(const SendMailCommand& cmd)
     std::unique_ptr<SocketConnection> smtpConn;
     if (!m_connector->Connect(m_smtpHost, m_smtpPort, smtpConn))
     {
-        m_onResult(SendMailResult{false, "Failed to reconnect to SMTP"});
-        return;
+        std::string reconnectError;
+        if (!reconnectSession(reconnectError) || !m_connector->Connect(m_smtpHost, m_smtpPort, smtpConn))
+        {
+            m_onResult(SendMailResult{false, "Failed to reconnect to SMTP"});
+            return;
+        }
     }
 
     std::vector<std::string> responseLines;
@@ -1064,9 +1264,10 @@ void MailWorker::handleSendMail(const SendMailCommand& cmd)
 
 void MailWorker::handleFetchFolders(const FetchFoldersCommand&)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(FetchFoldersResult{false, "Not connected", {}});
+        m_onResult(FetchFoldersResult{false, error.empty() ? "Not connected" : error, {}});
         return;
     }
 
@@ -1094,9 +1295,10 @@ void MailWorker::handleFetchFolders(const FetchFoldersCommand&)
 
 void MailWorker::handleFetchMails(const FetchMailsCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(FetchMailsResult{false, "Not connected", {}});
+        m_onResult(FetchMailsResult{false, error.empty() ? "Not connected" : error, {}});
         return;
     }
 
@@ -1156,9 +1358,10 @@ void MailWorker::handleFetchMails(const FetchMailsCommand& cmd)
 
 void MailWorker::handleFetchMail(const FetchMailCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(FetchMailResult{false, "Not connected", {}});
+        m_onResult(FetchMailResult{false, error.empty() ? "Not connected" : error, {}});
         return;
     }
 
@@ -1219,9 +1422,10 @@ void MailWorker::handleFetchMail(const FetchMailCommand& cmd)
 
 void MailWorker::handleDeleteMail(const DeleteMailCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1238,9 +1442,10 @@ void MailWorker::handleDeleteMail(const DeleteMailCommand& cmd)
 
 void MailWorker::handleMarkMailRead(const MarkMailReadCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1250,9 +1455,10 @@ void MailWorker::handleMarkMailRead(const MarkMailReadCommand& cmd)
 
 void MailWorker::handleMoveMail(const MoveMailCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1282,9 +1488,10 @@ void MailWorker::handleMoveMail(const MoveMailCommand& cmd)
 
 void MailWorker::handleDownloadAttachment(const DownloadAttachmentCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(DownloadAttachmentResult{false, "Not connected", {}, {}, 0});
+        m_onResult(DownloadAttachmentResult{false, error.empty() ? "Not connected" : error, {}, {}, 0});
         return;
     }
 
@@ -1408,9 +1615,10 @@ void MailWorker::handleDownloadAttachment(const DownloadAttachmentCommand& cmd)
 
 void MailWorker::handleCreateFolder(const CreateFolderCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1420,9 +1628,10 @@ void MailWorker::handleCreateFolder(const CreateFolderCommand& cmd)
 
 void MailWorker::handleDeleteFolder(const DeleteFolderCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1436,9 +1645,10 @@ void MailWorker::handleDeleteFolder(const DeleteFolderCommand& cmd)
 
 void MailWorker::handleAddLabel(const AddLabelCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1449,9 +1659,10 @@ void MailWorker::handleAddLabel(const AddLabelCommand& cmd)
 
 void MailWorker::handleRemoveLabel(const RemoveLabelCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1462,9 +1673,10 @@ void MailWorker::handleRemoveLabel(const RemoveLabelCommand& cmd)
 
 void MailWorker::handleMarkMailStarred(const MarkMailStarredCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 
@@ -1503,9 +1715,10 @@ void MailWorker::handleMarkMailStarred(const MarkMailStarredCommand& cmd)
 
 void MailWorker::handleMarkMailImportant(const MarkMailImportantCommand& cmd)
 {
-    if (!m_imapConnection)
+    std::string error;
+    if (!ensureImapConnected(error))
     {
-        m_onResult(MailActionResult{false, "Not connected"});
+        m_onResult(MailActionResult{false, error.empty() ? "Not connected" : error});
         return;
     }
 

@@ -15,6 +15,9 @@ class MuaBridge : public QObject
 	Q_OBJECT
 	Q_PROPERTY(bool isConnected READ isConnected NOTIFY connectionStateChanged)
 	Q_PROPERTY(bool isBusy READ isBusy NOTIFY busyChanged)
+	Q_PROPERTY(bool isReconnecting READ isReconnecting NOTIFY reconnectingChanged)
+	Q_PROPERTY(int reconnectAttempt READ reconnectAttempt NOTIFY reconnectAttemptChanged)
+	Q_PROPERTY(QString reconnectMessage READ reconnectMessage NOTIFY reconnectMessageChanged)
 	Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
 	Q_PROPERTY(QVariantList folders READ folders NOTIFY foldersChanged)
 	Q_PROPERTY(QVariantList mails READ mails NOTIFY mailsChanged)
@@ -27,6 +30,9 @@ public:
 
 	bool isConnected() const;
 	bool isBusy() const;
+	bool isReconnecting() const;
+	int reconnectAttempt() const;
+	QString reconnectMessage() const;
 	QString lastError() const;
 	QVariantList folders() const;
 	QVariantList mails() const;
@@ -67,6 +73,9 @@ public:
 signals:
 	void connectionStateChanged();
 	void busyChanged();
+	void reconnectingChanged();
+	void reconnectAttemptChanged();
+	void reconnectMessageChanged();
 	void lastErrorChanged();
 	void foldersChanged();
 	void mailsChanged();
@@ -94,6 +103,9 @@ private:
 
 	bool m_isConnected = false;
 	bool m_isBusy = false;
+	bool m_isReconnecting = false;
+	int m_reconnectAttempt = 0;
+	QString m_reconnectMessage;
 	QString m_lastError;
 	QVariantList m_folders;
 	QVariantList m_mails;

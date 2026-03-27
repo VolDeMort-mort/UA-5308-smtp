@@ -99,6 +99,13 @@ struct DownloadAttachmentResult
 	std::size_t bytesWritten;
 };
 
+struct ReconnectStateResult
+{
+	bool reconnecting = false;
+	uint32_t attempt = 0;
+	std::string message;
+};
+
 using MailResult = std::variant<
     ConnectResult,
     DisconnectResult,
@@ -107,4 +114,5 @@ using MailResult = std::variant<
     FetchMailResult,
     FetchFoldersResult,
     DownloadAttachmentResult,
+	ReconnectStateResult,
     MailActionResult>;

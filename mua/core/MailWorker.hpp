@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <thread>
@@ -41,6 +42,19 @@ private:
 	void handleMarkMailStarred(const MarkMailStarredCommand& cmd);
 	void handleMarkMailImportant(const MarkMailImportantCommand& cmd);
 
+	bool authenticateSmtp(SocketConnection& connection,
+	                     const std::string& username,
+	                     const std::string& password,
+	                     std::string& error);
+	bool loginImap(const std::string& host,
+	               uint16_t port,
+	               const std::string& username,
+	               const std::string& password,
+	               std::string& error);
+	bool reconnectSession(std::string& error);
+	bool ensureImapConnected(std::string& error);
+	void reportReconnectState(bool reconnecting, uint32_t attempt, const std::string& message);
+
 	std::string nextTag();
 
 	std::pair<bool, std::vector<std::string>> imapExchange(const std::string& cmd);
@@ -62,4 +76,10 @@ private:
 	uint16_t    m_smtpPort{0};
 	std::string m_smtpUsername;
 	std::string m_smtpPassword;
+
+	std::string m_imapHost;
+	uint16_t    m_imapPort{0};
+	std::string m_imapUsername;
+	std::string m_imapPassword;
+	std::atomic<bool> m_stopRequested{false};
 };
