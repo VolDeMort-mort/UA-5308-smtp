@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Boost REQUIRED)
 
-option(BUILD_SERVER "Build the SMTP server" ON)
-option(BUILD_MUA "Build the Mail User Agent" ON)
+option(BUILD_SERVER "Build the SMTP server" OFF)
+option(BUILD_MUA "Build the Mail User Agent" OFF)
 option(BUILD_TESTS "Build tests" OFF)
 
 if(BUILD_TESTS)
@@ -26,4 +26,4 @@ if(BUILD_MUA)
     add_subdirectory(mua)
 endif()
 
-add_subdirectory(logger)
+# add_subdirectory(logger)

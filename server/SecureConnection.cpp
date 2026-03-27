@@ -2,12 +2,46 @@
 
 #include <arpa/inet.h>
 #include <cstddef>
+#include <sys/select.h>
 #include <vector>
 
 SecureConnection::SecureConnection(boost::asio::ip::tcp::socket socket) : m_socket(std::move(socket)) {}
 
+void SecureConnection::setTimeout(int seconds)
+{
+	if (seconds > 0) m_timeout_seconds = seconds;
+}
+
+bool SecureConnection::waitForEvent(bool for_read)
+{
+	if (!m_socket.is_open()) return false;
+
+	auto fd = m_socket.native_handle();
+
+	fd_set read_set;
+	fd_set write_set;
+
+	FD_ZERO(&read_set);
+	FD_ZERO(&write_set);
+
+	if (for_read)
+		FD_SET(fd, &read_set);
+	else
+		FD_SET(fd, &write_set);
+
+	timeval timeout;
+	timeout.tv_sec = m_timeout_seconds;
+	timeout.tv_usec = 0;
+
+	int result = select(fd + 1, for_read ? &read_set : nullptr, for_read ? nullptr : &write_set, nullptr, &timeout);
+
+	return result > 0;
+}
+
 bool SecureConnection::sendRaw(const unsigned char* data, std::size_t len)
 {
+	if (!waitForEvent(false)) return false;
+
 	boost::system::error_code ec;
 	boost::asio::write(m_socket, boost::asio::buffer(data, len), ec);
 
@@ -16,6 +50,8 @@ bool SecureConnection::sendRaw(const unsigned char* data, std::size_t len)
 
 bool SecureConnection::recvRaw(unsigned char* data, std::size_t len)
 {
+	if (!waitForEvent(true)) return false;
+
 	boost::system::error_code ec;
 	boost::asio::read(m_socket, boost::asio::buffer(data, len), ec);
 
@@ -70,15 +106,15 @@ bool SecureConnection::receive(std::string& out_data)
 {
 
 	uint32_t net_len;
-	recvRaw(reinterpret_cast<unsigned char*>(&net_len), sizeof(net_len));
+	if (!recvRaw(reinterpret_cast<unsigned char*>(&net_len), sizeof(net_len))) return false;
 	uint32_t payload_len = ntohl(net_len);
 
 	unsigned char nonce[crypto_secretbox_NONCEBYTES];
-	recvRaw(nonce, crypto_secretbox_NONCEBYTES);
+	if (!recvRaw(nonce, crypto_secretbox_NONCEBYTES)) return false;
 
 	auto ciphertext_len = payload_len - crypto_secretbox_NONCEBYTES;
 	std::vector<unsigned char> ciphertext(ciphertext_len);
-	recvRaw(ciphertext.data(), ciphertext_len);
+	if (!recvRaw(ciphertext.data(), ciphertext_len)) return false;
 
 	auto plaintext_len = ciphertext_len - crypto_secretbox_MACBYTES;
 	std::vector<unsigned char> plaintext(plaintext_len);

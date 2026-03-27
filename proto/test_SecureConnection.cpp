@@ -62,3 +62,36 @@ TEST_F(SecureConnectionTest, SendReceiveRoundtrip)
 
 	EXPECT_EQ(received, message);
 }
+
+TEST_F(SecureConnectionTest, ReceiveTimesOutWhenPeerIsSilent)
+{
+	m_server->setTimeout(1);
+
+	std::string received;
+	EXPECT_FALSE(m_server->receive(received));
+}
+
+TEST(SecureConnectionTimeoutTest, HandshakeTimesOutWhenPeerStalls)
+{
+	ASSERT_NE(sodium_init(), -1);
+
+	boost::asio::io_context io;
+	boost::asio::ip::tcp::acceptor acceptor(io, {boost::asio::ip::tcp::v4(), 0});
+	auto port = acceptor.local_endpoint().port();
+
+	boost::asio::ip::tcp::socket client_sock(io);
+	boost::asio::ip::tcp::socket server_sock(io);
+
+	std::thread accept_thread([&]() { acceptor.accept(server_sock); });
+	client_sock.connect({boost::asio::ip::address_v4::loopback(), port});
+	accept_thread.join();
+
+	SecureConnection server(std::move(server_sock));
+	server.setTimeout(1);
+
+	EphemeralKeys server_keys{};
+	crypto_kx_keypair(server_keys.pk.data(), server_keys.sk.data());
+
+	EXPECT_FALSE(server.handshake(crypto_kx_server_session_keys, server_keys));
+}
+
