@@ -378,6 +378,23 @@ bool MessageRepository::setFlags(int64_t id, const std::vector<std::string>& fla
     bool is_flagged  = msg->is_flagged;
     bool is_recent   = msg->is_recent;
 
+    // Check if any flag has a prefix (+ or -)
+    bool has_prefix = false;
+    for (const auto& flag : flags)
+    {
+        if (!flag.empty() && (flag[0] == '+' || flag[0] == '-'))
+        {
+            has_prefix = true;
+            break;
+        }
+    }
+
+    // If no prefixes, it's a replace operation: clear all flags first
+    if (!has_prefix && !flags.empty())
+    {
+        is_seen = is_deleted = is_draft = is_answered = is_flagged = is_recent = false;
+    }
+
     // If no flags provided, clear all flags
     if (flags.empty())
     {
@@ -390,10 +407,19 @@ bool MessageRepository::setFlags(int64_t id, const std::vector<std::string>& fla
             bool value = true;
             std::string name = flag;
 
-            if (!flag.empty() && flag[0] == '-')
+            if (!flag.empty())
             {
-                value = false;
-                name  = flag.substr(1);
+                if (flag[0] == '-')
+                {
+                    value = false;
+                    name  = flag.substr(1);
+                }
+                else if (flag[0] == '+')
+                {
+                    value = true;
+                    name  = flag.substr(1);
+                }
+                // If no prefix, assume set to true (for add or replace)
             }
 
             if      (name == "\\Seen")     is_seen     = value;
