@@ -1,7 +1,8 @@
 #pragma once
 
-#include "SocketConnection.hpp"
+#include "IConnection.hpp"
 #include "Logger.h"
+#include "SocketConnection.hpp"
 
 #include <sodium.h>
 #include <cstdint>
@@ -9,7 +10,7 @@
 class SecureChannel
 {
 public:
-	SecureChannel(SocketConnection& conn) : m_conn(conn){};
+	SecureChannel(IConnection& conn) : m_conn(conn){};
 	virtual ~SecureChannel() 
 	{
 		sodium_memzero(m_txKey, sizeof(m_txKey));
@@ -22,11 +23,11 @@ public:
 	virtual bool StartTLS() = 0;
 	
 	bool isSecure() const;
-	void setLogger(Logger* logger);
+	void setLogger(ILogger* logger);
 
 protected:
-	SocketConnection& m_conn;
-	Logger* m_logger = nullptr;
+	IConnection& m_conn;
+	ILogger* m_logger = nullptr;
 
 	bool m_secure = false;
 	bool enableSecure();
@@ -38,6 +39,8 @@ protected:
 							const unsigned char* private_key) = 0;
 
 private:
+	static constexpr std::uint32_t MAX_MESSAGE_SIZE = 10 * 1024 * 1024; // plan to use config value
+
 	std::string Encrypt(const std::string& raw_data);
 	std::string Decrypt(const std::string& data);
 };

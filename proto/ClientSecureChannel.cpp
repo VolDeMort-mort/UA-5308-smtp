@@ -25,6 +25,12 @@ bool ClientSecureChannel::DeriveKeys(const unsigned char* otherKey, const unsign
 
 bool ClientSecureChannel::StartTLS()
 {
+	if (m_secure)
+	{
+		if (m_logger) m_logger->Log(LogLevel::PROD, "StartTLS called on already-secure channel");
+		return false;
+	}
+
 	m_logger->Log(LogLevel::DEBUG, "STARTTLS: handshake started (CLIENT)");
 	unsigned char publicKey[crypto_kx_PUBLICKEYBYTES];
 	unsigned char privateKey[crypto_kx_SECRETKEYBYTES];
