@@ -3,7 +3,9 @@
 #include <boost/asio.hpp>
 #include <string>
 
-class SocketConnection
+#include "IConnection.hpp"
+
+class SocketConnection : public IConnection
 {
 public:
     explicit SocketConnection(boost::asio::ip::tcp::socket socket);
