@@ -21,17 +21,18 @@ const std::string& MessageRepository::getLastError() const
 
 bool MessageRepository::assignUID(Message& msg, int64_t folder_id)
 {
+    auto lock = m_db.writeLock();
+    Transaction tx(m_db.getDB());
+
+    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
+
+    // Fetch folder INSIDE transaction to prevent race condition
     auto folder = m_folder_dal.findByID(folder_id);
     if (!folder.has_value())
         return setError("assignUID: folder not found");
 
     msg.folder_id = folder_id;
     msg.uid       = folder->next_uid;
-
-    auto lock = m_db.writeLock();
-    Transaction tx(m_db.getDB());
-
-    if (!tx.valid()) return setError("assignUID: failed to begin transaction");
 
     if (!m_message_dal.insert(msg))
         return setError(m_message_dal.getLastError());
@@ -377,24 +378,32 @@ bool MessageRepository::setFlags(int64_t id, const std::vector<std::string>& fla
     bool is_flagged  = msg->is_flagged;
     bool is_recent   = msg->is_recent;
 
-    for (const auto& flag : flags)
+    // If no flags provided, clear all flags
+    if (flags.empty())
     {
-        bool value = true;
-        std::string name = flag;
-
-        if (!flag.empty() && flag[0] == '-')
+        is_seen = is_deleted = is_draft = is_answered = is_flagged = is_recent = false;
+    }
+    else
+    {
+        for (const auto& flag : flags)
         {
-            value = false;
-            name  = flag.substr(1);
-        }
+            bool value = true;
+            std::string name = flag;
 
-        if      (name == "\\Seen")     is_seen     = value;
-        else if (name == "\\Deleted")  is_deleted  = value;
-        else if (name == "\\Draft")    is_draft    = value;
-        else if (name == "\\Answered") is_answered = value;
-        else if (name == "\\Flagged")  is_flagged  = value;
-        else if (name == "\\Recent")   is_recent   = value;
-        else return setError("setFlags: unknown flag '" + name + "'");
+            if (!flag.empty() && flag[0] == '-')
+            {
+                value = false;
+                name  = flag.substr(1);
+            }
+
+            if      (name == "\\Seen")     is_seen     = value;
+            else if (name == "\\Deleted")  is_deleted  = value;
+            else if (name == "\\Draft")    is_draft    = value;
+            else if (name == "\\Answered") is_answered = value;
+            else if (name == "\\Flagged")  is_flagged  = value;
+            else if (name == "\\Recent")   is_recent   = value;
+            else return setError("setFlags: unknown flag '" + name + "'");
+        }
     }
 
     auto lock = m_db.writeLock();

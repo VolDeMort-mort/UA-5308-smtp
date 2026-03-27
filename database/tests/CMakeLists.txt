@@ -1,13 +1,9 @@
 include(GoogleTest)
 
 set(TEST_SOURCES
-    Empty.cpp
-#    TestUserDAL.cpp
-#    TestFolderDAL.cpp
-#    TestMessageDAL.cpp
-#    TestRecipientDAL.cpp
-#    TestUserRepository.cpp
-#    TestMessageRepository.cpp
+    TestUserRepository.cpp
+    TestMessageRepository.cpp
+    TestConcurrency.cpp
 )
 
 add_executable(smtp_tests ${TEST_SOURCES})
@@ -16,6 +12,7 @@ target_include_directories(smtp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(smtp_tests PRIVATE
     db_lib
+    config_lib
     GTest::gtest
     GTest::gtest_main
 )

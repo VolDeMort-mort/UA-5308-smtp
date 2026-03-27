@@ -198,7 +198,7 @@ std::vector<Message> MessageDAL::search(int64_t user_id, const std::string& quer
 {
     ReadGuard g(m_pool);
     const char* sql = MESSAGE_SELECT
-        "WHERE user_id = ? AND subject LIKE ? "
+        "WHERE user_id = ? AND (subject LIKE ? OR from_address LIKE ?) "
         "ORDER BY internal_date DESC LIMIT ? OFFSET ?;";
 
     sqlite3_stmt* stmt = nullptr;
@@ -208,8 +208,9 @@ std::vector<Message> MessageDAL::search(int64_t user_id, const std::string& quer
     std::string pattern = "%" + query + "%";
     sqlite3_bind_int64(stmt, 1, user_id);
     sqlite3_bind_text(stmt, 2, pattern.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 3, limit);
-    sqlite3_bind_int(stmt, 4, offset);
+    sqlite3_bind_text(stmt, 3, pattern.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 4, limit);
+    sqlite3_bind_int(stmt, 5, offset);
     return fetchRows(stmt);
 }
 
