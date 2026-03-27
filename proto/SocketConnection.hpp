@@ -18,7 +18,7 @@ public:
     void SetTimeout(int seconds);
 
 private:
-    static constexpr size_t MAX_LINE_SIZE = 8192;
+    static constexpr size_t MAX_LINE_SIZE = 1024 * 1024;
 
     boost::asio::ip::tcp::socket m_socket;
     boost::asio::streambuf m_buffer;
