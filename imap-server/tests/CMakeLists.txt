@@ -16,9 +16,12 @@ add_executable(imap_tests
     ImapResponseTest.cpp
     ImapSessionTest.cpp
     ImapCommandHandlersTest.cpp
+    ImapEncryptionHandshakeTest.cpp
     ../src/ImapParser.cpp
     ../src/ImapUtils.cpp
     ../src/ImapCommandDispatcher.cpp
+    ../src/ImapServer.cpp
+    ../src/ImapSession.cpp
 )
 
 target_link_libraries(imap_tests PRIVATE smtp_proto Threads::Threads GTest::gtest GTest::gtest_main GTest::gmock logger_lib db_lib threadpool_lib mime_lib)
