@@ -1,26 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(smtp LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# UTF-8 support on MSVC
-if(MSVC)
-    add_compile_options(/utf-8)
-endif()
-
-# --- GTest ---
-include(FetchContent)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    GTest
-    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    OVERRIDE_FIND_PACKAGE
-)
-FetchContent_MakeAvailable(GTest)
-
+find_package(GTest REQUIRED)
 find_package(Boost REQUIRED)
 
 enable_testing()
