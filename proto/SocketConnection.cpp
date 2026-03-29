@@ -21,7 +21,7 @@ void SocketConnection::SetTimeout(int seconds)
 	if (seconds > 0) m_timeout_seconds = seconds;
 }
 
-bool SocketConnection::WaitForEvent(bool for_read)
+bool SocketConnection::WaitForEvent(bool for_read, int t_seconds /* =-1 */)
 {
 	if (!m_socket.is_open()) return false;
 
@@ -39,7 +39,16 @@ bool SocketConnection::WaitForEvent(bool for_read)
 		FD_SET(fd, &write_set);
 
 	timeval timeout;
-	timeout.tv_sec = m_timeout_seconds;
+
+	if (t_seconds == -1)
+	{
+		timeout.tv_sec = m_timeout_seconds;
+	}
+	else
+	{
+		timeout.tv_sec = t_seconds;
+	}
+
 	timeout.tv_usec = 0;
 
 #ifdef _WIN32
@@ -136,11 +145,21 @@ bool SocketConnection::ReceiveRaw(unsigned char* buffer, std::size_t size)
 		return false;
 	}
 
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(m_timeout_seconds);
+
 	std::size_t total = 0;
 
 	while (total < size)
 	{
-		if (!WaitForEvent(true))
+		auto now = std::chrono::steady_clock::now();
+		if (now >= deadline)
+		{
+			Close();
+			return false;
+		}
+
+		auto remaining = std::chrono::duration_cast<std::chrono::seconds>(deadline - now).count();
+		if (!WaitForEvent(true, remaining))
 		{
 			return false;
 		}
@@ -168,11 +187,21 @@ bool SocketConnection::SendRaw(const unsigned char* buffer, std::size_t size)
 		return false;
 	}
 
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(m_timeout_seconds);
+
 	std::size_t total = 0;
 
 	while (total < size)
 	{
-		if (!WaitForEvent(false))
+		auto now = std::chrono::steady_clock::now();
+		if (now >= deadline)
+		{
+			Close();
+			return false;
+		}
+
+		auto remaining = std::chrono::duration_cast<std::chrono::seconds>(deadline - now).count();
+		if (!WaitForEvent(false, remaining))
 		{
 			return false;
 		}
