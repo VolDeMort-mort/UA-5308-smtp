@@ -1,4 +1,5 @@
-add_library(mime_lib
+add_library(
+    mime_lib
     src/MimeBuilder.cpp
     src/MimeEncoder.cpp
     src/MimeParser.cpp
@@ -6,20 +7,14 @@ add_library(mime_lib
     src/MimeComposer.cpp
 )
 
-target_include_directories(mime_lib
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_include_directories(mime_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+target_link_libraries(
+    mime_lib
+    PUBLIC base64_lib common_utils_lib logger_lib config_lib
 )
 
-target_link_libraries(mime_lib
-    PUBLIC
-        base64_lib    
-        common_utils_lib 
-        logger_lib
-        config_lib
-)
-
-if(BUILD_TESTING)
-    add_subdirectory(utests)
+option(SMTP_TEST_MIME "Build mime tests" ${SMTP_TESTING})
+if(SMTP_TEST_MIME)
+    add_subdirectory(tests)
 endif()
-

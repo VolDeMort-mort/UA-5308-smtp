@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <sqlite3.h>
 
-#include "../Entity/User.h"
-#include "../ConnectionPool.h"
+#include "Entity/User.h"
+#include "ConnectionPool.h"
 
 class UserDAL
 {

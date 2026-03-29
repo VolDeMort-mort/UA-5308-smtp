@@ -1,5 +1,5 @@
-#include "../include/Config.h"
-#include "../include/JsonParser.h"
+#include "Config.h"
+#include "JsonParser.h"
 
 #include <stdexcept>
 

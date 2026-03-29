@@ -1,9 +1,3 @@
-find_package(GTest CONFIG REQUIRED)
-
-add_executable(threadpool_test ThreadPoolTest.cpp)
-target_link_libraries(threadpool_test PRIVATE threadpool_lib GTest::gtest_main)
-
-include(GoogleTest)
-gtest_discover_tests(threadpool_test)
-
-message(STATUS "Tests configured: threadpool_test")
+add_executable(test_threadpool ThreadPoolTest.cpp)
+target_link_libraries(test_threadpool PRIVATE threadpool_lib GTest::gtest_main)
+gtest_discover_tests(test_threadpool)

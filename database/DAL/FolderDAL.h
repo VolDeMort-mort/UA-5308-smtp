@@ -6,8 +6,8 @@
 #include <cstdint>
 #include <sqlite3.h>
 
-#include "../Entity/Folder.h"
-#include "../ConnectionPool.h"
+#include "Entity/Folder.h"
+#include "ConnectionPool.h"
 
 class FolderDAL
 {

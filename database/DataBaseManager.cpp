@@ -1,9 +1,6 @@
 #include "DataBaseManager.h"
 
-#include <fstream>
-#include <sstream>
-
-DataBaseManager::DataBaseManager(const std::string& db_path, const std::string& migration_path,
+DataBaseManager::DataBaseManager(const std::string& db_path, std::string_view migration_sql,
                                  std::shared_ptr<ILogger> logger, int read_pool_size)
     : m_logger(std::move(logger))
 {
@@ -36,15 +33,15 @@ DataBaseManager::DataBaseManager(const std::string& db_path, const std::string& 
         return;
     }
 
-    if (!applyMigration(migration_path))
+    if (!applyMigration(migration_sql))
     {
-        if (m_logger) m_logger->Log(LogLevel::PROD, "[DB] Migration failed: " + migration_path);
+        if (m_logger) m_logger->Log(LogLevel::PROD, "[DB] Migration failed");
         sqlite3_close(m_db);
         m_db = nullptr;
         return;
     }
 
-    if (m_logger) m_logger->Log(LogLevel::DEBUG, "[DB] Migration applied: " + migration_path);
+    if (m_logger) m_logger->Log(LogLevel::DEBUG, "[DB] Migration applied");
 
     try
     {
@@ -78,19 +75,9 @@ bool DataBaseManager::isConnected() const
     return m_connected;
 }
 
-bool DataBaseManager::applyMigration(const std::string& migration_path)
+bool DataBaseManager::applyMigration(std::string_view migration_sql)
 {
-    std::ifstream file(migration_path);
-    if (!file.is_open())
-    {
-        if (m_logger) m_logger->Log(LogLevel::PROD, "[DB] Cannot open migration file: " + migration_path);
-        return false;
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string sql = buffer.str();
-
+    std::string sql(migration_sql);
     char* err_msg = nullptr;
     int rc = sqlite3_exec(m_db, sql.c_str(), nullptr, nullptr, &err_msg);
     if (rc != SQLITE_OK)

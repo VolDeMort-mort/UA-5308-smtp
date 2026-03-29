@@ -3,14 +3,15 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <sqlite3.h>
-#include "../logger/include/Logger.h"
+#include "Logger.h"
 #include "ConnectionPool.h"
 
 class DataBaseManager
 {
 public:
-    DataBaseManager(const std::string& db_path, const std::string& migration_path,
+    DataBaseManager(const std::string& db_path, std::string_view migration_sql,
                     std::shared_ptr<ILogger> logger = nullptr, int read_pool_size = 0);
     ~DataBaseManager();
 
@@ -32,5 +33,5 @@ private:
     std::mutex m_write_mutex;
     std::unique_ptr<ConnectionPool> m_read_pool;
 
-    bool applyMigration(const std::string& migration_path);
+    bool applyMigration(std::string_view migration_sql);
 };

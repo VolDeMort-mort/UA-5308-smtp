@@ -1,4 +1,4 @@
-#include "../include/MimeComposer.h"
+#include "MimeComposer.h"
 
 #include <algorithm>
 #include <cctype>

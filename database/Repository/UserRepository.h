@@ -6,11 +6,11 @@
 #include <cstdint>
 #include <sodium.h>
 
-#include "../Entity/User.h"
-#include "../Entity/Folder.h"
-#include "../DAL/UserDAL.h"
-#include "../DAL/FolderDAL.h"
-#include "../DataBaseManager.h"
+#include "Entity/User.h"
+#include "Entity/Folder.h"
+#include "DAL/UserDAL.h"
+#include "DAL/FolderDAL.h"
+#include "DataBaseManager.h"
 
 class UserRepository
 {

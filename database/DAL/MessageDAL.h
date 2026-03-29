@@ -6,8 +6,8 @@
 #include <cstdint>
 #include <sqlite3.h>
 
-#include "../Entity/Message.h"
-#include "../ConnectionPool.h"
+#include "Entity/Message.h"
+#include "ConnectionPool.h"
 
 class MessageDAL
 {

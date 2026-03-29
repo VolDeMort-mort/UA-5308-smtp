@@ -1,5 +1,5 @@
 #include "ConnectionPool.h"
-#include "../config/include/Config.h"
+#include "Config.h"
 
 ConnectionPool::ConnectionPool(const std::string& db_path, int pool_size)
 {

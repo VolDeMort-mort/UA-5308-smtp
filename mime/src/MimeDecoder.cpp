@@ -1,10 +1,10 @@
-#include "../include/MimeDecoder.h"
+#include "MimeDecoder.h"
 
 #include <string>
 #include <vector>
 #include <exception>
 
-#include "../../base64/include/Base64Decoder.hpp"
+#include "Base64Decoder.hpp"
 
 namespace SmtpClient {
 
