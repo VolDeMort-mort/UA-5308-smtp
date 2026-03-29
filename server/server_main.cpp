@@ -6,6 +6,7 @@
 #include "FileStrategy.h"
 #include "Logger.h"
 #include "DataBaseManager.h"
+#include "schema.h"
 #include "ThreadPool.h"
 #include "ServerSecureChannel.hpp"
 #include "SmtpSession.hpp"
@@ -24,7 +25,7 @@ int main()
 
 	try
 	{
-		DataBaseManager db("mail.db", "../scheme/001_init_scheme.sql");
+		DataBaseManager db("mail.db", initSchema());
 		if (!db.isConnected())
 		{
 			std::cerr << "Database connection failed\n";

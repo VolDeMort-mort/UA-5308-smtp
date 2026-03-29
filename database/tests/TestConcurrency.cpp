@@ -9,9 +9,10 @@
 #include <thread>
 #include <vector>
 
-#include "../DataBaseManager.h"
-#include "../Repository/MessageRepository.h"
-#include "../Repository/UserRepository.h"
+#include "DataBaseManager.h"
+#include "Repository/MessageRepository.h"
+#include "Repository/UserRepository.h"
+#include "schema.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -63,9 +64,8 @@ protected:
 
     void SetUp() override {
         m_path = uniqueDbPath();
-        auto scheme_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "scheme" / "001_init_scheme.sql").string();
         // Give the pool enough read connections to cover concurrent readers
-        m_mgr = std::make_unique<DataBaseManager>(m_path, scheme_path, nullptr, /*read_pool_size=*/8);
+        m_mgr = std::make_unique<DataBaseManager>(m_path, initSchema(), nullptr, /*read_pool_size=*/8);
         ASSERT_TRUE(m_mgr->isConnected()) << "DB failed to open: " << m_path;
     }
 

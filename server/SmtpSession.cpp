@@ -4,7 +4,7 @@
 #include "SmtpResponse.hpp"
 #include "MimeParser.h"
 #include "Email.h"
-#include "Recipient.h"
+#include "Entity/Recipient.h"
 #include <chrono>
 #include <ctime>
 #include <sstream>

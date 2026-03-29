@@ -5,10 +5,10 @@
 #include <exception>
 
 #include "Logger.h"
-#include "../../common/utils/StringUtils.h" 
-#include "../include/MimeParser.h"
-#include "../include/MimeDecoder.h"
-#include "../../base64/include/Base64Decoder.hpp"
+#include "StringUtils.h"
+#include "MimeParser.h"
+#include "MimeDecoder.h"
+#include "Base64Decoder.hpp"
 namespace SmtpClient {
 
 namespace {

@@ -14,10 +14,7 @@
 #include "ImapCommandDispatcher.hpp"
 #include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
-
-#ifndef SCHEMA_PATH
-#define SCHEMA_PATH "../../database/scheme/001_init_scheme.sql"
-#endif
+#include "schema.h"
 
 class MockLogger : public ILogger
 {
@@ -34,7 +31,7 @@ protected:
 			FAIL() << "Failed to initialize libsodium";
 		}
 
-		db = std::make_unique<DataBaseManager>("/tmp/test_imap.db", SCHEMA_PATH);
+		db = std::make_unique<DataBaseManager>("/tmp/test_imap.db", initSchema());
 		userDal = std::make_unique<UserDAL>(db->getDB(), db->pool());
 		userRepo = std::make_unique<UserRepository>(*db);;
 		messRepo = std::make_unique<MessageRepository>(*db);

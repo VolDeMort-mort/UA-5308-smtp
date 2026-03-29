@@ -6,9 +6,10 @@
 #include <string>
 #include <vector>
 
-#include "../DataBaseManager.h"
-#include "../Repository/MessageRepository.h"
-#include "../Repository/UserRepository.h"
+#include "DataBaseManager.h"
+#include "Repository/MessageRepository.h"
+#include "Repository/UserRepository.h"
+#include "schema.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -46,8 +47,7 @@ protected:
 
     void SetUp() override {
         m_path      = uniqueDbPath();
-        auto scheme_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "scheme" / "001_init_scheme.sql").string();
-        m_mgr       = std::make_unique<DataBaseManager>(m_path, scheme_path);
+        m_mgr       = std::make_unique<DataBaseManager>(m_path, initSchema());
         ASSERT_TRUE(m_mgr->isConnected()) << "DB failed to open: " << m_path;
         m_user_repo = std::make_unique<UserRepository>(*m_mgr);
         m_msg_repo  = std::make_unique<MessageRepository>(*m_mgr);

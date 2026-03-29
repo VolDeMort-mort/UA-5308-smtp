@@ -5,16 +5,16 @@
 #include <string>
 #include <cstdint>
 
-#include "../Entity/Message.h"
-#include "../Entity/Folder.h"
-#include "../Entity/Recipient.h"
+#include "Entity/Message.h"
+#include "Entity/Folder.h"
+#include "Entity/Recipient.h"
 
-#include "../DAL/MessageDAL.h"
-#include "../DAL/FolderDAL.h"
-#include "../DAL/RecipientDAL.h"
+#include "DAL/MessageDAL.h"
+#include "DAL/FolderDAL.h"
+#include "DAL/RecipientDAL.h"
 
-#include "../Transaction.h"
-#include "../DataBaseManager.h"
+#include "Transaction.h"
+#include "DataBaseManager.h"
 
 class MessageRepository
 {

@@ -5,8 +5,9 @@
 #include <optional>
 #include <string>
 
-#include "../DataBaseManager.h"
-#include "../Repository/UserRepository.h"
+#include "DataBaseManager.h"
+#include "Repository/UserRepository.h"
+#include "schema.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -40,8 +41,7 @@ protected:
 
     void SetUp() override {
         m_path = uniqueDbPath();
-        auto scheme_path = (std::filesystem::path(__FILE__).parent_path().parent_path() / "scheme" / "001_init_scheme.sql").string();
-        m_mgr  = std::make_unique<DataBaseManager>(m_path, scheme_path);
+        m_mgr  = std::make_unique<DataBaseManager>(m_path, initSchema());
         ASSERT_TRUE(m_mgr->isConnected()) << "Failed to open database at " << m_path;
         m_repo = std::make_unique<UserRepository>(*m_mgr);
     }
