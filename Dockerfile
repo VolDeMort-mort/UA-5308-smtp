@@ -25,5 +25,6 @@ RUN microdnf install -y sqlite-libs && microdnf clean all
 COPY --from=builder /build/*.rpm /tmp/
 RUN rpm -ivh /tmp/*.rpm && rm -f /tmp/*.rpm
 
-COPY default_config.json /etc/smtp/default_config.json
-COPY imap-server/imap.config /etc/smtp/imap.config
+RUN mkdir -p /srv/smtp/data /srv/smtp/imap-server
+COPY default_config.json /srv/smtp/default_config.json
+COPY imap-server/imap.config /srv/smtp/imap-server/imap.config
