@@ -39,6 +39,7 @@ public:
 	virtual std::string get_name() const = 0;
 	virtual std::string get_last_error() const { return m_last_error; }
 	LogLevel get_current_level() const { return m_default_log_level; }
+	void set_log_level(LogLevel lvl) { m_default_log_level = lvl; };
 
 protected:
 	LogLevel m_default_log_level;

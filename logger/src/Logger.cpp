@@ -135,19 +135,31 @@ void Logger::Log(LogLevel lvl, const std::string& msg)
 		m_cv.notify_one();
 }
 
+void Logger::WaitFlush()
+{
+	std::unique_lock<std::mutex> lock(m_queue_mtx);
+	m_flush = true;
+	m_cv.notify_all(); // notify thread for flush
+
+	// wait empty queue and flag or shutdown to avoid crash
+	m_cv.wait(lock, [this] { return (m_queue.empty() && m_is_flushed) || !m_running_flag.load(); });
+	m_flush = false;
+	m_is_flushed = false;
+	m_cv.notify_all(); // notify thread for !flush
+}
+
+void Logger::set_level(LogLevel level)
+{
+	std::lock_guard<std::mutex> lock(m_strategy_mtx);
+	if (!m_strategy) return;
+	m_strategy->set_log_level(level);
+	ReportSystemInfo("Logger level switched to " + std::to_string(level));
+}
+
 std::vector<std::string> Logger::Read(size_t limit)
 {
-	{
-		std::unique_lock<std::mutex> lock(m_queue_mtx);
-		m_flush = true;
-		m_cv.notify_all(); // notify thread for flush
+	WaitFlush();
 
-		// wait empty queue and flag or shutdown to avoid crash
-		m_cv.wait(lock, [this] { return (m_queue.empty() && m_is_flushed) || !m_running_flag.load(); });
-		m_flush = false;
-		m_is_flushed = false;
-		m_cv.notify_all(); // notify thread for !flush
-	}
 	std::shared_ptr<ILoggerStrategy> local_strategy;
 	{
 		std::lock_guard<std::mutex> strategy_lock(m_strategy_mtx);
@@ -163,6 +175,8 @@ std::vector<std::string> Logger::Read(size_t limit)
 
 std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)
 {
+	WaitFlush();
+
 	std::shared_ptr<ILoggerStrategy> local_strategy;
 	{
 		std::lock_guard<std::mutex> strategy_lock(m_strategy_mtx);
@@ -178,12 +192,13 @@ std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)
 }
 void Logger::ReportSystemInfo(const std::string& msg)
 {
-	std::cout << ISXLoggerConfig::Color::Info << "[LOGGER INFO] " << msg << ISXLoggerConfig::Color::Reset << std::endl;
+	std::cout << ISXLoggerConfig::Color::Info << "[LOGGER INFO] "
+		<< msg << ISXLoggerConfig::Color::Reset << std::endl;
 }
 void Logger::ReportError(const std::string& msg)
 {
-	std::cerr << ISXLoggerConfig::Color::Error << "[LOGGER ERROR] " << msg << ISXLoggerConfig::Color::Reset
-			  << std::endl;
+	std::cerr << ISXLoggerConfig::Color::Error << "[LOGGER ERROR] "
+		<< msg << ISXLoggerConfig::Color::Reset << std::endl;
 }
 Logger::~Logger()
 {

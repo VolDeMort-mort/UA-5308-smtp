@@ -35,15 +35,17 @@ public:
 	~Logger();
 
 	/**
-	 * @brief Set new strategy in runtime
-	 * @param strategy New strategy for logging. Logs are saving with switching
+	 * @brief From ILogger::set_strategy
 	 */
-	void set_strategy(std::shared_ptr<ILoggerStrategy> strategy);
+	void set_strategy(std::shared_ptr<ILoggerStrategy> strategy) override;
 
 	/**
-	 * @brief Add raw message into queue
-	 * @param level Level of the logs(PROD, DEBUG, TRACE)
-	 * @param message Raw text of the log
+	 * @brief From ILogger::set_level
+	 */
+	void set_level(LogLevel level) override;
+
+	/**
+	 * @brief From ILogger::Log
 	 */
 	void Log(LogLevel level, const std::string& message) override;
 
@@ -57,7 +59,7 @@ public:
 
 	/**
 	 * @brief Search for logs from file
-	 * @details Force flushing to the storage before reading
+	 * @details Force flushing to the storage before searching
 	 * @param lvl Log level to filter by
 	 * @param limit Maximum number of logs
 	 * @param read_n Number of logs to scan from the end of the storage
@@ -83,6 +85,13 @@ private:
 	 * before writing, formatting the raw message from queue
 	 */
 	void WorkQueue();
+
+	/**
+	 * @brief Flushing logs
+	 * @details Read & Search methods waiting for notify from WorkQueue
+	 * to read or search actual logs
+	 */
+	void WaitFlush();
 
 	/**
 	 * @brief Report logger info

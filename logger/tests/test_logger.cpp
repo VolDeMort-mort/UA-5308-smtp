@@ -169,6 +169,31 @@ TEST_F(LoggerClass, EmptyFileTest)
 	auto search = logger->Search(PROD,10,1000);
 	EXPECT_EQ(search.size(), 0);
 }
+TEST_F(LoggerClass, SearchTest)
+{
+	logger->set_level(TRACE);
+	logger->Log(PROD, "First Log");
+	logger->Log(TRACE, "LOG MESSAGE");
+	logger->Log(DEBUG, "SEARCH");
+	logger->Log(TRACE, "Log");
+	logger->Log(TRACE, "Hello 123");
+	logger->Log(PROD, "Server");
+	logger->Log(TRACE, "LAST Log");
+	logger->Log(PROD, "Example");
+
+	auto search_logs = logger->Search(PROD, 2, 8);
+	EXPECT_TRUE(search_logs[0].find("First Log") != std::string::npos);
+	EXPECT_TRUE(search_logs[1].find("Server") != std::string::npos);
+
+	auto search_debug_logs = logger->Search(DEBUG, 2, 8);
+	EXPECT_TRUE(search_debug_logs[0].find("SEARCH") != std::string::npos);
+	EXPECT_TRUE(search_debug_logs.size() == 1);
+
+	auto search_trace__logs = logger->Search(TRACE, 3, 8);
+	EXPECT_TRUE(search_trace__logs[0].find("LOG MESSAGE") != std::string::npos);
+	EXPECT_TRUE(search_trace__logs[1].find("Log") != std::string::npos);
+	EXPECT_TRUE(search_trace__logs[2].find("Hello 123") != std::string::npos);
+}
 TEST_F(LoggerClass, SetStrategyTest)
 {
 	for (int i = 0; i < 100; ++i)
