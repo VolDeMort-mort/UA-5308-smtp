@@ -1,0 +1,9 @@
+build/
+.git/
+.cache/
+.vs/
+.vscode/
+.qtcreator/
+data/
+cmake-build-debug/
+cmake-build-release/

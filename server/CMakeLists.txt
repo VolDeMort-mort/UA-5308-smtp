@@ -1,7 +1,6 @@
 add_subdirectory(threadpool)
 
 add_executable(smtp_server server_main.cpp SmtpParser.cpp SmtpSession.cpp)
-
 target_link_libraries(
     smtp_server
     PRIVATE
@@ -13,3 +12,5 @@ target_link_libraries(
         mime_lib
         base64_lib
 )
+
+install(TARGETS smtp_server COMPONENT smtp RUNTIME DESTINATION bin)

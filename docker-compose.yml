@@ -1,0 +1,20 @@
+services:
+  smtp:
+    build: .
+    working_dir: /srv/smtp/data
+    command: ["/usr/bin/smtp_server"]
+    ports:
+      - "25000:25000"
+    volumes:
+      - maildata:/srv/smtp/data
+
+  imap:
+    build: .
+    command: ["/usr/bin/imap_server", "/srv/smtp/"]
+    ports:
+      - "2553:2553"
+    volumes:
+      - maildata:/srv/smtp/data
+
+volumes:
+  maildata:
