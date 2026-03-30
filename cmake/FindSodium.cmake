@@ -1,5 +1,5 @@
 find_path(Sodium_INCLUDE_DIR sodium.h)
-find_library(Sodium_LIBRARY NAMES sodium libsodium)
+find_library(Sodium_LIBRARY NAMES libsodium.a sodium libsodium)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(

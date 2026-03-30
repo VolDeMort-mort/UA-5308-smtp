@@ -1,19 +1,18 @@
 cmake_minimum_required(VERSION 3.24)
-project(smtp LANGUAGES C CXX)
+project(smtp VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-find_package(Boost REQUIRED)
-find_package(Threads REQUIRED)
-find_package(Sodium REQUIRED)
 
 option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_IMAP "Build the IMAP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
 option(BUILD_DATABASE "Build the Database" ON)
 option(SMTP_TESTING "Build all tests" OFF)
+find_package(Boost REQUIRED)
+find_package(Threads REQUIRED)
+find_package(Sodium REQUIRED)
 
 if(SMTP_TESTING)
     enable_testing()
@@ -47,3 +46,8 @@ endif()
 if(BUILD_MUA)
     add_subdirectory(mua)
 endif()
+
+set(CPACK_GENERATOR "RPM")
+set(CPACK_COMPONENTS_ALL smtp imap)
+set(CPACK_RPM_COMPONENT_INSTALL ON)
+include(CPack)

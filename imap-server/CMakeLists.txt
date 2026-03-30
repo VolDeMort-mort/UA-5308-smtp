@@ -27,6 +27,8 @@ target_link_libraries(
 add_executable(imap_server src/ImapMain.cpp)
 target_link_libraries(imap_server PRIVATE imap_lib)
 
+install(TARGETS imap_server COMPONENT imap RUNTIME DESTINATION bin)
+
 option(SMTP_TEST_IMAP "Build imap tests" ${SMTP_TESTING})
 if(SMTP_TEST_IMAP)
     add_subdirectory(tests)
