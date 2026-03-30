@@ -1,6 +1,6 @@
 services:
   smtp:
-    image: smtp-suite
+    build: .
     working_dir: /srv/smtp/data
     command: ["/usr/bin/smtp_server"]
     ports:
@@ -9,7 +9,7 @@ services:
       - maildata:/srv/smtp/data
 
   imap:
-    image: smtp-suite
+    build: .
     command: ["/usr/bin/imap_server", "/srv/smtp/"]
     ports:
       - "2553:2553"
