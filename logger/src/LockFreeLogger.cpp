@@ -18,6 +18,12 @@ void LockFreeLogger::set_strategy(std::shared_ptr<ILoggerStrategy> strategy)
 	if (!strategy) return;
 	std::atomic_store_explicit(&m_strategy,strategy, std::memory_order_release);
 }
+void LockFreeLogger::set_level(LogLevel level)
+{
+	auto local_strategy = std::atomic_load(&m_strategy);
+	if (!local_strategy) return;
+	local_strategy->set_log_level(level);
+}
 void LockFreeLogger::WorkQueue()
 {
 	std::queue<std::pair<LogLevel, std::string>> local_queue;
