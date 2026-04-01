@@ -31,7 +31,7 @@ bool ServerSecureChannel::StartTLS()
 		return false;
 	}
 
-	m_logger->Log(LogLevel::DEBUG, "STARTTLS: handshake started (SERVER)");
+	if (m_logger) m_logger->Log(LogLevel::DEBUG, "STARTTLS: handshake started (SERVER)");
 	unsigned char clientPublicKey[crypto_kx_PUBLICKEYBYTES];
 
 	if (!m_conn.ReceiveRaw(clientPublicKey, sizeof(clientPublicKey)))
@@ -40,7 +40,7 @@ bool ServerSecureChannel::StartTLS()
 		return false;
 	}
 
-	m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: received peer public key(SERVER)");
+	if (m_logger) m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: received peer public key(SERVER)");
 	
 	unsigned char publicKey[crypto_kx_PUBLICKEYBYTES];
 	unsigned char privateKey[crypto_kx_SECRETKEYBYTES];
@@ -52,7 +52,7 @@ bool ServerSecureChannel::StartTLS()
 		return false;
 	}
 	
-	m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: sending public key(SERVER)");
+	if (m_logger) m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: sending public key(SERVER)");
 
 	if (!m_conn.SendRaw(publicKey, sizeof(publicKey)))
 	{
@@ -62,6 +62,6 @@ bool ServerSecureChannel::StartTLS()
 	}
 
 	sodium_memzero(privateKey, sizeof(privateKey));
-	if (m_logger) m_logger->Log(LogLevel::DEBUG, "STARTTLS: TLS handshake succeeded. (SERVER)");
+	if (m_logger) m_logger->Log(LogLevel::PROD, "STARTTLS: TLS handshake succeeded. (SERVER)");
 	return enableSecure();
 }

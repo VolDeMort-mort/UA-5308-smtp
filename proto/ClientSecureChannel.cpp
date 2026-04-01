@@ -31,12 +31,12 @@ bool ClientSecureChannel::StartTLS()
 		return false;
 	}
 
-	m_logger->Log(LogLevel::DEBUG, "STARTTLS: handshake started (CLIENT)");
+	if (m_logger) m_logger->Log(LogLevel::DEBUG, "STARTTLS: handshake started (CLIENT)");
 	unsigned char publicKey[crypto_kx_PUBLICKEYBYTES];
 	unsigned char privateKey[crypto_kx_SECRETKEYBYTES];
 	crypto_kx_keypair(publicKey, privateKey);
 
-	m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: sending public key (CLIENT)");
+	if (m_logger) m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: sending public key (CLIENT)");
 
 	if (!m_conn.SendRaw(publicKey, sizeof(publicKey)))
 	{
@@ -53,7 +53,7 @@ bool ClientSecureChannel::StartTLS()
 		return false;
 	}
 
-	m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: received peer public key(CLIENT)");
+	if (m_logger) m_logger->Log(LogLevel::TRACE, "KEY_EXCHANGE: received peer public key(CLIENT)");
 
 	if (!DeriveKeys(serverPublicKey, publicKey, privateKey))
 	{
