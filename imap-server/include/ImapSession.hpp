@@ -16,7 +16,7 @@
 #include "ImapCommandDispatcher.hpp"
 #include "ImapConfig.hpp"
 #include "ImapSessionTypes.hpp"
-#include "Logger.h"
+#include "ILogger.h"
 #include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
 #include "ThreadPool.h"

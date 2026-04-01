@@ -1,7 +1,7 @@
 #pragma once
 
 #include "SocketConnection.hpp"
-#include "Logger.h"
+#include "ILogger.h"
 
 #include <sodium.h>
 #include <cstdint>
@@ -22,11 +22,11 @@ public:
 	virtual bool StartTLS() = 0;
 	
 	bool isSecure() const;
-	void setLogger(Logger* logger);
+	void setLogger(ILogger* logger);
 
 protected:
 	SocketConnection& m_conn;
-	Logger* m_logger = nullptr;
+	ILogger* m_logger = nullptr;
 
 	bool m_secure = false;
 	bool enableSecure();

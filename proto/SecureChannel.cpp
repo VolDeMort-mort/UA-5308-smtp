@@ -5,7 +5,7 @@ bool SecureChannel:: isSecure() const
 	return m_secure;
 }
 
-void SecureChannel::setLogger(Logger* logger)
+void SecureChannel::setLogger(ILogger* logger)
 {
 	m_logger = logger;
 }

@@ -9,7 +9,7 @@
 #include <atomic>
 #include <stdexcept>
 #include <type_traits>
-#include "Logger.h"
+#include "ILogger.h"
 
 enum class Priority { Low = 0, Normal = 1, High = 2 };
 
@@ -66,7 +66,7 @@ class ThreadPool {
 
     std::atomic<int> m_total_tasks{0};
 
-    Logger* m_logger = nullptr;
+    ILogger* m_logger = nullptr;
 
     bool is_working_unsafe() const;
     void routine(int worker_id);
@@ -75,7 +75,7 @@ class ThreadPool {
 public:
     ~ThreadPool() { terminate(); }
     bool is_working();
-    void set_logger(Logger* logger);
+    void set_logger(ILogger* logger);
     void initialize(int workerNumber);
     
     template<typename F, typename... Args>

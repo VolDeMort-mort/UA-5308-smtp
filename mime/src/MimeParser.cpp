@@ -4,7 +4,7 @@
 #include <vector>
 #include <exception>
 
-#include "Logger.h"
+#include "ILogger.h"
 #include "StringUtils.h"
 #include "MimeParser.h"
 #include "MimeDecoder.h"
