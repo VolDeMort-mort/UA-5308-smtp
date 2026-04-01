@@ -1,14 +1,5 @@
-find_package(GTest REQUIRED)
-include(GoogleTest)
-include(CTest)
-
-configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../database/scheme/001_init_scheme.sql
-    ${CMAKE_BINARY_DIR}/scheme/001_init_scheme.sql
-    COPYONLY
-)
-
-add_executable(imap_tests
+add_executable(
+    test_imap
     TestMain.cpp
     ImapCommandTest.cpp
     ImapParserTest.cpp
@@ -24,11 +15,5 @@ add_executable(imap_tests
     ../src/ImapSession.cpp
 )
 
-target_link_libraries(imap_tests PRIVATE smtp_proto Threads::Threads GTest::gtest GTest::gtest_main GTest::gmock logger_lib db_lib threadpool_lib mime_lib)
-target_include_directories(imap_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include ${mini_SOURCE_DIR}/src)
-
-target_compile_definitions(imap_tests PRIVATE
-    SCHEMA_PATH="${CMAKE_BINARY_DIR}/scheme/001_init_scheme.sql"
-)
-
-gtest_discover_tests(imap_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+target_link_libraries(test_imap PRIVATE imap_lib GTest::gtest_main GTest::gmock)
+gtest_discover_tests(test_imap)

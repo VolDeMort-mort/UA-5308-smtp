@@ -1,12 +1,14 @@
 #include <boost/asio.hpp>
 #include <exception>
 #include <mini/ini.h>
+#include <sodium.h>
 
 #include "FileStrategy.h"
 #include "ImapConfig.hpp"
 #include "ImapServer.hpp"
 #include "Logger.h"
-#include "UserRepository.h"
+#include "Repository/UserRepository.h"
+#include "schema.h"
 
 // use with relative path to root folder from directory you are launching from
 int main(int argc, char** argv)
@@ -46,8 +48,14 @@ int main(int argc, char** argv)
 
 	try
 	{
+	if (sodium_init() < 0) 
+	{
+		logger.Log(DEBUG, "Sodium failed to init in Imap main");
+		return 1;
+	}
+
 		boost::asio::io_context io;
-		DataBaseManager db(path_to_root + "./data/mail.db", path_to_root + "./database/scheme/001_init_scheme.sql",
+		DataBaseManager db(path_to_root + "./data/mail.db", initSchema(),
 						   std::shared_ptr<ILogger>(&logger, [](ILogger*) {}));
 		ThreadPool pool;
 		pool.initialize(config.WORKER_THREADS);

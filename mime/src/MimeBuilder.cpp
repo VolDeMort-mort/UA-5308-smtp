@@ -6,10 +6,10 @@
 #include <sstream>
 
 #include "Config.h"
-#include "../include/MimeBuilder.h"
-#include "../include/MimeEncoder.h"
-#include  "../../common/utils/TimeUtils.h"
-#include  "../../common/utils/StringUtils.h"
+#include "MimeBuilder.h"
+#include "MimeEncoder.h"
+#include "TimeUtils.h"
+#include "StringUtils.h"
 namespace SmtpClient {
 
 namespace {

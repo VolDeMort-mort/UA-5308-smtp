@@ -1,10 +1,12 @@
 #include <boost/asio.hpp>
 #include <iostream>
 #include <memory>
+#include <sodium.h>
 
 #include "FileStrategy.h"
 #include "Logger.h"
 #include "DataBaseManager.h"
+#include "schema.h"
 #include "ThreadPool.h"
 #include "ServerSecureChannel.hpp"
 #include "SmtpSession.hpp"
@@ -13,19 +15,24 @@
 
 int main()
 {
+	if (sodium_init() < 0) {
+		std::cerr << "Failed to initialize libsodium\n";
+		return 1;
+	}
+
 	constexpr uint16_t PORT = 25000;
 	const std::string SERVER_DOMAIN = "localhost";
 
 	try
 	{
-		DataBaseManager db("mail.db", "../scheme/001_init_scheme.sql");
+		DataBaseManager db("mail.db", initSchema());
 		if (!db.isConnected())
 		{
 			std::cerr << "Database connection failed\n";
 			return 1;
 		}
-		UserDAL user_dal(db.getDB());
-		UserRepository user_repo(db.getDB(), user_dal);
+		UserDAL user_dal(db.getDB(), db.pool());
+		UserRepository user_repo(db);
 		MessageRepository message_repo(db);
 
 		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));

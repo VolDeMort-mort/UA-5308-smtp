@@ -1,11 +1,16 @@
-find_package(Threads REQUIRED)
-
 add_subdirectory(threadpool)
 
-add_executable(smtp_server
-    server_main.cpp
-    SmtpParser.cpp
-    SmtpSession.cpp
+add_executable(smtp_server server_main.cpp SmtpParser.cpp SmtpSession.cpp)
+target_link_libraries(
+    smtp_server
+    PRIVATE
+        smtp_proto
+        db_lib
+        threadpool_lib
+        Threads::Threads
+        logger_lib
+        mime_lib
+        base64_lib
 )
 
-target_link_libraries(smtp_server PRIVATE smtp_proto db_lib threadpool_lib Threads::Threads logger_lib mime_lib base64_lib)
+install(TARGETS smtp_server COMPONENT smtp RUNTIME DESTINATION bin)

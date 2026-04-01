@@ -1,9 +1,9 @@
 #include <vector>
 
 #include "Config.h"
-#include "../include/MimeEncoder.h"
-#include "../../base64/include/Base64Encoder.hpp"
-#include "../../common/utils/StringUtils.h"
+#include "MimeEncoder.h"
+#include "Base64Encoder.hpp"
+#include "StringUtils.h"
 
 namespace SmtpClient {
 

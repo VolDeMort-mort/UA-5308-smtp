@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "SmtpCommand.hpp"
-#include "MessageRepository.h"
-#include "UserRepository.h"
+#include "Repository/MessageRepository.h"
+#include "Repository/UserRepository.h"
 #include "Logger.h"
 #include "Base64Decoder.hpp"
 #include "Base64Encoder.hpp"

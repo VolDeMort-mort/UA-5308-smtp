@@ -1,35 +1,26 @@
 cmake_minimum_required(VERSION 3.24)
-project(smtp LANGUAGES CXX)
+project(smtp VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-# UTF-8 support on MSVC
-if(MSVC)
-    add_compile_options(/utf-8)
+option(BUILD_SERVER "Build the SMTP server" ON)
+option(BUILD_IMAP "Build the IMAP server" ON)
+option(BUILD_MUA "Build the Mail User Agent" ON)
+option(BUILD_DATABASE "Build the Database" ON)
+option(SMTP_TESTING "Build all tests" OFF)
+find_package(Boost REQUIRED)
+find_package(Threads REQUIRED)
+find_package(Sodium REQUIRED)
+
+if(SMTP_TESTING)
+    enable_testing()
+    find_package(GTest REQUIRED)
+    include(GoogleTest)
 endif()
 
-# --- GTest ---
-include(FetchContent)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    GTest
-    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    OVERRIDE_FIND_PACKAGE
-)
-FetchContent_MakeAvailable(GTest)
-
-find_package(Boost REQUIRED)
-
-enable_testing()
-
-option(BUILD_SERVER   "Build the SMTP server"     ON)
-option(BUILD_IMAP     "Build the IMAP server"     ON)
-option(BUILD_MUA      "Build the Mail User Agent"  ON)
-option(BUILD_DATABASE "Build the Database"         ON)
-
+add_subdirectory(third_party)
 add_subdirectory(config)
 add_subdirectory(common)
 add_subdirectory(base64)
@@ -41,7 +32,7 @@ if(BUILD_SERVER OR BUILD_IMAP OR BUILD_MUA)
 endif()
 
 if(BUILD_SERVER)
-   add_subdirectory(server)
+    add_subdirectory(server)
 endif()
 
 if(BUILD_IMAP OR BUILD_DATABASE)
@@ -49,9 +40,14 @@ if(BUILD_IMAP OR BUILD_DATABASE)
 endif()
 
 if(BUILD_IMAP)
-   add_subdirectory(imap-server)
+    add_subdirectory(imap-server)
 endif()
 
 if(BUILD_MUA)
-   add_subdirectory(mua)
+    add_subdirectory(mua)
 endif()
+
+set(CPACK_GENERATOR "RPM")
+set(CPACK_COMPONENTS_ALL smtp imap)
+set(CPACK_RPM_COMPONENT_INSTALL ON)
+include(CPack)
