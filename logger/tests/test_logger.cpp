@@ -1,8 +1,11 @@
 #include <memory>
 #include <filesystem>
+#include <chrono>
+#include <iostream>
 
 #include <gtest/gtest.h>
 
+#include "ILogger.h"
 #include "Logger.h"
 #include "FileStrategy.h"
 #include "ConsoleStrategy.h"
@@ -243,4 +246,68 @@ TEST(LoggerPath, FileNotValid)
 
 	auto console_logs = logger.Read(1);
 	EXPECT_EQ(console_logs.size(), 0);
+}
+
+TEST(Logger, MaxThreadSpeedTest)
+{
+	int thread_count = std::thread::hardware_concurrency();
+	auto start = std::chrono::high_resolution_clock::now();
+	auto file_strategy = std::make_shared<FileStrategy>(PROD);
+	std::unique_ptr<ILogger> loggerTest = std::make_unique<Logger>(file_strategy);
+
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < thread_count; ++i)
+	{
+		threads.emplace_back(std::thread([&loggerTest](){
+				int j = 0;
+				std::string msg = "SpeedTest Log Message";
+				while (j < 100000)
+				{
+					loggerTest->Log(PROD, msg);
+					++j;
+				}
+			}));
+	}
+	for (auto& t : threads)
+	{
+		if (t.joinable())
+			t.join();
+	}
+	loggerTest.reset();
+	auto end = std::chrono::high_resolution_clock::now();
+	auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	std::cout << "\nThreads counts: " << thread_count << "\n";
+	std::cout << "Logger result: " << time << "ms\n\n";
+}
+
+TEST(Logger, TenThreadsSpeedTest)
+{
+	int thread_count = 10;
+	auto start = std::chrono::high_resolution_clock::now();
+	auto file_strategy = std::make_shared<FileStrategy>(PROD);
+	std::unique_ptr<ILogger> loggerTest = std::make_unique<Logger>(file_strategy);
+
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < thread_count; ++i)
+	{
+		threads.emplace_back(std::thread([&loggerTest](){
+				int j = 0;
+				std::string msg = "SpeedTest Log Message";
+				while (j < 100000)
+				{
+					loggerTest->Log(PROD, msg);
+					++j;
+				}
+			}));
+	}
+	for (auto& t : threads)
+	{
+		if (t.joinable())
+			t.join();
+	}
+	loggerTest.reset();
+	auto end = std::chrono::high_resolution_clock::now();
+	auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	std::cout << "\nThreads counts: " << thread_count << "\n";
+	std::cout << "Logger result: " << time << "ms\n\n";
 }
