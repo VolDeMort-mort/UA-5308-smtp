@@ -10,11 +10,20 @@ services:
 
   imap:
     build: .
+    working_dir: /srv/smtp/data
     command: ["/usr/bin/imap_server", "/srv/smtp/"]
     ports:
       - "2553:2553"
     volumes:
       - maildata:/srv/smtp/data
+
+  seed-users:
+    build: .
+    command: ["/usr/bin/mua_seed_users", "/srv/smtp/"]
+    volumes:
+      - maildata:/srv/smtp/data
+    restart: "no"
+    profiles: ["tools"]
 
 volumes:
   maildata:
