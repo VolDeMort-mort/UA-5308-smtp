@@ -25,7 +25,7 @@ target_link_libraries(
 )
 
 add_executable(imap_server src/ImapMain.cpp)
-target_link_libraries(imap_server PRIVATE imap_lib)
+target_link_libraries(imap_server PRIVATE imap_lib ws2_32 mswsock)
 
 install(TARGETS imap_server COMPONENT imap RUNTIME DESTINATION bin)
 

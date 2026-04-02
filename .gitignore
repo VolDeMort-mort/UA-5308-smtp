@@ -1,24 +1,10 @@
-.vs/
-out/
+# database files
+*.db
+*.db-shm
+*.db-wal
+
+# logs
+log.txt
+
+# build
 build/
-*.user
-*.suo
-*.opensdf
-*.sdf
-*.cache
-*.vsidx
-
-.qtcreator/
-*.pro.user
-
-CMakeUserPresets.json
-CMakeSettings.json
-cmake-build-debug/
-cmake-build-release/
-.cache/
-.vscode/
-data/*
-!data/README.md
-!data/mailboxes/
-data/mailboxes/*
-!data/mailboxes/README.md
