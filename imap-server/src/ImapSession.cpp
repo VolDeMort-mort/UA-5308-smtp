@@ -9,7 +9,7 @@ ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, D
 						 ThreadPool& pool, ImapConfig& config)
 	: m_config(config), m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db),
 	  m_conn(m_socket), m_secure_channel(std::make_unique<ServerSecureChannel>(m_conn)), 
-	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(socket.get_executor())
+	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(m_socket.get_executor())
 {
 	m_logger.Log(PROD, "New ImapSession created");
 	m_logger.Log(TRACE, "ImapSession::ImapSession - socket accepted");
@@ -50,13 +50,13 @@ void ImapSession::ReadCommand()
 									   {
 										   return;
 									   }
+									   m_closing = true;
 									   WriteResponse(ImapResponse::Untagged("BYE Autologout; idle for too long"));
 									   m_logger.Log(DEBUG, "Closing socket due to timeout");
-									   m_socket.close();
 								   }));
+
 	if (m_secure_channel->isSecure())
 	{
-		auto self = shared_from_this();
 		m_thread_pool.add_task(
 			[this, self]()
 			{
@@ -232,6 +232,12 @@ void ImapSession::Write()
 		{
 			m_is_writing = false;
 
+			if (m_closing) 
+			{
+				m_socket.close();
+				return;
+			}
+
 			if (m_is_starttls_pending)
 			{
 				m_is_starttls_pending = false;
@@ -266,6 +272,13 @@ void ImapSession::Write()
 									  else
 									  {
 										  m_is_writing = false;
+
+										  if (m_closing)
+										  {
+											  m_socket.close();
+											  return;
+										  }
+
 										  if (m_is_starttls_pending)
 										  {
 											  m_is_starttls_pending = false;

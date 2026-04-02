@@ -50,6 +50,7 @@ private:
 
 	std::queue<std::string> m_write_queue;
 	bool m_is_writing = false;
+	bool m_closing = false;
 
 	ILogger& m_logger;
 	ThreadPool& m_thread_pool;

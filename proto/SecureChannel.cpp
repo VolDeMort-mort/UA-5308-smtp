@@ -51,7 +51,7 @@ std::string SecureChannel::Decrypt(const std::string& raw_data)
 		return {};
 	}
 
-	unsigned char nonce[nonce_size] = {};
+	unsigned char nonce[crypto_aead_chacha20poly1305_ietf_NPUBBYTES] = {};
 	std::memcpy(nonce, raw_data.data(), nonce_size);
 
 	const unsigned char* encrypted_text = reinterpret_cast<const unsigned char*>(raw_data.data() + nonce_size);
@@ -105,6 +105,12 @@ bool SecureChannel::Send(const std::string& data)
 	if (m_logger) m_logger->Log(LogLevel::TRACE, "ENCRYPT: encrypting message");
 	std::string encrypted_text = Encrypt(data);
 
+	if (encrypted_text.empty())
+	{
+		if (m_logger) m_logger->Log(LogLevel::TRACE, "ENCRYPT: failed");
+		return false;
+	}
+
 	std::uint32_t text_len = static_cast<std::uint32_t>(encrypted_text.size());
 	std::uint32_t net_len = htonl(text_len);
 
@@ -141,7 +147,7 @@ bool SecureChannel::Receive(std::string& data)
 
 	text_len = ntohl(text_len);
 
-	if (text_len > MAX_MESSAGE_SIZE)
+	if (text_len == 0 || text_len > MAX_MESSAGE_SIZE)
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "SECURECHANNEL_RECEIVE: message too large (" + std::to_string(text_len) + " bytes)");
 		return false;
@@ -155,6 +161,14 @@ bool SecureChannel::Receive(std::string& data)
 	}
 
 	data = Decrypt(encrypted_text);
+
+	if (data.empty() &&
+		encrypted_text.size() > (crypto_aead_chacha20poly1305_ietf_NPUBBYTES + crypto_aead_chacha20poly1305_ietf_ABYTES))
+	{
+		if (m_logger) m_logger->Log(LogLevel::TRACE, "DECRYPT: failed");
+		return false;
+	}
+
 	if (m_logger) m_logger->Log(LogLevel::TRACE, "DECRYPT: message decrypted successfully");
 
 	if (!data.empty() && data.back() == '\n') data.pop_back();
