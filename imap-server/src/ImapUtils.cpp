@@ -68,6 +68,7 @@ ImapCommandType StringToCommandType(const std::string& cmd)
 		{"UNSUBSCRIBE", ImapCommandType::Unsubscribe},
 		{"CLOSE", ImapCommandType::Close},
 		{"CHECK", ImapCommandType::Check},
+		{"STARTTLS", ImapCommandType::StartTLS}
 	};
 
 	auto it = commandMap.find(IMAP_UTILS::ToUpper(cmd));
@@ -103,6 +104,7 @@ std::string CommandTypeToString(const ImapCommandType& type)
 		{ImapCommandType::Unsubscribe, "UNSUBSCRIBE"},
 		{ImapCommandType::Close, "CLOSE"},
 		{ImapCommandType::Check, "CHECK"},
+		{ImapCommandType::StartTLS, "STARTTLS"}
 	};
 
 	auto it = commandMap.find(type);

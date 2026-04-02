@@ -12,6 +12,7 @@
 
 class SocketConnector;
 class SocketConnection;
+class ClientSecureChannel;
 
 class MailWorker
 {
@@ -73,6 +74,8 @@ private:
 	std::unique_ptr<SocketConnection> m_smtpConnection;
 
 	std::unique_ptr<SocketConnection> m_imapConnection;
+	std::unique_ptr<ClientSecureChannel> m_imapSecureConnection;
+
 	uint32_t m_tagCounter{0};         
 	std::string m_currentFolder;
 
