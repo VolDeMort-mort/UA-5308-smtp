@@ -13,7 +13,7 @@ target_include_directories(smtp_proto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
     smtp_proto
-    PUBLIC Boost::headers Sodium::Sodium logger_lib db_lib
+    PUBLIC Boost::headers Sodium::Sodium logger_lib db_lib ws2_32
 )
 
 option(SMTP_TEST_PROTO "Build proto encryption tests" ${SMTP_TESTING})

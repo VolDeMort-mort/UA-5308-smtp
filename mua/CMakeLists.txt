@@ -1,5 +1,6 @@
 find_package(Qt6 QUIET OPTIONAL_COMPONENTS Quick Qml)
 
+<<<<<<< HEAD
 set(MUA_CORE_SOURCES
     core/CommandQueue.cpp
     core/MailWorker.cpp
@@ -39,13 +40,20 @@ if (TARGET Qt6::Quick)
         main.cpp
         bridge/MuaBridge.cpp
     )
+
     set_property(TARGET smtp_mua PROPERTY AUTOMOC ON)
     set_property(TARGET smtp_mua PROPERTY AUTORCC ON)
 
-    qt_add_qml_module(smtp_mua URI SmtpMua VERSION 1.0 QML_FILES main.qml)
+    qt_add_qml_module(smtp_mua
+        URI SmtpMua
+        VERSION 1.0
+        QML_FILES main.qml
+    )
+
     target_link_libraries(smtp_mua PRIVATE Qt6::Quick mua_core)
 
     target_include_directories(smtp_mua PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/bridge
     )
 endif()
+>>>>>>> 5251307 (Add coverage tests and update CMake configuration)
