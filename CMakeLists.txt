@@ -34,7 +34,6 @@ option(BUILD_IMAP "Build the IMAP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
 option(BUILD_DATABASE "Build the Database" ON)
 
-# 🔥 ВАЖНО: включи тесты по умолчанию или через cmake -D
 option(SMTP_TESTING "Build all tests" ON)
 
 # DEPENDENCIES
@@ -76,7 +75,6 @@ if(BUILD_MUA)
     add_subdirectory(mua)
 endif()
 
-# 🔥 ВАЖНО: подключаем тесты
 if(SMTP_TESTING)
     add_subdirectory(tests)
 endif()

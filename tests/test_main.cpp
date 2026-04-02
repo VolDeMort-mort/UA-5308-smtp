@@ -1,6 +1,5 @@
 #include <cassert>
 
-// пример (подставь свой реальный код)
 int add(int a, int b) {
     return a + b;
 }
