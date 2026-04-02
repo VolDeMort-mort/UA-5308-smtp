@@ -19,6 +19,12 @@ bool ConsoleStrategy::Write(const std::string& message)
 
 	switch (m_current_level)
 	{
+	case INFO:
+		color = ISXLoggerConfig::Color::Info;
+		break;
+	case ERROR:
+		color = ISXLoggerConfig::Color::Error;
+		break;
 	case PROD:
 		color = ISXLoggerConfig::Color::Prod;
 		break;
@@ -58,6 +64,12 @@ std::string ConsoleStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 	case LogLevel::NONE:
 		levelStr = "NONE";
 		break;
+	case LogLevel::INFO:
+		levelStr = "INFO";
+		break;
+	case LogLevel::ERROR:
+		levelStr = "ERROR";
+		break;
 	case LogLevel::PROD:
 		levelStr = "PROD";
 		break;
@@ -74,7 +86,7 @@ std::string ConsoleStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 	char buffer[512];
 
 	int headerLen = std::snprintf(
-		buffer, sizeof(buffer), "[%04d-%02d-%02d %02d:%02d:%02d] [%s] ",
+		buffer, sizeof(buffer), "[%04d-%02d-%02d %02d:%02d:%02d] [%s] [tid:%lu] ",
 		tm.tm_year + 1900, // tm struc counts ammount of years passed since 1900(thats why we need +1900 to get 2026)
 		tm.tm_mon + 1,	   // months are indexes, here we convert for normal view
 		tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, levelStr, tid);

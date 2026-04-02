@@ -6,13 +6,11 @@
 #include "ConsoleStrategy.h"
 #include "LoggerConfig.h"
 
-Logger::Logger(std::shared_ptr<ILoggerStrategy> strategy)
+Logger::Logger(std::shared_ptr<ILoggerStrategy> strategy) :
+	m_running_flag(true), m_flush(false), m_is_flushed(false)
 {
 	ReportSystemInfo("Logger start working");
 	set_strategy(std::move(strategy));
-	m_running_flag = true;
-	m_flush = false;
-	m_is_flushed = false;
 	m_work_thread = std::thread(&Logger::WorkQueue, this);
 }
 
@@ -192,19 +190,17 @@ std::vector<std::string> Logger::Search(LogLevel lvl, size_t limit, int read_n)
 }
 void Logger::ReportSystemInfo(const std::string& msg)
 {
-	std::cout << ISXLoggerConfig::Color::Info << "[LOGGER INFO] "
-		<< msg << ISXLoggerConfig::Color::Reset << std::endl;
+	Log(INFO, msg);
 }
 void Logger::ReportError(const std::string& msg)
 {
-	std::cerr << ISXLoggerConfig::Color::Error << "[LOGGER ERROR] "
-		<< msg << ISXLoggerConfig::Color::Reset << std::endl;
+	Log(ERROR, msg);
 }
 Logger::~Logger()
 {
+	ReportSystemInfo("Logger finished working");
 	m_running_flag = false;
 	m_cv.notify_all();
 	if (m_work_thread.joinable())
 		m_work_thread.join();
-	ReportSystemInfo("Logger finished working");
 }

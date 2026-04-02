@@ -21,12 +21,12 @@ public:
 	 */
 	virtual void Log(LogLevel level, const std::string& message) = 0;
 
-	virtual void set_level(LogLevel level) = 0; // runtime level switching
-
 protected:
 	/**
 	 * @brief Set new strategy in runtime
 	 * @param strategy New strategy for logging. Logs are saving with switching
 	 */
 	virtual void set_strategy(std::shared_ptr<ILoggerStrategy> strategy) = 0;
+
+	virtual void set_level(LogLevel level) = 0; // runtime level switching
 };

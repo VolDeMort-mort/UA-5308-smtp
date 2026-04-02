@@ -55,13 +55,21 @@ void FileStrategy::Rotate()
 	if (m_file.is_open()) m_file.close();
 	if (std::filesystem::exists(m_old_path)) // when both files are filled,delete older one
 		std::filesystem::remove(m_old_path);
+	std::error_code ec;
+	bool renamed = false;
 
 	if (std::filesystem::exists(m_current_path)) // switching the files when one is filled
-		std::filesystem::rename(m_current_path, m_old_path);
+		std::filesystem::rename(m_current_path, m_old_path,ec);
+	if (!ec)
+		renamed = true;
+
+	 if (!renamed)
+		m_last_error = "Renamed failed";
+	else
+		m_current_file_size = 0;
 
 	if (!OpenFile())
 		m_last_error = "Can`t open log file: " + m_current_path;
-	m_current_file_size = 0;
 }
 bool FileStrategy::CanWrite(int message_size)
 {
@@ -104,6 +112,12 @@ std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 	{
 	case LogLevel::NONE:
 		levelStr = "NONE";
+		break;
+	case LogLevel::INFO:
+		levelStr = "INFO";
+		break;
+	case LogLevel::ERROR:
+		levelStr = "ERROR";
 		break;
 	case LogLevel::PROD:
 		levelStr = "PROD";
@@ -188,6 +202,12 @@ std::vector<std::string> FileStrategy::Search(LogLevel lvl, size_t limit, int re
 	{
 	case LogLevel::NONE:
 		levelStr = "[NONE]";
+		break;
+	case LogLevel::INFO:
+		levelStr = "[INFO]";
+		break;
+	case LogLevel::ERROR:
+		levelStr = "[ERROR]";
 		break;
 	case LogLevel::PROD:
 		levelStr = "[PROD]";

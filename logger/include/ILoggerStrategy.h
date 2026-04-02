@@ -8,6 +8,8 @@
 enum LogLevel
 {
 	NONE,
+	INFO,
+	ERROR,
 	PROD,
 	DEBUG,
 	TRACE
