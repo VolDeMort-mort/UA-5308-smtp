@@ -4,6 +4,7 @@ add_library(
     src/Logger.cpp
     src/FileStrategy.cpp
     src/ConsoleStrategy.cpp
+    src/LockFreeLogger.cpp
 )
 
 target_include_directories(
