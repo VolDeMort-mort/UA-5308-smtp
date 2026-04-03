@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import SmtpMua
+import "../Components"
 
 Popup {
     id: composePopup

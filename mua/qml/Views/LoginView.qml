@@ -10,6 +10,7 @@ Rectangle {
     anchors.fill: parent
     color: Theme.windowBg
 
+    // Temp
     signal loginRequest()
 
     property bool isConnecting: false
@@ -119,8 +120,6 @@ Rectangle {
 
                         //// For backend
                         // Bridge.connectToServer(
-                        //     smtpHost.text, parseInt(smtpPort.text),
-                        //     imapHost.text, parseInt(imapPort.text),
                         //     loginField.textValue,
                         //     passField.textValue
                         // )
