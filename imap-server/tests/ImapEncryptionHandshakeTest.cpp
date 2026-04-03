@@ -6,8 +6,8 @@
 
 #include "ClientSecureChannel.hpp"
 #include "ConsoleStrategy.h"
+#include "DAL/UserDAL.h"
 #include "DataBaseManager.h"
-#include "ImapConfig.hpp"
 #include "ImapServer.hpp"
 #include "Logger.h"
 #include "ServerSecureChannel.hpp"
@@ -15,7 +15,6 @@
 #include "SocketConnection.hpp"
 #include "SocketConnector.hpp"
 #include "ThreadPool.h"
-#include "UserDAL.h"
 
 struct ImapStartTlsFixture : public ::testing::Test
 {
@@ -33,15 +32,15 @@ struct ImapStartTlsFixture : public ::testing::Test
 
 	static void SetUpTestSuite()
 	{
-		config.PORT = 30002;
-		config.TIMEOUT_MINS = 5;
-		config.WORKER_THREADS = 2;
+		config.port = 30002;
+		config.timeout_mins = 5;
+		config.worker_threads = 2;
 
 		db = std::make_unique<DataBaseManager>(":memory:", "./database/scheme/001_init_scheme.sql",
 											   std::shared_ptr<ILogger>(&logger, [](ILogger*) {}));
 
 		pool = std::make_unique<ThreadPool>();
-		pool->initialize(config.WORKER_THREADS);
+		pool->initialize(config.worker_threads);
 		pool->set_logger(&logger);
 
 		imapServer = std::make_unique<ImapServer>(serverIo, logger, *db, *pool, config);
@@ -60,7 +59,7 @@ struct ImapStartTlsFixture : public ::testing::Test
 	{
 		SocketConnector connector;
 		connector.Initialize(clientIo);
-		connector.Connect("localhost", config.PORT, clientConn);
+		connector.Connect("localhost", config.port, clientConn);
 
 		std::string banner;
 		ASSERT_TRUE(clientConn->Receive(banner));

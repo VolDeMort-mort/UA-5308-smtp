@@ -21,6 +21,7 @@ struct ImapConfig
 	std::string migration_path = "../../database/scheme/001_init_scheme.sql";
 	int timeout_mins = 30;
 	int worker_threads = 4;
+	int handshake_timeout_secs = 10;
 };
 
 struct LoggingConfig
