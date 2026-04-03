@@ -7,7 +7,6 @@ find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
 
 qt_add_executable(smtp_mua main.cpp)
 
-
 set_source_files_properties(
     qml/Singleton/Icons.qml
     qml/Singleton/Theme.qml
@@ -45,6 +44,7 @@ qt_add_qml_module(smtp_mua
         qml/Views/LoginView.qml
 
         qml/main.qml
+        QML_FILES qml/Views/SignInView.qml
 )
 
 target_link_libraries(smtp_mua

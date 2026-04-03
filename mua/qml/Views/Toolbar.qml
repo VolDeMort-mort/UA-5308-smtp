@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import "../Components"
 import SmtpMua
@@ -31,7 +32,7 @@ Rectangle {
             onClicked: {
                 allSelected = !allSelected
                 for (var i = 0; i < mockEmailModel.count; ++i) {
-                    mockEmailModel.setProperty(i, "checked", allSelected)
+                    mockEmailModel.setProperty(i, "isChecked", allSelected)
                 }
             }
         }
@@ -40,6 +41,11 @@ Rectangle {
         ActionBtn {
             implicitWidth: 40
             iconRow.children: [ SvgIcon { pathData: Icons.refresh; color: Theme.textColor; size: 14 } ]
+            onClicked: {
+                if (typeof muaBridge !== "undefined") {
+                    muaBridge.fetchMails("INBOX", 0, 50)
+                }
+            }
         }
 
         // Spacer
@@ -48,7 +54,6 @@ Rectangle {
             color: Theme.textColor
             font.pixelSize: Theme.fontSizeMedium
             Layout.margins: 4
-
             opacity: w > 350 ? 1.0 : 0.0
             visible: opacity > 0.0
         }
@@ -63,10 +68,18 @@ Rectangle {
                 SvgIcon { pathData: Icons.moveTo; color: Theme.textColor; size: 14 },
                 Text { text: "Forward"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
+
+            onClicked: {
+                let selected = getSelectedMails()
+                if (selected.length > 0) {
+                    composePopup.openForward(selected[0])
+                }
+            }
         }
 
         // Move to btn
         ActionBtn {
+            id: moveToBtn
             implicitWidth: 105
             opacity: w > 450 ? 1.0 : 0.0
             visible: opacity > 0.0
@@ -75,6 +88,41 @@ Rectangle {
                 SvgIcon { pathData: Icons.folder; color: Theme.textColor; size: 14 },
                 Text { text: "Move to"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
+
+            onClicked: moveMenu.open()
+
+            Menu {
+                id: moveMenu
+                y: moveToBtn.height
+
+                background: Rectangle {
+                    color: Theme.panelColor
+                    radius: 8
+                    border.color: Theme.itemBorderColor
+                }
+
+                Instantiator {
+                    model: folModel
+                    MenuItem {
+                        text: model.name
+                        contentItem: Text {
+                            text: parent.text
+                            color: Theme.textColor
+                            font.pixelSize: Theme.fontSizeMedium
+                        }
+                        background: Rectangle {
+                            color: parent.highlighted ? Qt.alpha(Theme.iconSelectColor, 0.2) : "transparent"
+                        }
+                        onTriggered: {
+                            let selected = getSelectedMails()
+                            selected.forEach(mail => {
+                                muaBridge.moveMail(mail.id_msg || mail.mailId, model.name)
+                            })
+                            removeSelectedFromUI()
+                        }
+                    }
+                }
+            }
         }
 
         // Spam btn
@@ -87,6 +135,14 @@ Rectangle {
                 SvgIcon { pathData: Icons.spam; color: Theme.textColor; size: 14 },
                 Text { text: "Spam"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
+
+            onClicked: {
+                let selected = getSelectedMails()
+                selected.forEach(mail => {
+                    muaBridge.moveMail(mail.id_msg || mail.mailId, "Spam")
+                })
+                removeSelectedFromUI()
+            }
         }
 
         // Delete btn
@@ -99,19 +155,25 @@ Rectangle {
                 SvgIcon { pathData: Icons.trash; color: Theme.textColor; size: 14 },
                 Text { text: "Delete"; color: Theme.textColor; font.pixelSize: Theme.fontSizeMedium }
             ]
+
+            onClicked: {
+                let selected = getSelectedMails()
+                selected.forEach(mail => {
+                    muaBridge.deleteMail(mail.id_msg || mail.mailId)
+                })
+                removeSelectedFromUI()
+            }
         }
 
         // ... btn
         ActionBtn {
             implicitWidth: 40
-
             iconRow.children: [ SvgIcon { pathData: Icons.etc; color: Theme.mutedTextColor; size: 16 } ]
         }
 
-        // Flexible Spacer
         Item { Layout.fillWidth: true }
 
-        // Filters
+        // Filters AllButton
         Item {
             id: allButton
             implicitWidth: allButtonLayout.implicitWidth
@@ -138,5 +200,31 @@ Rectangle {
                 }
             }
         }
+    }
+
+    function getSelectedMails() {
+        let selected = []
+        for (let i = 0; i < mockEmailModel.count; ++i) {
+            let mail = mockEmailModel.get(i)
+            if (mail.isChecked) {
+                selected.push(mail)
+            }
+        }
+        if (selected.length === 0 && typeof areaContainer !== "undefined" && areaContainer.selectedMailData) {
+            selected.push(areaContainer.selectedMailData)
+        }
+        return selected
+    }
+
+    function removeSelectedFromUI() {
+        for (let i = mockEmailModel.count - 1; i >= 0; --i) {
+            if (mockEmailModel.get(i).isChecked) {
+                mockEmailModel.remove(i)
+            }
+        }
+        if (typeof mainController !== "undefined") {
+            mainController.changeState("LISTSTATE")
+        }
+        allSelected = false
     }
 }

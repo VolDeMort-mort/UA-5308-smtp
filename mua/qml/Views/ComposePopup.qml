@@ -6,6 +6,7 @@ import "../Components"
 
 Popup {
     id: composePopup
+
     width: 600
     height: 500
 
@@ -156,5 +157,19 @@ Popup {
             }
         }
     }
+    function openForward(mailData) {
+        receiverInput.textValue = ""
+        subjectInput.textValue = "Fwd: " + mailData.subject
 
+        let senderInfo = mailData.sender || mailData.receiver || "Unknown"
+        let dateInfo = mailData.createdAt || mailData.date || "Unknown time"
+
+        bodyText.text = "--- Forwarded Message ---\n" +
+                "From: " + senderInfo + "\n" +
+                "Subject: " + mailData.subject + "\n" +
+                "Date: " + dateInfo + "\n\n" +
+                mailData.body
+
+        composePopup.open()
+    }
 }

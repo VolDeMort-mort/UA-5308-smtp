@@ -7,7 +7,7 @@ import SmtpMua
 Popup {
     id: filterPopup
 
-    width: 280          // FIX
+    width: 280
     height: 400
     padding: 15
 
@@ -68,9 +68,21 @@ Popup {
         spacing: 5
 
         // Status checkboxes
-        StyledCheckBox { text: "Seen" }
-        StyledCheckBox { text: "Unseen" }
-        StyledCheckBox { text: "Attachments" }
+        StyledCheckBox {
+            text: "Seen"
+            checked: filteredModel.seenOnly
+            onCheckedChanged: filteredModel.seenOnly = checked
+        }
+        StyledCheckBox {
+            text: "Unseen"
+            checked: filteredModel.unseenOnly
+            onCheckedChanged: filteredModel.unseenOnly = checked
+        }
+        StyledCheckBox {
+            text: "Attachments"
+            checked: filteredModel.attachmentsOnly
+            onCheckedChanged: filteredModel.attachmentsOnly = checked
+        }
 
         // Spacer
         Rectangle {
@@ -79,23 +91,55 @@ Popup {
             Layout.topMargin: 5; Layout.bottomMargin: 5
         }
 
-        // Auto dates checkboxes
-        StyledCheckBox { text: "Today" }
-        StyledCheckBox { text: "This week" }
-        StyledCheckBox { text: "This month" }
-        StyledCheckBox { text: "This year" }
+        // Auto dates checkboxes (Згруповані, щоб вибиралася лише одна)
+        ButtonGroup { id: dateGroup }
+
+        StyledCheckBox {
+            text: "Today"
+            ButtonGroup.group: dateGroup
+            checked: filteredModel.dateFilter === "today"
+            onCheckedChanged: if(checked) filteredModel.dateFilter = "today"
+        }
+        StyledCheckBox {
+            text: "This week"
+            ButtonGroup.group: dateGroup
+            checked: filteredModel.dateFilter === "week"
+            onCheckedChanged: if(checked) filteredModel.dateFilter = "week"
+        }
+        StyledCheckBox {
+            text: "This month"
+            ButtonGroup.group: dateGroup
+            checked: filteredModel.dateFilter === "month"
+            onCheckedChanged: if(checked) filteredModel.dateFilter = "month"
+        }
+        StyledCheckBox {
+            text: "This year"
+            ButtonGroup.group: dateGroup
+            checked: filteredModel.dateFilter === "year"
+            onCheckedChanged: if(checked) filteredModel.dateFilter = "year"
+        }
 
         Item { Layout.fillHeight: true }
 
         // Manual dates fields
-        DateInputRow { label: "From:"; placeholder: "dd.mm.yy hh:mm" }
-        DateInputRow { label: "To:"; placeholder: "dd.mm.yy hh:mm" }
+        DateInputRow {
+            label: "From:"
+            placeholder: "dd.mm.yy hh:mm"
+            onDateTextChanged: (newText) => filteredModel.dateFrom = newText
+        }
+        DateInputRow {
+            label: "To:"
+            placeholder: "dd.mm.yy hh:mm"
+            onDateTextChanged: (newText) => filteredModel.dateTo = newText
+        }
     }
 
     // Date field
     component DateInputRow: RowLayout {
         property string label
         property string placeholder
+
+        signal dateTextChanged(string newText)
 
         spacing: 10
 
@@ -122,6 +166,12 @@ Popup {
                 text: placeholder
                 color: Theme.mutedTextColor
                 font.pixelSize: Theme.fontSizeMedium
+
+                onTextChanged: {
+                    if (text !== placeholder) {
+                        dateTextChanged(text)
+                    }
+                }
             }
         }
     }

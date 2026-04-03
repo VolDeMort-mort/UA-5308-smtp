@@ -6,23 +6,23 @@ import SmtpMua
 import "../Components"
 
 Rectangle {
-    id: signUpPageRoot
+    id: signInPageRoot
     anchors.fill: parent
     color: Theme.windowBg
 
-    signal signUpRequest(string email, string name, string surname)
-    signal switchToSignIn()
+    signal signInRequest(string email)
+    signal switchToSignUp()
 
     property bool isConnecting: false
 
     Item {
         anchors.centerIn: parent
         width: 420
-        height: 450
+        height: 350
 
         MultiEffect {
-            source: signUpPanel
-            anchors.fill: signUpPanel
+            source: signInPanel
+            anchors.fill: signInPanel
             shadowEnabled: true
             shadowColor: Qt.rgba(0, 0, 0, 0.3)
             shadowBlur: 1.0
@@ -31,7 +31,7 @@ Rectangle {
         }
 
         Rectangle {
-            id: signUpPanel
+            id: signInPanel
             anchors.fill: parent
             color: Theme.sidebarBg
             radius: 15
@@ -44,7 +44,7 @@ Rectangle {
                 spacing: 15
 
                 Text {
-                    text: "Create Account"
+                    text: "Sign In"
                     font.pixelSize: 28
                     font.bold: true
                     color: Theme.textColor
@@ -52,22 +52,6 @@ Rectangle {
                 }
 
                 Item { height: 10; Layout.fillWidth: true }
-
-
-                    StyledInput {
-                        id: nameField
-                        Layout.fillWidth: true
-                        label: "Name:"
-                        placeholder: "John"
-                    }
-
-                    StyledInput {
-                        id: surnameField
-                        Layout.fillWidth: true
-                        label: "Surname:"
-                        placeholder: "Doe"
-                    }
-
 
                 StyledInput {
                     id: emailField
@@ -87,32 +71,28 @@ Rectangle {
                 Item { Layout.fillHeight: true }
 
                 Button {
-                    id: submitButton
+                    id: signInButton
                     Layout.fillWidth: true
                     Layout.preferredHeight: 45
 
-                    enabled: !signUpPageRoot.isConnecting &&
-                             nameField.textValue.length > 0 &&
-                             surnameField.textValue.length > 0 &&
-                             emailField.textValue.length > 0 &&
-                             passField.textValue.length > 0
+                    enabled: !signInPageRoot.isConnecting && emailField.textValue.length > 0 && passField.textValue.length > 0
 
                     background: Rectangle {
                         radius: 15
                         color: {
-                            if (!submitButton.enabled) return Theme.panelColor
-                            if (submitButton.pressed) return Qt.darker(Theme.itemBgColor, 1.2)
-                            if (submitButton.hovered) return Qt.lighter(Theme.itemBgColor, 1.1)
+                            if (!signInButton.enabled) return Theme.panelColor
+                            if (signInButton.pressed) return Qt.darker(Theme.itemBgColor, 1.2)
+                            if (signInButton.hovered) return Qt.lighter(Theme.itemBgColor, 1.1)
                             return Theme.itemBgColor
                         }
-                        opacity: submitButton.enabled ? 1.0 : 0.5
+                        opacity: signInButton.enabled ? 1.0 : 0.5
                         Behavior on color { ColorAnimation { duration: 150 } }
                         Behavior on opacity { NumberAnimation { duration: 200 } }
                     }
 
                     contentItem: Text {
-                        text: signUpPageRoot.isConnecting ? "Connecting..." : "Continue"
-                        color: submitButton.enabled ? Theme.textColor : Theme.mutedTextColor
+                        text: signInPageRoot.isConnecting ? "Connecting..." : "Sign In"
+                        color: signInButton.enabled ? Theme.textColor : Theme.mutedTextColor
                         font.pixelSize: Theme.fontSizeHeader
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
@@ -120,7 +100,7 @@ Rectangle {
                     }
 
                     onClicked: {
-                        signUpPageRoot.isConnecting = true
+                        signInPageRoot.isConnecting = true
 
                         muaBridge.connectToServer(
                             "smtp.gmail.com", 465,
@@ -131,8 +111,6 @@ Rectangle {
                     }
                 }
 
-
-
                 Item { Layout.fillHeight: true }
 
                 RowLayout {
@@ -140,13 +118,13 @@ Rectangle {
                     spacing: 5
 
                     Text {
-                        text: "Already have an account?"
+                        text: "Don't have an account?"
                         color: Theme.mutedTextColor
                         font.pixelSize: Theme.fontSizeMedium
                     }
 
                     Text {
-                        text: "Sign In"
+                        text: "Sign Up"
                         color: Theme.iconSelectColor
                         font.pixelSize: Theme.fontSizeMedium
                         font.bold: true
@@ -154,7 +132,7 @@ Rectangle {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: signUpPageRoot.switchToSignIn()
+                            onClicked: signInPageRoot.switchToSignUp()
                         }
                     }
                 }
@@ -166,12 +144,12 @@ Rectangle {
         target: muaBridge
 
         function onConnected() {
-            signUpPageRoot.isConnecting = false
-            signUpPageRoot.signUpRequest(emailField.textValue, nameField.textValue, surnameField.textValue)
+            signInPageRoot.isConnecting = false
+            signInPageRoot.signInRequest(emailField.textValue)
         }
 
         function onErrorOccurred(message) {
-            signUpPageRoot.isConnecting = false
+            signInPageRoot.isConnecting = false
         }
     }
 }
