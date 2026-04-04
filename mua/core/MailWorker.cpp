@@ -435,6 +435,13 @@ public:
     void Log(LogLevel, const std::string&) override
     {
     }
+    void set_strategy(std::shared_ptr<ILoggerStrategy> strategy) override
+    {
+    }
+    void set_level(LogLevel level) override
+    {
+
+    }
 };
 
 std::vector<std::string> CollectRecipients(const SendMailCommand& cmd)

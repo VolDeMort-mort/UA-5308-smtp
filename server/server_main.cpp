@@ -4,6 +4,7 @@
 #include <sodium.h>
 
 #include "FileStrategy.h"
+#include "ILogger.h"
 #include "Logger.h"
 #include "DataBaseManager.h"
 #include "schema.h"
@@ -35,8 +36,8 @@ int main()
 		UserRepository user_repo(db);
 		MessageRepository message_repo(db);
 
-		Logger logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
-
+		auto loger_shared = std::make_shared<Logger>(std::make_shared<FileStrategy>(LogLevel::TRACE));
+		ILogger& logger = *loger_shared;
 		boost::asio::io_context io_context;
 
 		SocketAcceptor acceptor;

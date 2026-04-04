@@ -42,7 +42,7 @@ bool ThreadPool::is_working() {
     return is_working_unsafe();
 }
 
-void ThreadPool::set_logger(Logger* logger) {
+void ThreadPool::set_logger(ILogger* logger) {
     m_logger = logger;
 }
 

@@ -1,23 +1,32 @@
 #pragma once
 
 #include <string>
+#include <memory>
 
 #include "ILoggerStrategy.h"
 
 /**
  * @class ILogger
  * @brief Interface for log operation
- * @details Logging interface for different modules (IMAP integration for now)
  */
 class ILogger
 {
 public:
-	virtual ~ILogger() = default; // default virtual dtor
+	virtual ~ILogger() = default;
 
 	/**
-	 * @brief Logs a message with a log level
-	 * @param level Level of the message
+	 * @brief Add raw message into queue
+	 * @param level Level of the logs(PROD, DEBUG, TRACE)
 	 * @param message Raw text of the log
 	 */
 	virtual void Log(LogLevel level, const std::string& message) = 0;
+
+protected:
+	/**
+	 * @brief Set new strategy in runtime
+	 * @param strategy New strategy for logging. Logs are saving with switching
+	 */
+	virtual void set_strategy(std::shared_ptr<ILoggerStrategy> strategy) = 0;
+
+	virtual void set_level(LogLevel level) = 0; // runtime level switching
 };
