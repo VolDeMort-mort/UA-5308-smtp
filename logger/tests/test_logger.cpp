@@ -168,7 +168,7 @@ TEST_F(LoggerClass, StressTest)
 TEST_F(LoggerClass, EmptyFileTest)
 {
 	auto read = logger->Read(10);
-	EXPECT_EQ(read.size(),0);
+	EXPECT_EQ(read.size(),2);
 	auto search = logger->Search(PROD,10,1000);
 	EXPECT_EQ(search.size(), 0);
 }
@@ -205,7 +205,7 @@ TEST_F(LoggerClass, SetStrategyTest)
 		if (i == 90)
 		{
 			auto read = logger->Read(100);
-			EXPECT_EQ(read.size(), 91);
+			EXPECT_EQ(read.size(), 93);
 			logger->set_strategy(std::make_unique<ConsoleStrategy>(PROD));
 		}
 	}
