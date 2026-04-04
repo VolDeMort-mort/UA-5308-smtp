@@ -3,7 +3,9 @@
 #include <boost/asio.hpp>
 #include <string>
 
-class SocketConnection
+#include "IConnection.hpp"
+
+class SocketConnection : public IConnection
 {
 public:
     explicit SocketConnection(boost::asio::ip::tcp::socket socket);
@@ -24,5 +26,5 @@ private:
     boost::asio::streambuf m_buffer;
 
     int m_timeout_seconds{30};
-	bool WaitForEvent(bool for_read);
+	bool WaitForEvent(bool for_read, int t_seconds = -1);
 };

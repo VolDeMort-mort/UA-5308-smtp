@@ -27,7 +27,8 @@ enum class ImapCommandType
 	Unsubscribe,
 	Close,
 	Check,
-	Unknown
+	Unknown,
+	StartTLS
 };
 
 struct ImapCommand

@@ -661,68 +661,112 @@ std::string MailWorker::nextTag()
 
 std::pair<bool, std::vector<std::string>> MailWorker::imapExchange(const std::string& cmd)
 {
-    for (int attempt = 0; attempt < 2; ++attempt)
-    {
-        if (!m_imapConnection)
-        {
-            std::string reconnectError;
-            if (!reconnectSession(reconnectError))
-            {
-                return {false, {}};
-            }
-        }
+	auto imapSend = [&](const std::string& data) -> bool
+	{
+		if (m_imapSecureConnection)
+		{
+			return m_imapSecureConnection->Send(data);
+		}
+		return m_imapConnection->Send(data);
+	};
 
-        const std::string tag = nextTag();
-        if (!m_imapConnection->Send(tag + " " + cmd + "\r\n"))
-        {
-            std::string reconnectError;
-            if (attempt == 0 && reconnectSession(reconnectError))
-            {
-                continue;
-            }
-            return {false, {}};
-        }
+	auto imapRecv = [&](std::string& data) -> bool
+	{
+		if (m_imapSecureConnection)
+		{
+			return m_imapSecureConnection->Receive(data);
+		}
+		return m_imapConnection->Receive(data);
+	};
 
-        std::vector<std::string> untagged;
-        bool transportFailure = false;
+	for (int attempt = 0; attempt < 2; ++attempt)
+	{
+		if (!m_imapConnection)
+		{
+			std::string reconnectError;
+			if (!reconnectSession(reconnectError))
+			{
+				return {false, {}};
+			}
+		}
 
-        while (true)
-        {
-            std::string line;
-            if (!m_imapConnection->Receive(line))
-            {
-                transportFailure = true;
-                break;
-            }
+		const std::string tag = nextTag();
+		if (!imapSend(tag + " " + cmd + "\r\n"))
+		{
+			std::string reconnectError;
+			if (attempt == 0 && reconnectSession(reconnectError))
+			{
+				continue;
+			}
+			return {false, {}};
+		}
 
-            if (line.rfind(tag + " OK", 0) == 0)
-            {
-                return {true, untagged};
-            }
+		std::vector<std::string> untagged;
+		bool transportFailure = false;
 
-            if (line.rfind(tag + " NO", 0) == 0 || line.rfind(tag + " BAD", 0) == 0)
-            {
-                return {false, untagged};
-            }
+		while (true)
+		{
+			std::string frame;
+			if (!imapRecv(frame))
+			{
+				transportFailure = true;
+				break;
+			}
 
-            untagged.push_back(line);
-        }
+			std::vector<std::string> lines;
+			std::string remaining = frame;
 
-        if (!transportFailure)
-        {
-            return {false, untagged};
-        }
+			while (!remaining.empty())
+			{
+				auto pos = remaining.find('\n');
+				std::string line = (pos == std::string::npos) ? remaining : remaining.substr(0, pos);
 
-        std::string reconnectError;
-        if (attempt == 0 && reconnectSession(reconnectError))
-        {
-            continue;
-        }
+				if (!line.empty() && line.back() == '\r')
+				{
+					line.pop_back();
+				}	
 
-        return {false, untagged};
-    }
+				lines.push_back(line);
+				remaining = (pos == std::string::npos) ? "" : remaining.substr(pos + 1);
+			}
 
-    return {false, {}};
+			bool done = false;
+			bool ok = false;
+			for (const auto& line : lines)
+			{
+				if (line.rfind(tag + " OK", 0) == 0)
+				{
+					done = true;
+					ok = true;
+					break;
+				}
+				if (line.rfind(tag + " NO", 0) == 0 || line.rfind(tag + " BAD", 0) == 0)
+				{
+					done = true;
+					ok = false;
+					break;
+				}
+				untagged.push_back(line);
+			}
+
+			if (done) return {ok, untagged};
+		}
+
+		if (!transportFailure)
+		{
+			return {false, untagged};
+		}
+
+		std::string reconnectError;
+		if (attempt == 0 && reconnectSession(reconnectError))
+		{
+			continue;
+		}
+
+		return {false, untagged};
+	}
+
+	return {false, {}};
 }
 
 void MailWorker::run()
@@ -896,47 +940,72 @@ bool MailWorker::loginImap(const std::string& host,
         return false;
     }
 
-    const std::string tag = nextTag();
-    if (!m_imapConnection->Send(tag + " LOGIN " + QuoteImap(username) + " " + QuoteImap(password) + "\r\n"))
-    {
-        m_imapConnection->Close();
-        m_imapConnection.reset();
-        error = "IMAP login send failed";
-        return false;
-    }
+    const std::string tlsTag = nextTag();
+	if (!m_imapConnection->Send(tlsTag + " STARTTLS\r\n"))
+	{
+		m_imapConnection->Close();
+		m_imapConnection.reset();
+		error = "IMAP STARTTLS send failed";
+		return false;
+	}
 
-    while (true)
-    {
-        std::string line;
-        if (!m_imapConnection->Receive(line))
-        {
-            m_imapConnection->Close();
-            m_imapConnection.reset();
-            error = "IMAP login receive failed";
-            return false;
-        }
+	std::string tlsResponse;
+	if (!m_imapConnection->Receive(tlsResponse) || tlsResponse.find(tlsTag + " OK") == std::string::npos)
+	{
+		m_imapConnection->Close();
+		m_imapConnection.reset();
+		error = "IMAP STARTTLS rejected: " + tlsResponse;
+		return false;
+	}
 
-        if (line.rfind(tag + " OK", 0) == 0)
-        {
-            break;
-        }
+	m_imapSecureConnection = std::make_unique<ClientSecureChannel>(*m_imapConnection);
+	if (!m_imapSecureConnection->StartTLS())
+	{
+		m_imapSecureConnection.reset();
+		m_imapConnection->Close();
+		m_imapConnection.reset();
+		error = "IMAP TLS handshake failed";
+		return false;
+	}
 
-        if (line.rfind(tag + " NO", 0) == 0 || line.rfind(tag + " BAD", 0) == 0)
-        {
-            m_imapConnection->Close();
-            m_imapConnection.reset();
-            error = "IMAP login failed (server returned NO/BAD)";
-            return false;
-        }
-    }
+	const std::string tag = nextTag();
+	if (!m_imapSecureConnection->Send(tag + " LOGIN " + QuoteImap(username) + " " + QuoteImap(password) + "\r\n"))
+	{
+		m_imapSecureConnection.reset();
+		m_imapConnection->Close();
+		m_imapConnection.reset();
+		error = "IMAP login send failed";
+		return false;
+	}
 
-    if (!m_imapConnection)
-    {
-        error = "IMAP login failed";
-        return false;
-    }
+	while (true)
+	{
+		std::string line;
+		if (!m_imapSecureConnection->Receive(line))
+		{
+			m_imapSecureConnection.reset();
+			m_imapConnection->Close();
+			m_imapConnection.reset();
+			error = "IMAP login receive failed";
+			return false;
+		}
 
-    return true;
+		if (line.rfind(tag + " OK", 0) == 0)
+		{
+			break;
+		}
+
+		if (line.rfind(tag + " NO", 0) == 0 || line.rfind(tag + " BAD", 0) == 0)
+		{
+			m_imapSecureConnection.reset();
+			m_imapConnection->Close();
+			m_imapConnection.reset();
+			error = "IMAP login failed (server returned NO/BAD)";
+			return false;
+		}
+	}
+
+	return true;
 }
 
 bool MailWorker::reconnectSession(std::string& error)
@@ -967,6 +1036,7 @@ bool MailWorker::reconnectSession(std::string& error)
 
         if (m_imapConnection)
         {
+			m_imapSecureConnection.reset();
             m_imapConnection->Close();
             m_imapConnection.reset();
         }
@@ -1108,6 +1178,7 @@ void MailWorker::handleDisconnect(const DisconnectCommand&)
     if (m_imapConnection)
     {
         imapExchange("LOGOUT");
+		m_imapSecureConnection.reset();
         m_imapConnection->Close();
         m_imapConnection.reset();
     }
@@ -1409,26 +1480,58 @@ void MailWorker::handleFetchMails(const FetchMailsCommand& cmd)
     const unsigned int from = cmd.offset + 1;
     const unsigned int to = cmd.offset + std::max(1u, cmd.limit);
 
-    std::vector<MailSummary> mails;
-    mails.reserve(cmd.limit);
+    const std::string range = std::to_string(from) + ":" + std::to_string(to);
+    auto [ok, lines] = imapExchange("FETCH " + range + " (FLAGS RFC822)");
 
-    for (unsigned int seqId = from; seqId <= to; ++seqId)
+    if (!ok)
     {
-        std::vector<std::string> lines = fetchFlagsBySeq(seqId);
-        std::string rawEmail;
-        if (!fetchMessagePayloadBySeq(seqId, rawEmail))
+        m_onResult(FetchMailsResult{false, "FETCH failed", {}});
+        return;
+    }
+
+    std::vector<std::size_t> fetchStarts;
+    for (std::size_t i = 0; i < lines.size(); ++i)
+    {
+        if (lines[i].rfind("* ", 0) == 0 && lines[i].find(" FETCH ") != std::string::npos)
         {
-            continue;
+            fetchStarts.push_back(i);
+        }
+    }
+
+    std::vector<MailSummary> mails;
+    mails.reserve(fetchStarts.size());
+
+    for (std::size_t k = 0; k < fetchStarts.size(); ++k)
+    {
+        const std::size_t blockStart = fetchStarts[k];
+        const std::size_t blockEnd   = (k + 1 < fetchStarts.size()) ? fetchStarts[k + 1] : lines.size();
+
+        std::vector<std::string> block(lines.begin() + blockStart, lines.begin() + blockEnd);
+
+        const std::size_t fetchPos = block[0].find(" FETCH ");
+		if (fetchPos == std::string::npos)
+		{
+			continue;
+		}
+
+        int64_t seqId = 0;
+        try 
+        { 
+            seqId = std::stoll(block[0].substr(2, fetchPos - 2));
+        } catch (...) 
+        {
+            continue; 
         }
 
-        if (rawEmail.empty())
-        {
-            continue;
-        }
+        std::string rawEmail = ExtractRfc822Payload(block);
+		if (rawEmail.empty())
+		{
+			continue;
+		}
 
         MailSummary summary;
-        summary.mailId = static_cast<int64_t>(seqId);
-        ExtractFlags(lines, summary.isSeen, summary.isFlagged);
+        summary.mailId = seqId;
+        ExtractFlags(block, summary.isSeen, summary.isFlagged);
 
         SilentLogger mimeLogger;
         SmtpClient::Email parsed;

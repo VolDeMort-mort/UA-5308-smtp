@@ -61,6 +61,7 @@ private:
 	std::string HandleUnsubscribe(const ImapCommand& cmd);
 	std::string HandleClose(const ImapCommand& cmd);
 	std::string HandleCheck(const ImapCommand& cmd);
+	std::string HandleStartTLS(const ImapCommand& cmd);
 
 	std::map<ImapCommandType, std::function<std::string(const ImapCommand&)>> m_handlers;
 };
