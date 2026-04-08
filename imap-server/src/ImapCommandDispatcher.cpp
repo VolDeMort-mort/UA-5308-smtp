@@ -14,31 +14,29 @@
 ImapCommandDispatcher::ImapCommandDispatcher(ILogger& logger, UserRepository& userRepo, MessageRepository& messRepo)
 	: m_logger(logger), m_userRepo(userRepo), m_messRepo(messRepo)
 {
-	m_handlers = {
-		{ImapCommandType::Login, [this](const ImapCommand& cmd) { return HandleLogin(cmd); }},
-		{ImapCommandType::Logout, [this](const ImapCommand& cmd) { return HandleLogout(cmd); }},
-		{ImapCommandType::Capability, [this](const ImapCommand& cmd) { return HandleCapability(cmd); }},
-		{ImapCommandType::Noop, [this](const ImapCommand& cmd) { return HandleNoop(cmd); }},
-		{ImapCommandType::Select, [this](const ImapCommand& cmd) { return HandleSelect(cmd); }},
-		{ImapCommandType::List, [this](const ImapCommand& cmd) { return HandleList(cmd); }},
-		{ImapCommandType::Lsub, [this](const ImapCommand& cmd) { return HandleLsub(cmd); }},
-		{ImapCommandType::Status, [this](const ImapCommand& cmd) { return HandleStatus(cmd); }},
-		{ImapCommandType::Fetch, [this](const ImapCommand& cmd) { return HandleFetch(cmd); }},
-		{ImapCommandType::Store, [this](const ImapCommand& cmd) { return HandleStore(cmd); }},
-		{ImapCommandType::Create, [this](const ImapCommand& cmd) { return HandleCreate(cmd); }},
-		{ImapCommandType::Delete, [this](const ImapCommand& cmd) { return HandleDelete(cmd); }},
-		{ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
-		{ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
-		{ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
-		{ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
-		{ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
-		{ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
-		{ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
-		{ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
-		{ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
-		{ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
-		{ImapCommandType::StartTLS, [this](const ImapCommand& cmd) { return HandleStartTLS(cmd); }}
-	};
+	m_handlers = {{ImapCommandType::Login, [this](const ImapCommand& cmd) { return HandleLogin(cmd); }},
+				  {ImapCommandType::Logout, [this](const ImapCommand& cmd) { return HandleLogout(cmd); }},
+				  {ImapCommandType::Capability, [this](const ImapCommand& cmd) { return HandleCapability(cmd); }},
+				  {ImapCommandType::Noop, [this](const ImapCommand& cmd) { return HandleNoop(cmd); }},
+				  {ImapCommandType::Select, [this](const ImapCommand& cmd) { return HandleSelect(cmd); }},
+				  {ImapCommandType::List, [this](const ImapCommand& cmd) { return HandleList(cmd); }},
+				  {ImapCommandType::Lsub, [this](const ImapCommand& cmd) { return HandleLsub(cmd); }},
+				  {ImapCommandType::Status, [this](const ImapCommand& cmd) { return HandleStatus(cmd); }},
+				  {ImapCommandType::Fetch, [this](const ImapCommand& cmd) { return HandleFetch(cmd); }},
+				  {ImapCommandType::Store, [this](const ImapCommand& cmd) { return HandleStore(cmd); }},
+				  {ImapCommandType::Create, [this](const ImapCommand& cmd) { return HandleCreate(cmd); }},
+				  {ImapCommandType::Delete, [this](const ImapCommand& cmd) { return HandleDelete(cmd); }},
+				  {ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
+				  {ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
+				  {ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
+				  {ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
+				  {ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
+				  {ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
+				  {ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
+				  {ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
+				  {ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
+				  {ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
+				  {ImapCommandType::StartTLS, [this](const ImapCommand& cmd) { return HandleStartTLS(cmd); }}};
 }
 
 std::string ImapCommandDispatcher::Dispatch(const ImapCommand& cmd)
@@ -1365,7 +1363,6 @@ std::string ImapCommandDispatcher::HandleUidCopy(const ImapCommand& cmd)
 	return response;
 }
 
-// currently does nothing
 std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 {
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleSubscribe - In: tag=" + cmd.m_tag + ", args=[" +
@@ -1380,13 +1377,21 @@ std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 	else
 	{
 		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
-		if (!folder_opt.has_value())
+		if (!folder_opt.has_value() || !folder_opt->id.has_value())
 		{
 			response = ImapResponse::Bad(cmd.m_tag, "Mailbox does not exist");
 		}
 		else
 		{
-			// repo doesn`t support this yet
+			if (m_messRepo.setSubscribed(folder_opt->id.value(), true))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "SUBSCRIBE completed");
+			}
+			else
+			{
+				response = ImapResponse::No(cmd.m_tag, m_messRepo.getLastError());
+				m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleSubscribe - Error: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
@@ -1395,7 +1400,6 @@ std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 	return response;
 }
 
-// currently does nothing
 std::string ImapCommandDispatcher::HandleUnsubscribe(const ImapCommand& cmd)
 {
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUnsubscribe - In: tag=" + cmd.m_tag + ", args=[" +
@@ -1410,13 +1414,21 @@ std::string ImapCommandDispatcher::HandleUnsubscribe(const ImapCommand& cmd)
 	else
 	{
 		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
-		if (!folder_opt.has_value())
+		if (!folder_opt.has_value() || !folder_opt->id.has_value())
 		{
 			response = ImapResponse::Bad(cmd.m_tag, "Mailbox does not exist");
 		}
 		else
 		{
-			// repo doesn`t support this yet
+			if (m_messRepo.setSubscribed(folder_opt->id.value(), false))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "UNSUBSCRIBE completed");
+			}
+			else
+			{
+				response = ImapResponse::No(cmd.m_tag, m_messRepo.getLastError());
+				m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleSubscribe - Error: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
