@@ -17,6 +17,8 @@ std::string ToUpper(std::string str);
 
 std::vector<std::string> SplitArgs(const std::string& str);
 
+std::vector<std::string> Split(const std::string& str, char delim);
+
 std::string JoinArgs(const std::vector<std::string>& args);
 
 ImapCommandType StringToCommandType(const std::string& cmd);
