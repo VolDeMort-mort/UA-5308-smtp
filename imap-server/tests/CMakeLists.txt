@@ -15,5 +15,11 @@ add_executable(
     ../src/ImapSession.cpp
 )
 
-target_link_libraries(test_imap PRIVATE imap_lib GTest::gtest_main GTest::gmock)
+target_link_libraries(test_imap PRIVATE imap_lib db_lib GTest::gtest_main GTest::gmock)
+
+target_include_directories(test_imap PRIVATE
+    ${CMAKE_SOURCE_DIR}/database/DAL
+    ${CMAKE_SOURCE_DIR}/database
+)
+
 gtest_discover_tests(test_imap)
