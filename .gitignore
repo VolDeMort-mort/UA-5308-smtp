@@ -22,3 +22,4 @@ data/*
 !data/mailboxes/
 data/mailboxes/*
 !data/mailboxes/README.md
+
