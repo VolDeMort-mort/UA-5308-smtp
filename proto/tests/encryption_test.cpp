@@ -7,8 +7,14 @@
 #include "ConsoleStrategy.h"
 
 #include <gtest/gtest.h>
+#include <sodium.h>
+#include <unistd.h>
 
 using boost::asio::ip::tcp;
+
+static uint16_t channelTestPort() {
+    return static_cast<uint16_t>(20000 + (getpid() % 10000));
+}
 
 struct ChannelFixture : public ::testing::Test
 {
@@ -23,7 +29,9 @@ struct ChannelFixture : public ::testing::Test
 
 	static void SetUpTestSuite()
 	{
-		constexpr uint16_t port = 29999;
+		if (sodium_init() < 0) return;
+
+		const uint16_t port = channelTestPort();
 
 		SocketAcceptor acceptor;
 		acceptor.Initialize(serverIo, port);
@@ -89,4 +97,37 @@ TEST_F(ChannelFixture, MessageMatch)
 	serverThread.join();
 
 	EXPECT_EQ(received, message);
+}
+
+TEST_F(ChannelFixture, StartTlsAlreadySecureReturnsFalse)
+{
+	ASSERT_TRUE(handshakeDone);
+	EXPECT_FALSE(server->StartTLS());
+	EXPECT_FALSE(client->StartTLS());
+}
+
+TEST_F(ChannelFixture, IsSecureAfterHandshake)
+{
+	ASSERT_TRUE(handshakeDone);
+	EXPECT_TRUE(server->isSecure());
+	EXPECT_TRUE(client->isSecure());
+}
+
+TEST_F(ChannelFixture, SendEmptyStringFails)
+{
+	ASSERT_TRUE(handshakeDone);
+	EXPECT_FALSE(server->Send(""));
+}
+
+TEST_F(ChannelFixture, MultipleMessagesClientToServer)
+{
+	ASSERT_TRUE(handshakeDone);
+	for (int i = 0; i < 3; ++i) {
+		std::string msg = "msg" + std::to_string(i);
+		std::string recv;
+		std::thread t([&]() { client->Send(msg); });
+		EXPECT_TRUE(server->Receive(recv));
+		t.join();
+		EXPECT_EQ(recv, msg);
+	}
 }

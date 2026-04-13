@@ -1,8 +1,12 @@
 #include <boost/asio.hpp>
+#include <chrono>
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
+#include <unistd.h>
 #include <thread>
+
+#include <sodium.h>
 
 #include "ClientSecureChannel.hpp"
 #include "ConsoleStrategy.h"
@@ -16,6 +20,11 @@
 #include "SocketConnector.hpp"
 #include "ThreadPool.h"
 #include "UserDAL.h"
+#include "schema.h"
+
+static uint16_t imapTlsTestPort() {
+    return static_cast<uint16_t>(22000 + (getpid() % 10000));
+}
 
 struct ImapStartTlsFixture : public ::testing::Test
 {
@@ -33,11 +42,13 @@ struct ImapStartTlsFixture : public ::testing::Test
 
 	static void SetUpTestSuite()
 	{
-		config.PORT = 30002;
+		if (sodium_init() < 0) return;
+
+		config.PORT = imapTlsTestPort();
 		config.TIMEOUT_MINS = 5;
 		config.WORKER_THREADS = 2;
 
-		db = std::make_unique<DataBaseManager>(":memory:", "./database/scheme/001_init_scheme.sql",
+		db = std::make_unique<DataBaseManager>(":memory:", initSchema(),
 											   std::shared_ptr<ILogger>(&logger, [](ILogger*) {}));
 
 		pool = std::make_unique<ThreadPool>();
@@ -45,9 +56,10 @@ struct ImapStartTlsFixture : public ::testing::Test
 		pool->set_logger(&logger);
 
 		imapServer = std::make_unique<ImapServer>(serverIo, logger, *db, *pool, config);
-		imapServer->Start();
 
-		serverThread = std::thread([]() { serverIo.run(); });
+		serverThread = std::thread([]() { imapServer->Start(); });
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	}
 
 	static void TearDownTestSuite()

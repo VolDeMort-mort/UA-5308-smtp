@@ -7,6 +7,11 @@ std::vector<uint8_t> Base64Decoder::DecodeBase64(const std::string& encoded_data
 
 	for (char c : encoded_data)
 	{
+		if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
+		{
+			continue;
+		}
+
 		const bool is_upper = c >= 'A' && c <= 'Z';
 		const bool is_lower = c >= 'a' && c <= 'z';
 		const bool is_digit = c >= '0' && c <= '9';

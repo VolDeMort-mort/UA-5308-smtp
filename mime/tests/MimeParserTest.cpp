@@ -343,3 +343,146 @@ TEST(MimeParserTest, RoundTrip_ThreadingHeaders)
 	EXPECT_EQ(parsed.in_reply_to, "<prev.001@test.com>");
 	EXPECT_EQ(parsed.references,  "<prev.001@test.com>");
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ParseEmail: error/edge paths
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(MimeParserTest, ParseEmail_MultipartNoBoundaryReturnsFalse)
+{
+	auto logger = MakeLogger();
+	// multipart/mixed with no boundary parameter
+	std::string raw =
+		"From: sender@example.com\r\n"
+		"Content-Type: multipart/mixed\r\n"
+		"\r\n"
+		"Body without boundary";
+
+	Email out;
+	EXPECT_FALSE(MimeParser::ParseEmail(raw, out, logger));
+}
+
+TEST(MimeParserTest, ParseEmail_TopLevelBase64Body)
+{
+	auto logger = MakeLogger();
+	// "Hello" in base64 is SGVsbG8=
+	std::string raw =
+		"From: sender@example.com\r\n"
+		"Content-Type: text/plain; charset=\"utf-8\"\r\n"
+		"Content-Transfer-Encoding: base64\r\n"
+		"\r\n"
+		"SGVsbG8=\r\n";
+
+	Email out;
+	ASSERT_TRUE(MimeParser::ParseEmail(raw, out, logger));
+	EXPECT_NE(out.plain_text.find("Hello"), std::string::npos);
+}
+
+TEST(MimeParserTest, ParseEmail_TopLevelBase64InvalidDataFallback)
+{
+	auto logger = MakeLogger();
+	std::string raw =
+		"From: sender@example.com\r\n"
+		"Content-Type: text/plain; charset=\"utf-8\"\r\n"
+		"Content-Transfer-Encoding: base64\r\n"
+		"\r\n"
+		"!!!NOT_VALID_BASE64!!!\r\n";
+
+	Email out;
+	// Should not throw; parser falls back to raw body on decode error
+	EXPECT_NO_THROW(MimeParser::ParseEmail(raw, out, logger));
+}
+
+TEST(MimeParserTest, ParseEmail_7bitBodyNoEncoding)
+{
+	auto logger = MakeLogger();
+	std::string raw =
+		"From: a@b.com\r\n"
+		"Content-Type: text/plain\r\n"
+		"\r\n"
+		"Plain 7bit body.";
+
+	Email out;
+	ASSERT_TRUE(MimeParser::ParseEmail(raw, out, logger));
+	EXPECT_NE(out.plain_text.find("Plain 7bit body."), std::string::npos);
+	EXPECT_EQ(out.plain_text_encoding, "7bit");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ParseStructure
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST(MimeParserTest, ParseStructure_EmptyInputReturnsFalse)
+{
+	auto logger = MakeLogger();
+	MimePart root;
+	EXPECT_FALSE(MimeParser::ParseStructure("", root, logger));
+}
+
+TEST(MimeParserTest, ParseStructure_SimplePlainText)
+{
+	auto logger = MakeLogger();
+	std::string raw =
+		"Content-Type: text/plain; charset=\"utf-8\"\r\n"
+		"Content-Transfer-Encoding: 7bit\r\n"
+		"\r\n"
+		"Hello world";
+
+	MimePart root;
+	ASSERT_TRUE(MimeParser::ParseStructure(raw, root, logger));
+	EXPECT_EQ(root.type,    "text");
+	EXPECT_EQ(root.subtype, "plain");
+	EXPECT_FALSE(root.IsMultipart());
+}
+
+TEST(MimeParserTest, ParseStructure_MultipartAlternative)
+{
+	auto logger = MakeLogger();
+	std::string raw =
+		"Content-Type: multipart/alternative; boundary=\"BOUND\"\r\n"
+		"\r\n"
+		"--BOUND\r\n"
+		"Content-Type: text/plain\r\n"
+		"\r\n"
+		"Plain part\r\n"
+		"--BOUND\r\n"
+		"Content-Type: text/html\r\n"
+		"\r\n"
+		"<p>HTML part</p>\r\n"
+		"--BOUND--\r\n";
+
+	MimePart root;
+	ASSERT_TRUE(MimeParser::ParseStructure(raw, root, logger));
+	EXPECT_TRUE(root.IsMultipart());
+	EXPECT_EQ(root.children.size(), 2u);
+	EXPECT_EQ(root.children[0].subtype, "plain");
+	EXPECT_EQ(root.children[1].subtype, "html");
+}
+
+TEST(MimeParserTest, ParseStructure_MultipartNoBoundary)
+{
+	auto logger = MakeLogger();
+	std::string raw =
+		"Content-Type: multipart/mixed\r\n"
+		"\r\n"
+		"body without boundary";
+
+	MimePart root;
+	ASSERT_TRUE(MimeParser::ParseStructure(raw, root, logger));
+	EXPECT_TRUE(root.IsMultipart());
+	EXPECT_TRUE(root.children.empty());
+}
+
+TEST(MimeParserTest, ParseStructure_NoContentType)
+{
+	auto logger = MakeLogger();
+	std::string raw =
+		"From: a@b.com\r\n"
+		"\r\n"
+		"Body without content-type header";
+
+	MimePart root;
+	ASSERT_TRUE(MimeParser::ParseStructure(raw, root, logger));
+	EXPECT_EQ(root.type,    "text");
+	EXPECT_EQ(root.subtype, "plain");
+}

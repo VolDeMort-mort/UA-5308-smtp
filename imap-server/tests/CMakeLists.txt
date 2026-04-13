@@ -8,18 +8,18 @@ add_executable(
     ImapSessionTest.cpp
     ImapCommandHandlersTest.cpp
     ImapEncryptionHandshakeTest.cpp
-    ../src/ImapParser.cpp
-    ../src/ImapUtils.cpp
-    ../src/ImapCommandDispatcher.cpp
-    ../src/ImapServer.cpp
-    ../src/ImapSession.cpp
 )
 
-target_link_libraries(test_imap PRIVATE imap_lib db_lib GTest::gtest_main GTest::gmock)
+target_link_libraries(test_imap PRIVATE imap_lib GTest::gtest GTest::gmock)
 
 target_include_directories(test_imap PRIVATE
-    ${CMAKE_SOURCE_DIR}/database/DAL
     ${CMAKE_SOURCE_DIR}/database
+    ${CMAKE_SOURCE_DIR}/database/DAL
+    ${CMAKE_SOURCE_DIR}/database/Entity
 )
 
 gtest_discover_tests(test_imap)
+
+if(SMTP_COVERAGE)
+    target_code_coverage(test_imap)
+endif()

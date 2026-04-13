@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include "DataBaseManager.h"
 #include "Repository/MessageRepository.h"
@@ -21,7 +22,7 @@ std::atomic<int> g_db_counter{0};
 
 std::string uniqueDbPath() {
     auto tmp = std::filesystem::temp_directory_path();
-    return (tmp / ("msg_repo_" + std::to_string(++g_db_counter) + ".db")).string();
+    return (tmp / ("msg_repo_" + std::to_string(getpid()) + "_" + std::to_string(++g_db_counter) + ".db")).string();
 }
 
 void removeDb(const std::string& path) {
@@ -763,4 +764,102 @@ TEST_F(MessageRepositoryTest, MultipleDelivers_UIDsUniquePerFolder) {
     for (size_t i = 0; i < uids_f2.size(); ++i)
         for (size_t j = i + 1; j < uids_f2.size(); ++j)
             EXPECT_NE(uids_f2[i], uids_f2[j]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// setFlags: + prefix (add) and - prefix (remove)
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, SetFlags_PlusPrefix_AddsFlag) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"+\\Seen", "+\\Flagged"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_seen);
+    EXPECT_TRUE(found->is_flagged);
+    EXPECT_FALSE(found->is_deleted);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_MinusPrefix_RemovesFlag) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"\\Seen", "\\Flagged"}));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"-\\Seen"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_FALSE(found->is_seen);
+    EXPECT_TRUE(found->is_flagged);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_PlusMinus_Mixed) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"\\Seen", "\\Draft"}));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"+\\Flagged", "-\\Draft"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_seen);
+    EXPECT_TRUE(found->is_flagged);
+    EXPECT_FALSE(found->is_draft);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_AllKnownFlags) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id,
+        {"\\Seen", "\\Deleted", "\\Draft", "\\Answered", "\\Flagged", "\\Recent"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_seen);
+    EXPECT_TRUE(found->is_deleted);
+    EXPECT_TRUE(found->is_draft);
+    EXPECT_TRUE(found->is_answered);
+    EXPECT_TRUE(found->is_flagged);
+    EXPECT_TRUE(found->is_recent);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_UnknownFlagFails) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    EXPECT_FALSE(m_msg_repo->setFlags(*m.id, {"\\UnknownFlag"}));
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_PrefixedUnknownFlagFails) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    EXPECT_FALSE(m_msg_repo->setFlags(*m.id, {"+\\NoSuchFlag"}));
+    EXPECT_FALSE(m_msg_repo->setFlags(*m.id, {"-\\NoSuchFlag"}));
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_NonExistentMessageFails) {
+    EXPECT_FALSE(m_msg_repo->setFlags(999999, {"\\Seen"}));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// hardDelete: non-existent message fails
+// ─────────────────────────────────────────────────────────────────────────────
+
+TEST_F(MessageRepositoryTest, HardDelete_NonExistentFails) {
+    EXPECT_FALSE(m_msg_repo->hardDelete(999999));
+}
+
+TEST_F(MessageRepositoryTest, HardDelete_ExistingMessageSucceeds) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    int64_t id = *m.id;
+
+    EXPECT_TRUE(m_msg_repo->hardDelete(id));
+    EXPECT_FALSE(m_msg_repo->findByID(id).has_value());
+}
+
+TEST_F(MessageRepositoryTest, HardDelete_AlreadyDeletedFails) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    int64_t id = *m.id;
+
+    EXPECT_TRUE(m_msg_repo->hardDelete(id));
+    EXPECT_FALSE(m_msg_repo->hardDelete(id));
 }

@@ -252,3 +252,218 @@ TEST(ImapParserTest, ParseListWithResponseCode)
 	EXPECT_EQ(cmd.m_args[1], "");
 	EXPECT_EQ(cmd.m_args[2], "*");
 }
+
+TEST(ImapParserTest, ParseUnterminatedLiteral)
+{
+	auto cmd = ImapParser::Parse("A023 APPEND INBOX {");
+
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[0], "INBOX");
+	EXPECT_EQ(cmd.m_args[1], "{");
+}
+
+TEST(ImapParserTest, ParseBracketArgAsAtom)
+{
+	auto cmd = ImapParser::Parse("A024 SELECT [INBOX]");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "[INBOX]");
+}
+
+TEST(ImapParserTest, ParseBracketInsideList)
+{
+	auto cmd = ImapParser::Parse("A025 FETCH 1 (BODY[TEXT])");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Fetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[0], "1");
+	EXPECT_EQ(cmd.m_args[1], "(BODY[TEXT])");
+}
+
+TEST(ImapParserTest, ParseUidFetch)
+{
+	auto cmd = ImapParser::Parse("A026 UID FETCH 1:* (FLAGS)");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::UidFetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[0], "1:*");
+	EXPECT_EQ(cmd.m_args[1], "(FLAGS)");
+}
+
+TEST(ImapParserTest, ParseUidStore)
+{
+	auto cmd = ImapParser::Parse("A027 UID STORE 5 +FLAGS (\\Seen)");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::UidStore);
+	EXPECT_EQ(cmd.m_args.size(), 3);
+}
+
+TEST(ImapParserTest, ParseUidCopy)
+{
+	auto cmd = ImapParser::Parse("A028 UID COPY 3 Sent");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::UidCopy);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+}
+
+TEST(ImapParserTest, ParseUidUnknownSubcommand)
+{
+	auto cmd = ImapParser::Parse("A029 UID SEARCH ALL");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Unknown);
+}
+
+TEST(ImapParserTest, ParseUidNoSubcommand)
+{
+	auto cmd = ImapParser::Parse("A030 UID");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Unknown);
+}
+
+TEST(ImapParserTest, ParseEscapedQuoteInQuotedString)
+{
+	auto cmd = ImapParser::Parse("A031 LOGIN \"user\\\"name\" pass");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Login);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[0], "user\"name");
+}
+
+TEST(ImapParserTest, ParseSubscribeCommand)
+{
+	auto cmd = ImapParser::Parse("A032 SUBSCRIBE Newsletters");
+
+	EXPECT_EQ(cmd.m_tag, "A032");
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Subscribe);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "Newsletters");
+}
+
+TEST(ImapParserTest, ParseUnsubscribeCommand)
+{
+	auto cmd = ImapParser::Parse("A033 UNSUBSCRIBE Newsletters");
+
+	EXPECT_EQ(cmd.m_tag, "A033");
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Unsubscribe);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+}
+
+TEST(ImapParserTest, ParseListWithQuotedStringInsideParens)
+{
+	auto cmd = ImapParser::Parse("A034 FETCH 1 (\"hello\" world)");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Fetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[1], "(\"hello\" world)");
+}
+
+TEST(ImapParserTest, ParseListWithNestedBrackets)
+{
+	auto cmd = ImapParser::Parse("A035 FETCH 1 (BODY[[TEXT]])");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Fetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[1], "(BODY[[TEXT]])");
+}
+
+TEST(ImapParserTest, ParseListWithMultipleQuotedElements)
+{
+	auto cmd = ImapParser::Parse("A036 SEARCH (\"FROM\" \"test@example.com\")");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Unknown);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "(\"FROM\" \"test@example.com\")");
+}
+
+TEST(ImapParserTest, ParseListWithEscapedQuoteInsideParens)
+{
+	auto cmd = ImapParser::Parse("A037 FETCH 1 (\"hel\\\"lo\")");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Fetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[1], "(\"hel\"lo\")");
+}
+
+TEST(ImapParserTest, ParseListWithDeeplyNestedBrackets)
+{
+	auto cmd = ImapParser::Parse("A038 FETCH 1 (BODY[HEADER[[FIELDS]]])");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Fetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[1], "(BODY[HEADER[[FIELDS]]])");
+}
+
+TEST(ImapParserTest, ParseArgsLeadingAndTrailingSpaces)
+{
+	auto cmd = ImapParser::Parse("A039 SELECT   INBOX  ");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "INBOX");
+}
+
+TEST(ImapParserTest, ParseUidFetchWithParenthesizedArgs)
+{
+	auto cmd = ImapParser::Parse("A040 UID FETCH 1:5 (FLAGS BODY[TEXT])");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::UidFetch);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[0], "1:5");
+	EXPECT_EQ(cmd.m_args[1], "(FLAGS BODY[TEXT])");
+}
+
+TEST(ImapParserTest, ParseLiteralWithContent)
+{
+	auto cmd = ImapParser::Parse("A041 APPEND INBOX {10}");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Unknown);
+	EXPECT_EQ(cmd.m_args.size(), 2);
+	EXPECT_EQ(cmd.m_args[0], "INBOX");
+	EXPECT_EQ(cmd.m_args[1], "{10}");
+}
+
+TEST(ImapParserTest, ParseResponseCodeSimple)
+{
+	auto cmd = ImapParser::Parse("A042 SELECT [UNSEEN 5]");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "[UNSEEN 5]");
+}
+
+TEST(ImapParserTest, ParseResponseCodeNested)
+{
+	auto cmd = ImapParser::Parse("A043 SELECT [PERMANENTFLAGS (\\Seen \\Flagged)]");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "[PERMANENTFLAGS (\\Seen \\Flagged)]");
+}
+
+TEST(ImapParserTest, ParseResponseCodeNestedBrackets)
+{
+	auto cmd = ImapParser::Parse("A044 SELECT [BODY[TEXT]]");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "[BODY[TEXT]]");
+}
+
+TEST(ImapParserTest, ParseResponseCodeWithQuotedString)
+{
+	auto cmd = ImapParser::Parse("A045 SELECT [ALERT \"Server going down\"]");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "[ALERT \"Server going down\"]");
+}
+
+TEST(ImapParserTest, ParseResponseCodeEmpty)
+{
+	auto cmd = ImapParser::Parse("A046 SELECT []");
+
+	EXPECT_EQ(cmd.m_type, ImapCommandType::Select);
+	EXPECT_EQ(cmd.m_args.size(), 1);
+	EXPECT_EQ(cmd.m_args[0], "[]");
+}

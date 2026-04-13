@@ -27,7 +27,12 @@ add_library(
     ${CMAKE_CURRENT_BINARY_DIR}/init_schema.c
 )
 
-target_include_directories(db_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(db_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/DAL
+    ${CMAKE_CURRENT_SOURCE_DIR}/Entity
+    ${CMAKE_CURRENT_SOURCE_DIR}/Repository
+)
 
 target_link_libraries(
     db_lib

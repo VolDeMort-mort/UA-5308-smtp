@@ -437,7 +437,15 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 			return SmtpResponse::AuthChallenge("");
 		}
 
-		std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(initial_response);
+		std::vector<uint8_t> decoded;
+		try
+		{
+			decoded = Base64Decoder::DecodeBase64(initial_response);
+		}
+		catch (const std::exception&)
+		{
+			return SmtpResponse::AuthFailed();
+		}
 
 		if (decoded.empty()) return SmtpResponse::AuthFailed();
 
@@ -464,7 +472,17 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 
 std::string SmtpSession::HandleAuthLine(const std::string& line)
 {
-	std::vector<uint8_t> decoded = Base64Decoder::DecodeBase64(line);
+	std::vector<uint8_t> decoded;
+	try
+	{
+		decoded = Base64Decoder::DecodeBase64(line);
+	}
+	catch (const std::exception&)
+	{
+		m_state = SmtpState::WAIT_MAIL;
+		m_auth_username.clear();
+		return SmtpResponse::AuthFailed();
+	}
 
 	if (decoded.empty() && !line.empty())
 	{
