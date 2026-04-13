@@ -76,6 +76,7 @@ private:
 	std::thread m_work_thread;		  // thread for queue
 	std::atomic<bool> m_running_flag; // flag for queue life cycle(false - break cycle)
 	std::atomic<bool> m_flush;		  // flag for Read() to force flush logs
+	std::atomic<bool> m_flush_done;
 
 	/**
 	 * @brief Add logs into m_queue

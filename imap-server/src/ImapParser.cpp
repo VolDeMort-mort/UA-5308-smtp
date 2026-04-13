@@ -50,6 +50,7 @@ std::string ImapParser::ElementParser::ParseElement()
 	if (c == '"') return ParseQuoted();
 	if (c == '(') return ParseList();
 	if (c == '{') return ParseLiteral();
+	if (c == '[') return ParseResponse();
 
 	return ParseAtom();
 }

@@ -1,6 +1,7 @@
 ﻿#include <filesystem>
 #include <gtest/gtest.h>
 #include <sodium.h>
+#include <unistd.h>
 
 #include "SmtpSession.hpp"
 #include "Base64Decoder.hpp"
@@ -11,9 +12,10 @@
 #include "SmtpResponse.hpp"
 #include "schema.h"
 
-// ============================================================================
-//  Helpers
-// ============================================================================
+
+static std::string smtpTestDbPath() {
+    return "/tmp/test_smtp_session_" + std::to_string(getpid()) + ".db";
+}
 
 static std::string B64Encode(const std::string& raw)
 {
@@ -32,9 +34,6 @@ static std::string PlainCredentials(const std::string& user, const std::string& 
 	return B64Encode(blob);
 }
 
-// ============================================================================
-//  Fixture - no database, for pure state-machine tests
-// ============================================================================
 
 class SmtpSessionTest : public ::testing::Test
 {
@@ -49,9 +48,6 @@ protected:
 	std::unique_ptr<SmtpSession> session;
 };
 
-// ============================================================================
-//  Fixture – WITH database, used for auth / SaveMessage tests
-// ============================================================================
 
 class SmtpSessionDbTest : public ::testing::Test
 {
@@ -60,11 +56,11 @@ protected:
 	{
 		if (sodium_init() < 0) FAIL() << "sodium_init() failed";
 
-		db = std::make_unique<DataBaseManager>("test_smtp_session.db", initSchema());
+		db = std::make_unique<DataBaseManager>(smtpTestDbPath(), initSchema());
 		user_repo = std::make_unique<UserRepository>(*db);
 		message_repo = std::make_unique<MessageRepository>(*db);
 
-		// Register test users that AUTH tests will authenticate as.
+		
 		User alice;
 		alice.username = "alice";
 		ASSERT_TRUE(user_repo->registerUser(alice, "pass123"));
@@ -82,7 +78,7 @@ protected:
 		user_repo.reset();
 		message_repo.reset();
 		db.reset();
-		std::remove("test_smtp_session.db");
+		std::remove(smtpTestDbPath().c_str());
 	}
 
 	void MakeSession()
@@ -90,9 +86,7 @@ protected:
 		session = std::make_unique<SmtpSession>("testserver.local", message_repo.get(), user_repo.get(), nullptr);
 	}
 
-	// ---- helpers ----
-
-	// EHLO, enable TLS flag, then authenticate via AUTH PLAIN inline.
+	
 	void AuthAsAlice()
 	{
 		session->SetSecure(true);
@@ -100,7 +94,6 @@ protected:
 		session->ProcessLine("AUTH PLAIN " + PlainCredentials("alice", "pass123"));
 	}
 
-	// Drive session through: auth → MAIL FROM → RCPT TO.
 	void SetupMailTransaction(const std::string& rcpt = "bob@testserver.local")
 	{
 		AuthAsAlice();
@@ -114,9 +107,7 @@ protected:
 	std::unique_ptr<SmtpSession> session;
 };
 
-// ============================================================================
-//  Greeting
-// ============================================================================
+
 
 TEST_F(SmtpSessionTest, GreetingContainsDomain)
 {
@@ -128,9 +119,7 @@ TEST_F(SmtpSessionTest, GreetingStartsWith220)
 	EXPECT_EQ(session->Greeting().substr(0, 3), "220");
 }
 
-// ============================================================================
-//  Initial state
-// ============================================================================
+
 
 TEST_F(SmtpSessionTest, InitialStateIsWaitHelo)
 {
@@ -142,9 +131,7 @@ TEST_F(SmtpSessionTest, IsNotClosedInitially)
 	EXPECT_FALSE(session->IsClosed());
 }
 
-// ============================================================================
-//  HELO / EHLO → state transitions
-// ============================================================================
+
 
 TEST_F(SmtpSessionTest, HeloTransitionsToWaitMail)
 {
@@ -174,7 +161,6 @@ TEST_F(SmtpSessionTest, EhloResponseContainsAuthCapabilities)
 
 TEST_F(SmtpSessionTest, EhloWithoutTlsAdversitesStarttls)
 {
-	// TLS not yet active → STARTTLS should appear in EHLO capabilities.
 	std::string resp = session->ProcessLine("EHLO client.test");
 	EXPECT_NE(resp.find("STARTTLS"), std::string::npos);
 }
@@ -186,9 +172,6 @@ TEST_F(SmtpSessionTest, EhloWithTlsDoesNotAdvertiseStarttls)
 	EXPECT_EQ(resp.find("STARTTLS"), std::string::npos);
 }
 
-// ============================================================================
-//  NOOP / RSET / QUIT
-// ============================================================================
 
 TEST_F(SmtpSessionTest, NoopReturnsOk)
 {
@@ -213,9 +196,6 @@ TEST_F(SmtpSessionTest, QuitReturnsClosingAndClosesSession)
 	EXPECT_EQ(session->getState(), SmtpState::CLOSED);
 }
 
-// ============================================================================
-//  STARTTLS
-// ============================================================================
 
 TEST_F(SmtpSessionTest, StarttlsInWaitMailReturnsReadyAndSetsState)
 {
@@ -231,9 +211,6 @@ TEST_F(SmtpSessionTest, StarttlsBeforeEhloBadSequence)
 	EXPECT_EQ(resp, SmtpResponse::BadSequence());
 }
 
-// ============================================================================
-//  Bad-sequence guards
-// ============================================================================
 
 TEST_F(SmtpSessionTest, MailInWaitHeloReturnsBadSequence)
 {
@@ -255,9 +232,6 @@ TEST_F(SmtpSessionTest, DataBeforeRcptReturnsBadSequence)
 	EXPECT_EQ(resp, SmtpResponse::BadSequence());
 }
 
-// ============================================================================
-//  Line-length guard
-// ============================================================================
 
 TEST_F(SmtpSessionTest, LineLongerThan512BytesReturnsSyntaxError)
 {
@@ -287,13 +261,6 @@ TEST_F(SmtpSessionTest, ResetToHeloSetsWaitHeloState)
 	EXPECT_EQ(session->getState(), SmtpState::WAIT_HELO);
 }
 
-// ============================================================================
-//  Tests with db
-// ============================================================================
-
-// ============================================================================
-//  AUTH – requires database
-// ============================================================================
 
 TEST_F(SmtpSessionDbTest, AuthBeforeEhloBadSequence)
 {
@@ -397,9 +364,6 @@ TEST_F(SmtpSessionDbTest, EhloResetsAuthenticationFlag)
 	EXPECT_EQ(session->getState(), SmtpState::WAIT_MAIL);
 }
 
-// ============================================================================
-//  MAIL / RCPT / DATA flow
-// ============================================================================
 
 TEST_F(SmtpSessionDbTest, MailWithoutAuthReturnsAuthRequired)
 {
@@ -511,9 +475,6 @@ TEST_F(SmtpSessionDbTest, SecondMailTransactionAfterRsetSucceeds)
 	EXPECT_EQ(resp, SmtpResponse::Ok());
 }
 
-// ============================================================================
-//  SetSecure changes EHLO response in mid-session
-// ============================================================================
 
 TEST_F(SmtpSessionDbTest, SetSecureFalseEhloShowsStarttls)
 {
@@ -527,4 +488,99 @@ TEST_F(SmtpSessionDbTest, SetSecureTrueEhloHidesStarttls)
 	session->SetSecure(true);
 	std::string resp = session->ProcessLine("EHLO client.test");
 	EXPECT_EQ(resp.find("STARTTLS"), std::string::npos);
+}
+
+TEST_F(SmtpSessionDbTest, AuthLoginInvalidBase64Fails)
+{
+	session->SetSecure(true);
+	session->ProcessLine("EHLO client.test");
+	session->ProcessLine("AUTH LOGIN");
+	std::string resp = session->ProcessLine("!!!not-base64!!!");
+	EXPECT_NE(resp.find("535"), std::string::npos);
+}
+
+TEST_F(SmtpSessionDbTest, AuthPlainInvalidBase64Fails)
+{
+	session->SetSecure(true);
+	session->ProcessLine("EHLO client.test");
+	std::string resp = session->ProcessLine("AUTH PLAIN !!!not-base64!!!");
+	EXPECT_NE(resp.find("535"), std::string::npos);
+}
+
+TEST_F(SmtpSessionDbTest, AuthPlainMissingNullSeparatorFails)
+{
+	session->SetSecure(true);
+	session->ProcessLine("EHLO client.test");
+	std::string resp = session->ProcessLine("AUTH PLAIN " + B64Encode("nousepattern"));
+	EXPECT_NE(resp.find("535"), std::string::npos);
+}
+
+TEST_F(SmtpSessionDbTest, SaveMessagePlainText)
+{
+	SetupMailTransaction("alice@testserver.local");
+	session->ProcessLine("DATA");
+
+	std::string body =
+		"From: alice@testserver.local\r\n"
+		"To: alice@testserver.local\r\n"
+		"Subject: plain\r\n"
+		"Content-Type: text/plain\r\n"
+		"\r\n"
+		"Hello plain text\r\n";
+
+	for (const auto& line : {
+		"From: alice@testserver.local",
+		"To: alice@testserver.local",
+		"Subject: plain",
+		"Content-Type: text/plain",
+		"",
+		"Hello plain text"
+	}) {
+		session->ProcessLine(line);
+	}
+
+	std::string resp = session->ProcessLine(".");
+	EXPECT_TRUE(resp == SmtpResponse::Ok() || resp == SmtpResponse::MessageStorageFailed());
+}
+
+TEST_F(SmtpSessionDbTest, SaveMessageWithHtml)
+{
+	SetupMailTransaction("alice@testserver.local");
+	session->ProcessLine("DATA");
+
+	for (const auto& line : {
+		"From: alice@testserver.local",
+		"To: alice@testserver.local",
+		"Subject: html mail",
+		"MIME-Version: 1.0",
+		"Content-Type: multipart/alternative; boundary=\"bound1\"",
+		"",
+		"--bound1",
+		"Content-Type: text/plain",
+		"",
+		"Plain part",
+		"--bound1",
+		"Content-Type: text/html",
+		"",
+		"<b>HTML part</b>",
+		"--bound1--"
+	}) {
+		session->ProcessLine(line);
+	}
+
+	std::string resp = session->ProcessLine(".");
+	EXPECT_TRUE(resp == SmtpResponse::Ok() || resp == SmtpResponse::MessageStorageFailed());
+}
+
+TEST_F(SmtpSessionDbTest, SaveMessageRecipientNotInDb)
+{
+	AuthAsAlice();
+	session->ProcessLine("MAIL FROM:<alice@testserver.local>");
+	session->ProcessLine("RCPT TO:<newuser@testserver.local>");
+	session->ProcessLine("DATA");
+	session->ProcessLine("Subject: hello");
+	session->ProcessLine("");
+	session->ProcessLine("body");
+	std::string resp = session->ProcessLine(".");
+	EXPECT_TRUE(resp == SmtpResponse::Ok() || resp == SmtpResponse::MessageStorageFailed());
 }

@@ -5,15 +5,12 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include "DataBaseManager.h"
 #include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
 #include "schema.h"
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 namespace {
 
@@ -21,7 +18,7 @@ std::atomic<int> g_db_counter{0};
 
 std::string uniqueDbPath() {
     auto tmp = std::filesystem::temp_directory_path();
-    return (tmp / ("msg_repo_" + std::to_string(++g_db_counter) + ".db")).string();
+    return (tmp / ("msg_repo_" + std::to_string(getpid()) + "_" + std::to_string(++g_db_counter) + ".db")).string();
 }
 
 void removeDb(const std::string& path) {
@@ -29,11 +26,7 @@ void removeDb(const std::string& path) {
         std::filesystem::remove(path + suffix);
 }
 
-} // namespace
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fixture
-// ─────────────────────────────────────────────────────────────────────────────
+} 
 
 class MessageRepositoryTest : public ::testing::Test {
 protected:
@@ -52,13 +45,13 @@ protected:
         m_user_repo = std::make_unique<UserRepository>(*m_mgr);
         m_msg_repo  = std::make_unique<MessageRepository>(*m_mgr);
 
-        // Register a test user (UserRepository may create default folders on registration)
+     
         User u;
         u.username = "testuser";
         ASSERT_TRUE(m_user_repo->registerUser(u, "password"));
         m_user_id = *u.id;
 
-        // Obtain the INBOX folder (created by registerUser) or create one manually
+   
         auto inbox = m_msg_repo->findFolderByName(m_user_id, "INBOX");
         if (inbox.has_value()) {
             m_inbox_id = *inbox->id;
@@ -78,7 +71,6 @@ protected:
         removeDb(m_path);
     }
 
-    // ── Factory helpers ──────────────────────────────────────────────────────
 
     Message buildMessage(const std::string& from    = "sender@example.com",
                          const std::string& subject = "Test Subject") const {
@@ -104,7 +96,6 @@ protected:
         return f;
     }
 
-    // Delivers a message and asserts success; returns the populated message
     Message deliver(const std::string& from    = "sender@example.com",
                     const std::string& subject = "Test Subject",
                     int64_t            folder  = 0) {
@@ -115,10 +106,6 @@ protected:
         return m;
     }
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Folder CRUD
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, CreateFolder_AssignsPositiveID) {
     Folder f = buildFolder("CustomFolder");
@@ -155,7 +142,7 @@ TEST_F(MessageRepositoryTest, FindFolderByName_NonExistent_ReturnsNullopt) {
 }
 
 TEST_F(MessageRepositoryTest, FindFolderByName_IsolatedPerUser) {
-    // Create a second user with a folder of the same name
+   
     User u2;
     u2.username = "otheruser";
     ASSERT_TRUE(m_user_repo->registerUser(u2, "pass"));
@@ -165,7 +152,6 @@ TEST_F(MessageRepositoryTest, FindFolderByName_IsolatedPerUser) {
     f.name    = "SharedName";
     ASSERT_TRUE(m_msg_repo->createFolder(f));
 
-    // user 1 must not see user 2's folder
     EXPECT_FALSE(m_msg_repo->findFolderByName(m_user_id, "SharedName").has_value());
 }
 
@@ -222,10 +208,6 @@ TEST_F(MessageRepositoryTest, FindFoldersByParent_NoChildren_ReturnsEmpty) {
     ASSERT_TRUE(m_msg_repo->createFolder(f));
     EXPECT_TRUE(m_msg_repo->findFoldersByParent(*f.id).empty());
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Message delivery & lookup
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, Deliver_AssignsIDAndUID) {
     Message m = buildMessage();
@@ -313,7 +295,6 @@ TEST_F(MessageRepositoryTest, FindByFolder_Pagination) {
     EXPECT_EQ(page2.size(), 2u);
     EXPECT_EQ(page3.size(), 1u);
 
-    // No duplicate IDs across pages
     for (const auto& a : page1)
         for (const auto& b : page2)
             EXPECT_NE(a.id, b.id);
@@ -347,10 +328,6 @@ TEST_F(MessageRepositoryTest, SaveToFolder_InsertsMessage) {
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(found->folder_id, *drafts.id);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mark / flag operations
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, MarkSeen_TogglesSeenFlag) {
     Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
@@ -457,10 +434,6 @@ TEST_F(MessageRepositoryTest, SetFlags_EmptyList_ClearsAllFlags) {
     EXPECT_FALSE(found->is_flagged);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Filtered queries
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST_F(MessageRepositoryTest, FindUnseen_ReturnsOnlyUnseenMessages) {
     Message m1 = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m1, m_inbox_id));
     Message m2 = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m2, m_inbox_id));
@@ -526,10 +499,6 @@ TEST_F(MessageRepositoryTest, Search_NoMatch_ReturnsEmpty) {
     EXPECT_TRUE(results.empty());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Move, Copy, Expunge, HardDelete
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST_F(MessageRepositoryTest, MoveToFolder_ChangesMessageFolderAndAssignsNewUID) {
     Folder dest = buildFolder("Archive");
     ASSERT_TRUE(m_msg_repo->createFolder(dest));
@@ -545,7 +514,6 @@ TEST_F(MessageRepositoryTest, MoveToFolder_ChangesMessageFolderAndAssignsNewUID)
     auto found = m_msg_repo->findByID(*m.id);
     ASSERT_TRUE(found.has_value());
     EXPECT_EQ(found->folder_id, *dest.id);
-    // UID in new folder should differ from UID in old folder
     EXPECT_NE(found->uid, old_uid);
 }
 
@@ -570,7 +538,7 @@ TEST_F(MessageRepositoryTest, Copy_CreatesNewMessageInTargetFolder) {
 
     auto copied = m_msg_repo->copy(*m.id, *dest.id);
     ASSERT_TRUE(copied.has_value());
-    EXPECT_NE(copied->id, m.id);                       // different row
+    EXPECT_NE(copied->id, m.id);                       
     EXPECT_EQ(copied->folder_id, *dest.id);
     EXPECT_EQ(copied->from_address, "orig@example.com");
 }
@@ -597,7 +565,6 @@ TEST_F(MessageRepositoryTest, Expunge_DeletesOnlyMarkedDeletedMessages) {
 
     m_msg_repo->markDeleted(*m1.id, true);
     m_msg_repo->markDeleted(*m3.id, true);
-    // m2 is NOT deleted
 
     ASSERT_TRUE(m_msg_repo->expunge(m_inbox_id));
 
@@ -618,9 +585,6 @@ TEST_F(MessageRepositoryTest, HardDelete_RemovesMessageFromDB) {
     EXPECT_FALSE(m_msg_repo->findByID(*m.id).has_value());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Recipients
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(MessageRepositoryTest, AddRecipient_AssignsID) {
     Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
@@ -675,10 +639,6 @@ TEST_F(MessageRepositoryTest, FindRecipientsByMessage_EmptyForNewMessage) {
     EXPECT_TRUE(m_msg_repo->findRecipientsByMessage(*m.id).empty());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UID counter & Recent flag
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST_F(MessageRepositoryTest, IncrementNextUID_IncrementsCounter) {
     auto before = m_msg_repo->findFolderByID(m_inbox_id);
     ASSERT_TRUE(before.has_value());
@@ -695,7 +655,6 @@ TEST_F(MessageRepositoryTest, ClearRecentByFolder_ClearsRecentFlagOnAllMessages)
     Message m1 = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m1, m_inbox_id));
     Message m2 = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m2, m_inbox_id));
 
-    // Both should be recent after delivery
     EXPECT_TRUE(m_msg_repo->findByID(*m1.id)->is_recent);
     EXPECT_TRUE(m_msg_repo->findByID(*m2.id)->is_recent);
 
@@ -724,10 +683,6 @@ TEST_F(MessageRepositoryTest, CloseFolder_ClearsRecentMessages) {
     EXPECT_FALSE(m_msg_repo->findByID(*m.id)->is_recent);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Cross-entity integrity
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST_F(MessageRepositoryTest, DeleteFolder_AlsoRemovesMessages) {
     Folder tmp = buildFolder("Temp");
     ASSERT_TRUE(m_msg_repo->createFolder(tmp));
@@ -737,7 +692,6 @@ TEST_F(MessageRepositoryTest, DeleteFolder_AlsoRemovesMessages) {
 
     ASSERT_TRUE(m_msg_repo->deleteFolder(*tmp.id));
 
-    // Message should be gone once its parent folder is deleted
     EXPECT_FALSE(m_msg_repo->findByID(msg_id).has_value());
 }
 
@@ -755,7 +709,6 @@ TEST_F(MessageRepositoryTest, MultipleDelivers_UIDsUniquePerFolder) {
         uids_f2.push_back(m2.uid);
     }
 
-    // UIDs within each folder must be unique
     for (size_t i = 0; i < uids_f1.size(); ++i)
         for (size_t j = i + 1; j < uids_f1.size(); ++j)
             EXPECT_NE(uids_f1[i], uids_f1[j]);
@@ -763,4 +716,94 @@ TEST_F(MessageRepositoryTest, MultipleDelivers_UIDsUniquePerFolder) {
     for (size_t i = 0; i < uids_f2.size(); ++i)
         for (size_t j = i + 1; j < uids_f2.size(); ++j)
             EXPECT_NE(uids_f2[i], uids_f2[j]);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_PlusPrefix_AddsFlag) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"+\\Seen", "+\\Flagged"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_seen);
+    EXPECT_TRUE(found->is_flagged);
+    EXPECT_FALSE(found->is_deleted);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_MinusPrefix_RemovesFlag) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"\\Seen", "\\Flagged"}));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"-\\Seen"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_FALSE(found->is_seen);
+    EXPECT_TRUE(found->is_flagged);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_PlusMinus_Mixed) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"\\Seen", "\\Draft"}));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id, {"+\\Flagged", "-\\Draft"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_seen);
+    EXPECT_TRUE(found->is_flagged);
+    EXPECT_FALSE(found->is_draft);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_AllKnownFlags) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    ASSERT_TRUE(m_msg_repo->setFlags(*m.id,
+        {"\\Seen", "\\Deleted", "\\Draft", "\\Answered", "\\Flagged", "\\Recent"}));
+
+    auto found = m_msg_repo->findByID(*m.id);
+    ASSERT_TRUE(found.has_value());
+    EXPECT_TRUE(found->is_seen);
+    EXPECT_TRUE(found->is_deleted);
+    EXPECT_TRUE(found->is_draft);
+    EXPECT_TRUE(found->is_answered);
+    EXPECT_TRUE(found->is_flagged);
+    EXPECT_TRUE(found->is_recent);
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_UnknownFlagFails) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    EXPECT_FALSE(m_msg_repo->setFlags(*m.id, {"\\UnknownFlag"}));
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_PrefixedUnknownFlagFails) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+
+    EXPECT_FALSE(m_msg_repo->setFlags(*m.id, {"+\\NoSuchFlag"}));
+    EXPECT_FALSE(m_msg_repo->setFlags(*m.id, {"-\\NoSuchFlag"}));
+}
+
+TEST_F(MessageRepositoryTest, SetFlags_NonExistentMessageFails) {
+    EXPECT_FALSE(m_msg_repo->setFlags(999999, {"\\Seen"}));
+}
+
+TEST_F(MessageRepositoryTest, HardDelete_NonExistentFails) {
+    EXPECT_FALSE(m_msg_repo->hardDelete(999999));
+}
+
+TEST_F(MessageRepositoryTest, HardDelete_ExistingMessageSucceeds) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    int64_t id = *m.id;
+
+    EXPECT_TRUE(m_msg_repo->hardDelete(id));
+    EXPECT_FALSE(m_msg_repo->findByID(id).has_value());
+}
+
+TEST_F(MessageRepositoryTest, HardDelete_AlreadyDeletedFails) {
+    Message m = buildMessage(); ASSERT_TRUE(m_msg_repo->deliver(m, m_inbox_id));
+    int64_t id = *m.id;
+
+    EXPECT_TRUE(m_msg_repo->hardDelete(id));
+    EXPECT_FALSE(m_msg_repo->hardDelete(id));
 }

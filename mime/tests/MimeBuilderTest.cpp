@@ -8,8 +8,6 @@
 using namespace SmtpClient;
 
 
-// Helpers
-
 static Email MakeValidEmail(const std::string& plain_text = "Hello World")
 {
 	Email e;
@@ -26,8 +24,6 @@ static Logger MakeLogger()
 }
 
 
-// GenerateBoundary
-
 TEST(MimeBuilderTest, GenerateBoundary_StartsWithSeparator)
 {
 	EXPECT_EQ(MimeBuilder::GenerateBoundary().substr(0, 11), "----=_Part_");
@@ -37,9 +33,6 @@ TEST(MimeBuilderTest, GenerateBoundary_IsUnique)
 {
 	EXPECT_NE(MimeBuilder::GenerateBoundary(), MimeBuilder::GenerateBoundary());
 }
-
-
-// Validation
 
 TEST(MimeBuilderTest, BuildEmail_FailsWithEmptySender)
 {
@@ -109,9 +102,6 @@ TEST(MimeBuilderTest, BuildEmail_FailsWithInvalidSender)
 	EXPECT_FALSE(MimeBuilder::BuildEmail(e, mime, logger));
 }
 
-
-// Required headers
-
 TEST(MimeBuilderTest, BuildEmail_ContainsMimeVersion)
 {
 	auto logger = MakeLogger();
@@ -149,9 +139,6 @@ TEST(MimeBuilderTest, BuildEmail_ContainsMessageId)
 	EXPECT_NE(mime.find("Message-ID:"), std::string::npos);
 }
 
-
-// Subject encoding
-
 TEST(MimeBuilderTest, BuildEmail_AsciiSubjectPassthrough)
 {
 	auto logger = MakeLogger();
@@ -171,9 +158,6 @@ TEST(MimeBuilderTest, BuildEmail_CyrillicSubjectEncoded)
 	ASSERT_TRUE(MimeBuilder::BuildEmail(e, mime, logger));
 	EXPECT_NE(mime.find("=?UTF-8?B?"), std::string::npos);
 }
-
-
-// Threading headers
 
 TEST(MimeBuilderTest, BuildEmail_NoThreadingHeadersByDefault)
 {
@@ -196,9 +180,6 @@ TEST(MimeBuilderTest, BuildEmail_ThreadingHeadersPresent)
 	EXPECT_NE(mime.find("In-Reply-To: <orig@test.com>"), std::string::npos);
 	EXPECT_NE(mime.find("References: <orig@test.com>"), std::string::npos);
 }
-
-
-// Content structure
 
 TEST(MimeBuilderTest, BuildEmail_PlainTextStructure)
 {

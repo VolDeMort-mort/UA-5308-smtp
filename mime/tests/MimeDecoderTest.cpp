@@ -17,7 +17,6 @@ TEST(MimeDecoderTest, DecodeEncodedWord_EmptyString)
 
 TEST(MimeDecoderTest, DecodeEncodedWord_Base64Cyrillic)
 {
-	// "Привіт" in Base64: 0KPRgNC40LLRltGC
 	std::string encoded = "=?UTF-8?B?0J/RgNC40LLRltGC?=";
 	std::string decoded = MimeDecoder::DecodeEncodedWord(encoded);
 
@@ -38,7 +37,6 @@ TEST(MimeDecoderTest, DecodeEncodedWord_QEncoding_HexEscape)
 
 TEST(MimeDecoderTest, DecodeEncodedWord_CaseInsensitiveEncoding_B)
 {
-	// Both ?B? and ?b? should work
 	std::string lower  = "=?UTF-8?b?SGVsbG8=?=";
 	std::string upper  = "=?UTF-8?B?SGVsbG8=?=";
 	EXPECT_EQ(MimeDecoder::DecodeEncodedWord(lower), "Hello");
@@ -114,8 +112,6 @@ TEST(MimeDecoderTest, DecodeQP_SoftLineBreak)
 
 TEST(MimeDecoderTest, DecodeQP_CyrillicMultibyte)
 {
-	// "Привіт" = D0 9F D1 80 D0 B8 D0 B2 D1 96 D0 B2 D1 96 D1 82 (actually "Привіт")
-	// D0 9F D1 80 D0 B8 D0 B2 D1 96 D1 82
 	std::string input    = "=D0=9F=D1=80=D0=B8=D0=B2=D1=96=D1=82";
 	std::string expected = "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82";
 	EXPECT_EQ(MimeDecoder::DecodeQuotedPrintable(input), expected);
@@ -124,4 +120,71 @@ TEST(MimeDecoderTest, DecodeQP_CyrillicMultibyte)
 TEST(MimeDecoderTest, DecodeQP_LoneEquals_PassThrough)
 {
 	EXPECT_EQ(MimeDecoder::DecodeQuotedPrintable("x=yz"), "x=yz");
+}
+
+TEST(MimeDecoderTest, DecodeQP_SoftLineBreakLfOnly)
+{
+	std::string input    = "Hello=\nWorld";
+	std::string expected = "HelloWorld";
+	EXPECT_EQ(MimeDecoder::DecodeQuotedPrintable(input), expected);
+}
+
+TEST(MimeDecoderTest, DecodeQP_TrailingEqualsSign)
+{
+	EXPECT_EQ(MimeDecoder::DecodeQuotedPrintable("abc="), "abc=");
+}
+
+TEST(MimeDecoderTest, DecodeQP_EqualsFollowedByOneHexChar)
+{
+	EXPECT_EQ(MimeDecoder::DecodeQuotedPrintable("=Az"), "=Az");
+}
+
+TEST(MimeDecoderTest, DecodeQP_LowercaseHexEscape)
+{
+	EXPECT_EQ(MimeDecoder::DecodeQuotedPrintable("=61=62=63"), "abc");
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_MissingFirstQ_PassThrough)
+{
+	std::string s = "=?UTF-8";
+	EXPECT_EQ(MimeDecoder::DecodeEncodedWord(s), s);
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_MissingSecondQ_PassThrough)
+{
+	std::string s = "=?UTF-8?Q";
+	EXPECT_EQ(MimeDecoder::DecodeEncodedWord(s), s);
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_MissingTerminator_PassThrough)
+{
+	std::string s = "=?UTF-8?Q?no_close";
+	EXPECT_EQ(MimeDecoder::DecodeEncodedWord(s), s);
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_WhitespaceOnlyTailDropped)
+{
+	std::string s = "=?UTF-8?B?SGVsbG8=?=   =?UTF-8?B?V29ybGQ=?=";
+	EXPECT_EQ(MimeDecoder::DecodeEncodedWord(s), "HelloWorld");
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_NonWhitespaceTailKept)
+{
+	std::string s = "=?UTF-8?B?SGVsbG8=?= world";
+	std::string r = MimeDecoder::DecodeEncodedWord(s);
+	EXPECT_NE(r.find("Hello"), std::string::npos);
+	EXPECT_NE(r.find("world"), std::string::npos);
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_PlainTextNoArtifacts)
+{
+	std::string s = "Just a plain subject";
+	EXPECT_EQ(MimeDecoder::DecodeEncodedWord(s), s);
+}
+
+TEST(MimeDecoderTest, DecodeEncodedWord_QpArtifactsInPlainText)
+{
+	std::string s = "Hello=20World"; // =20 is a space
+	std::string r = MimeDecoder::DecodeEncodedWord(s);
+	EXPECT_EQ(r, "Hello World");
 }
