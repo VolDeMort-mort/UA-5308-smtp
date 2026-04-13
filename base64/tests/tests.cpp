@@ -98,6 +98,49 @@ TEST(BasicDecoder, LengthCheck)
 	EXPECT_THROW({ auto decoded_v = Base64Decoder::DecodeBase64(encoded); }, std::runtime_error);
 }
 
+TEST(BasicDecoder, SkipsWhitespace)
+{
+	std::string encoded = "TWFu\r\n";
+	auto decoded_v = Base64Decoder::DecodeBase64(encoded);
+	std::string decoded(decoded_v.begin(), decoded_v.end());
+	EXPECT_EQ(decoded, "Man");
+}
+
+TEST(BasicDecoder, SkipsLineBreaksInMiddle)
+{
+	std::string encoded = "SGVs\r\nbG8=";
+	auto decoded_v = Base64Decoder::DecodeBase64(encoded);
+	std::string decoded(decoded_v.begin(), decoded_v.end());
+	EXPECT_EQ(decoded, "Hello");
+}
+
+TEST(BasicDecoder, SkipsSpacesAndTabs)
+{
+	std::string encoded = "TWFu  \t  ";
+	auto decoded_v = Base64Decoder::DecodeBase64(encoded);
+	std::string decoded(decoded_v.begin(), decoded_v.end());
+	EXPECT_EQ(decoded, "Man");
+}
+
+TEST(BasicDecoder, RoundTripWithEncoder)
+{
+	std::string original = "Hello, World! This is a round-trip test for Base64 encoding and decoding.";
+	std::vector<uint8_t> data(original.begin(), original.end());
+	std::string encoded = Base64Encoder::EncodeBase64(data);
+	auto decoded_v = Base64Decoder::DecodeBase64(encoded);
+	std::string decoded(decoded_v.begin(), decoded_v.end());
+	EXPECT_EQ(decoded, original);
+}
+
+TEST(BasicDecoder, RoundTripWithLineBreaks)
+{
+	std::vector<uint8_t> data(200, 'X');
+	std::string encoded = Base64Encoder::EncodeBase64(data);
+	EXPECT_NE(encoded.find("\r\n"), std::string::npos);
+	auto decoded_v = Base64Decoder::DecodeBase64(encoded);
+	EXPECT_EQ(decoded_v, data);
+}
+
 TEST(StreamEncoder, OneCall)
 {
 	Base64StreamEncoder encoder;
@@ -148,6 +191,56 @@ TEST(StreamEncoder, LineBreak)
 	std::size_t pos = encoded_data.find("\r\n");
 	EXPECT_EQ(pos, 76);
 	EXPECT_EQ(encoded_data.size(), 78);
+}
+
+TEST(StreamEncoder, TwoBytesThenOne)
+{
+	Base64StreamEncoder encoder;
+	std::stringstream out;
+
+	const uint8_t b12[] = { 'M', 'a' };
+	const uint8_t b3[] = { 'n' };
+
+	encoder.EncodeStream(b12, 2, out);
+	encoder.EncodeStream(b3, 1, out);
+	encoder.Finalize(out);
+	std::string result = out.str();
+
+	EXPECT_EQ(result, "TWFu\r\n");
+}
+
+TEST(StreamEncoder, MultiChunkRoundTrip)
+{
+	std::vector<uint8_t> original(500, 0);
+	for (size_t i = 0; i < original.size(); ++i)
+		original[i] = static_cast<uint8_t>(i % 256);
+
+	Base64StreamEncoder encoder;
+	std::stringstream encoded_stream;
+
+	size_t pos = 0;
+	size_t chunk_sizes[] = {1, 2, 3, 7, 13, 50, 100};
+	size_t ci = 0;
+	while (pos < original.size())
+	{
+		size_t chunk = std::min(chunk_sizes[ci % 7], original.size() - pos);
+		encoder.EncodeStream(&original[pos], chunk, encoded_stream);
+		pos += chunk;
+		ci++;
+	}
+	encoder.Finalize(encoded_stream);
+
+	std::string encoded = encoded_stream.str();
+
+	Base64StreamDecoder decoder;
+	std::stringstream decoded_stream;
+	decoder.DecodeStream(encoded.c_str(), encoded.size(), decoded_stream);
+	decoder.Finalize(decoded_stream);
+
+	std::string decoded_str = decoded_stream.str();
+	std::vector<uint8_t> decoded(decoded_str.begin(), decoded_str.end());
+
+	EXPECT_EQ(decoded, original);
 }
 
 TEST(StreamDecoder, FourSymbols)

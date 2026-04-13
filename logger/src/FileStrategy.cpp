@@ -9,8 +9,8 @@
 #include <string>
 #include <thread>
 
-FileStrategy::FileStrategy(LogLevel defaultLevel)
-	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
+FileStrategy::FileStrategy(LogLevel defaultLevel, const std::string& path)
+	: m_current_path(path), m_old_path(path + ".old"), m_default_log_level(defaultLevel)
 {
 	if (std::filesystem::exists(m_current_path))
 		m_current_file_size = std::filesystem::file_size(m_current_path);

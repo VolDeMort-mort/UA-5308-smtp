@@ -24,7 +24,7 @@ public:
 	 * @param level Level of the logs(PROD, DEBUG, TRACE)
 	 * @details open log file & set level
 	 */
-	FileStrategy(LogLevel defaultLevel);
+	FileStrategy(LogLevel defaultLevel, const std::string& path = FILE_PATH);
 
 	/**
 	 * @brief FileStrategy dtor

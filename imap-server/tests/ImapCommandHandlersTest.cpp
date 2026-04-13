@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <sodium.h>
+#include <unistd.h>
 
 #include "DAL/FolderDAL.h"
 #include "DAL/UserDAL.h"
@@ -15,6 +16,15 @@
 #include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
 #include "schema.h"
+
+namespace {
+std::string imapTestDbPath() {
+    return "/tmp/test_imap_" + std::to_string(getpid()) + ".db";
+}
+std::string imapTestEmlPath(const std::string& subject) {
+    return "/tmp/test_msg_" + std::to_string(getpid()) + "_" + subject + ".eml";
+}
+}
 
 class MockLogger : public ILogger
 {
@@ -31,7 +41,7 @@ protected:
 			FAIL() << "Failed to initialize libsodium";
 		}
 
-		db = std::make_unique<DataBaseManager>("/tmp/test_imap.db", initSchema());
+		db = std::make_unique<DataBaseManager>(imapTestDbPath(), initSchema());
 		userDal = std::make_unique<UserDAL>(db->getDB(), db->pool());
 		userRepo = std::make_unique<UserRepository>(*db);;
 		messRepo = std::make_unique<MessageRepository>(*db);
@@ -54,7 +64,7 @@ protected:
 		}
 		dispatcher.reset();
 		db.reset();
-		std::remove("/tmp/test_imap.db");
+		std::remove(imapTestDbPath().c_str());
 	}
 
 	::testing::NiceMock<MockLogger> mockLogger;
@@ -129,7 +139,7 @@ protected:
 		auto addMsg = [&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject,
 						  bool flagged, bool answered)
 		{
-			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::string filepath = imapTestEmlPath(subject);
 			std::ofstream file(filepath);
 			file << "From: " << from << "\r\n";
 			file << "To: recipient@test.com\r\n";
@@ -163,7 +173,7 @@ protected:
 		auto addMultipartMsg =
 			[&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject)
 		{
-			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::string filepath = imapTestEmlPath(subject);
 			std::ofstream file(filepath);
 			file << "From: " << from << "\r\n";
 			file << "To: recipient@test.com\r\n";

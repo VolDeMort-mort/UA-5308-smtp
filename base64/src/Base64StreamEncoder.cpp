@@ -42,10 +42,6 @@ void Base64StreamEncoder::EncodeStream(const uint8_t* data, std::size_t size, st
 	{
 		while (m_left_size < 3 && i < size)
 		{
-			if (m_left_size >= 2)
-			{
-				break;
-			}
 			m_left[m_left_size++] = data[i++];
 		}
 

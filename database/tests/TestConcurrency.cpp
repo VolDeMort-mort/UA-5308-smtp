@@ -8,15 +8,12 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unistd.h>
 
 #include "DataBaseManager.h"
 #include "Repository/MessageRepository.h"
 #include "Repository/UserRepository.h"
 #include "schema.h"
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 namespace {
 
@@ -24,7 +21,7 @@ std::atomic<int> g_db_counter{0};
 
 std::string uniqueDbPath() {
     auto tmp = std::filesystem::temp_directory_path();
-    return (tmp / ("concur_" + std::to_string(++g_db_counter) + ".db")).string();
+    return (tmp / ("concur_" + std::to_string(getpid()) + "_" + std::to_string(++g_db_counter) + ".db")).string();
 }
 
 void removeDb(const std::string& path) {
@@ -32,7 +29,6 @@ void removeDb(const std::string& path) {
         std::filesystem::remove(path + suffix);
 }
 
-// Helper: build a minimal deliverable message
 Message makeMessage(int64_t user_id, int64_t folder_id,
                     const std::string& from = "sender@test.com") {
     Message m;
@@ -47,15 +43,7 @@ Message makeMessage(int64_t user_id, int64_t folder_id,
     return m;
 }
 
-} // namespace
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fixture
-// The DataBaseManager is shared; each thread creates its own Repository
-// instances (as in a real server where each connection owns its repo).
-// We use a pool of 4 read connections by default; tests that stress the pool
-// increase this to 8.
-// ─────────────────────────────────────────────────────────────────────────────
+} 
 
 class ConcurrencyTest : public ::testing::Test {
 protected:
@@ -64,8 +52,7 @@ protected:
 
     void SetUp() override {
         m_path = uniqueDbPath();
-        // Give the pool enough read connections to cover concurrent readers
-        m_mgr = std::make_unique<DataBaseManager>(m_path, initSchema(), nullptr, /*read_pool_size=*/8);
+        m_mgr = std::make_unique<DataBaseManager>(m_path, initSchema(), nullptr, 8);
         ASSERT_TRUE(m_mgr->isConnected()) << "DB failed to open: " << m_path;
     }
 
@@ -74,13 +61,10 @@ protected:
         removeDb(m_path);
     }
 
-    // Per-thread repo factory: each thread owns its repos but shares the manager.
-    // This mirrors the real usage pattern of the server.
     std::pair<UserRepository, MessageRepository> makeRepos() {
         return {UserRepository(*m_mgr), MessageRepository(*m_mgr)};
     }
 
-    // Convenience: register a user and return (user_id, inbox_id)
     std::pair<int64_t, int64_t> setupUser(const std::string& username) {
         UserRepository    ur(*m_mgr);
         MessageRepository mr(*m_mgr);
@@ -102,10 +86,6 @@ protected:
         return {uid, fid};
     }
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1.  Concurrent registration — all threads create distinct users
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ConcurrencyTest, ConcurrentUserRegistration_AllUsersCreated) {
     constexpr int N = 8;
@@ -152,12 +132,8 @@ TEST_F(ConcurrencyTest, ConcurrentRegistration_AssignedIDsAreUnique) {
         << "Duplicate user IDs detected under concurrent registration";
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 2.  Concurrent reads — all readers see a consistent snapshot
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ConcurrencyTest, ConcurrentReads_AllReadersGetConsistentCount) {
-    // Pre-populate synchronously
     {
         UserRepository ur(*m_mgr);
         for (int i = 0; i < 5; ++i) {
@@ -208,10 +184,6 @@ TEST_F(ConcurrencyTest, ConcurrentFolderLookups_AllSeeCorrectFolders) {
     for (auto& t : threads) t.join();
     EXPECT_EQ(ok.load(), READERS);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 3.  Concurrent writes — no messages are lost
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ConcurrencyTest, ConcurrentDelivery_NoMessagesLost) {
     auto [uid, fid] = setupUser("delivery_user");
@@ -270,10 +242,6 @@ TEST_F(ConcurrencyTest, ConcurrentDelivery_UIDs_AreUniqueWithinFolder) {
         << "Duplicate UIDs detected under concurrent delivery";
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 4.  Concurrent flag updates — no deadlock, final state consistent
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST_F(ConcurrencyTest, ConcurrentFlagUpdates_NoDeadlockOrCorruption) {
     auto [uid, fid] = setupUser("flag_user");
     ASSERT_GT(uid, 0);
@@ -299,7 +267,7 @@ TEST_F(ConcurrencyTest, ConcurrentFlagUpdates_NoDeadlockOrCorruption) {
             for (auto id : msg_ids) {
                 mr.markSeen(id,    t % 2 == 0);
                 mr.markFlagged(id, t % 2 != 0);
-                mr.markDeleted(id, false);       // never truly delete in this test
+                mr.markDeleted(id, false);       
             }
             ++done;
         });
@@ -307,15 +275,10 @@ TEST_F(ConcurrencyTest, ConcurrentFlagUpdates_NoDeadlockOrCorruption) {
     for (auto& th : threads) th.join();
     EXPECT_EQ(done.load(), THREADS);
 
-    // All messages must still be retrievable — no row was corrupted/lost
     MessageRepository mr(*m_mgr);
     for (auto id : msg_ids)
         EXPECT_TRUE(mr.findByID(id).has_value()) << "Message " << id << " lost";
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 5.  Mixed read / write — readers never block writers; data is coherent
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ConcurrencyTest, MixedReadWrite_ReadersNeverSeeMoreThanWritten) {
     auto [uid, fid] = setupUser("rw_user");
@@ -342,8 +305,6 @@ TEST_F(ConcurrencyTest, MixedReadWrite_ReadersNeverSeeMoreThanWritten) {
             MessageRepository mr(*m_mgr);
             for (int r = 0; r < 5; ++r) {
                 auto msgs = mr.findByFolder(fid, 1000, 0);
-                // Readers must never observe more messages than can possibly
-                // have been written at this point in time.
                 if (static_cast<int>(msgs.size()) <= WRITERS * MSGS_PER_WRITER)
                     ++read_ok;
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -356,7 +317,6 @@ TEST_F(ConcurrencyTest, MixedReadWrite_ReadersNeverSeeMoreThanWritten) {
     EXPECT_EQ(write_ok.load(), WRITERS * MSGS_PER_WRITER);
     EXPECT_EQ(read_ok.load(),  READERS * 5);
 
-    // Final verification
     MessageRepository mr(*m_mgr);
     auto final_msgs = mr.findByFolder(fid, 1000, 0);
     EXPECT_EQ(static_cast<int>(final_msgs.size()), WRITERS * MSGS_PER_WRITER);
@@ -400,10 +360,6 @@ TEST_F(ConcurrencyTest, MixedReadWrite_ConcurrentFolderCreationAndLookup) {
     EXPECT_EQ(read_ok.load(),   READERS  * 5);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 6.  Connection pool under pressure — pool waits rather than errors out
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST_F(ConcurrencyTest, ConnectionPool_MoreReadersThanPoolSlots_AllComplete) {
     {
         UserRepository ur(*m_mgr);
@@ -411,7 +367,6 @@ TEST_F(ConcurrencyTest, ConnectionPool_MoreReadersThanPoolSlots_AllComplete) {
         ur.registerUser(u, "pass");
     }
 
-    // Launch more readers than the pool size (8) to exercise the wait path
     constexpr int READERS = 16;
     std::atomic<int>      completed{0};
     std::vector<std::thread> threads;
@@ -422,7 +377,6 @@ TEST_F(ConcurrencyTest, ConnectionPool_MoreReadersThanPoolSlots_AllComplete) {
             for (int r = 0; r < 3; ++r) {
                 auto users = ur.findAll(50, 0);
                 EXPECT_FALSE(users.empty());
-                // Hold the connection briefly to build up contention
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
             ++completed;
@@ -431,10 +385,6 @@ TEST_F(ConcurrencyTest, ConnectionPool_MoreReadersThanPoolSlots_AllComplete) {
     for (auto& t : threads) t.join();
     EXPECT_EQ(completed.load(), READERS);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 7.  Stress test — all operation types mixed at scale, no deadlock
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ConcurrencyTest, StressTest_MixedOps_NoDeadlock) {
     constexpr int USERS   = 4;
@@ -506,15 +456,11 @@ TEST_F(ConcurrencyTest, StressTest_MixedOps_NoDeadlock) {
         << "Not all operations completed — possible deadlock or crash";
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 8.  Concurrent expunge — serialised by write-lock, no phantom rows
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(ConcurrencyTest, ConcurrentExpunge_NoPhantomRows) {
     auto [uid, fid] = setupUser("expunge_user");
     ASSERT_GT(uid, 0);
 
-    // Deliver and mark-deleted a batch of messages
     constexpr int BATCH = 20;
     {
         MessageRepository mr(*m_mgr);
@@ -525,9 +471,6 @@ TEST_F(ConcurrencyTest, ConcurrentExpunge_NoPhantomRows) {
         }
     }
 
-    // Multiple threads try to expunge the same folder simultaneously.
-    // The write mutex ensures only one wins per round; together they must
-    // leave 0 deleted messages behind.
     constexpr int EXPUNGERS = 4;
     std::atomic<int> expunge_ok{0};
     std::vector<std::thread> threads;
@@ -539,10 +482,8 @@ TEST_F(ConcurrencyTest, ConcurrentExpunge_NoPhantomRows) {
     }
     for (auto& th : threads) th.join();
 
-    // At least one expunge must have succeeded
     EXPECT_GE(expunge_ok.load(), 1);
 
-    // No deleted messages should remain
     MessageRepository mr(*m_mgr);
     auto deleted = mr.findDeleted(fid, 100, 0);
     EXPECT_TRUE(deleted.empty())
