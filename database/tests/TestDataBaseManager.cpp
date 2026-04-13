@@ -24,11 +24,8 @@ void removeDb(const std::string& path) {
         std::filesystem::remove(path + suffix);
 }
 
-} // namespace
+} 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Happy-path: :memory: database
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(DataBaseManagerTest, MemoryDatabaseConnects) {
     DataBaseManager mgr(":memory:", initSchema());
@@ -46,9 +43,6 @@ TEST(DataBaseManagerTest, FileDatabaseConnects) {
     removeDb(path);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Failure: invalid path (directory that does not exist)
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(DataBaseManagerTest, InvalidPathNotConnected) {
     DataBaseManager mgr("/nonexistent/path/that/cannot/exist/db.sqlite", initSchema());
@@ -56,28 +50,16 @@ TEST(DataBaseManagerTest, InvalidPathNotConnected) {
     EXPECT_EQ(mgr.getDB(), nullptr);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Failure: bad migration SQL → not connected
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST(DataBaseManagerTest, BadMigrationSqlNotConnected) {
     DataBaseManager mgr(":memory:", "THIS IS NOT VALID SQL;");
     EXPECT_FALSE(mgr.isConnected());
     EXPECT_EQ(mgr.getDB(), nullptr);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// getDB returns nullptr when not connected
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST(DataBaseManagerTest, GetDbReturnsNullWhenNotConnected) {
     DataBaseManager mgr("/no/such/dir/x.db", initSchema());
     EXPECT_EQ(mgr.getDB(), nullptr);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Successful construction with explicit pool size
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(DataBaseManagerTest, ConnectsWithExplicitPoolSize) {
     std::string path = uniqueDbPath();
@@ -89,9 +71,6 @@ TEST(DataBaseManagerTest, ConnectsWithExplicitPoolSize) {
     removeDb(path);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Write lock is acquirable
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(DataBaseManagerTest, WriteLockAcquirable) {
     DataBaseManager mgr(":memory:", initSchema());

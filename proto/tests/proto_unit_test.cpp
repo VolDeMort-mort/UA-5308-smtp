@@ -13,9 +13,6 @@ static uint16_t imapConnTestPort() {
     return static_cast<uint16_t>(21000 + (getpid() % 10000));
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// SmtpResponse tests
-// ═════════════════════════════════════════════════════════════════════════════
 
 TEST(SmtpResponseTest, ServiceReady) {
     EXPECT_EQ(SmtpResponse::ServiceReady("mail.example.com"),
@@ -108,9 +105,6 @@ TEST(SmtpResponseTest, UnrecognizedAuthMech) {
               "504 Unrecognized authentication mechanism\r\n");
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ImapConnection tests (live socket pair)
-// ═════════════════════════════════════════════════════════════════════════════
 
 struct ImapConnFixture : public ::testing::Test {
     static boost::asio::io_context serverIo;
@@ -183,9 +177,6 @@ TEST_F(ImapConnFixture, SendRawAndReceiveRaw) {
     EXPECT_EQ(buf, data);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ImapConnection on its own socket: IsOpen / Close / Send on closed socket
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(ImapConnectionTest, IsOpenFalseAfterClose) {
     boost::asio::io_context io;
@@ -238,9 +229,6 @@ TEST(ImapConnectionTest, ReceiveRawOnClosedSocketFails) {
     EXPECT_FALSE(conn.ReceiveRaw(buf, sizeof(buf)));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SocketAcceptor: not-initialized paths + port-in-use
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(SocketAcceptorTest, StopWhenNotInitializedReturnsFalse) {
     SocketAcceptor acc;
@@ -278,9 +266,6 @@ TEST(SocketAcceptorTest, InitializePortAlreadyInUseReturnsFalse) {
     acc1.Stop();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SocketConnection: IsOpen / SetTimeout on a real connected pair
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(SocketConnectionTest, IsOpenFalseOnDefaultSocket) {
     boost::asio::io_context io;

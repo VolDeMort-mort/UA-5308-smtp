@@ -51,7 +51,6 @@ ListView {
         }
     }
 
-    // Label "Nothing to slow..."
     Text {
         id: emptyModelText
 

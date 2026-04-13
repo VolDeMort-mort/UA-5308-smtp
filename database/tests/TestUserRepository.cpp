@@ -28,11 +28,8 @@ void removeDb(const std::string& path) {
         std::filesystem::remove(path + suffix);
 }
 
-} // namespace
+} 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Fixture
-// ─────────────────────────────────────────────────────────────────────────────
 
 class UserRepositoryTest : public ::testing::Test {
 protected:
@@ -53,14 +50,14 @@ protected:
         removeDb(m_path);
     }
 
-    // Build a minimal User ready to be handed to registerUser()
+   
     static User buildUser(const std::string& username) {
         User u;
         u.username = username;
         return u;
     }
 
-    // Register a user and return the populated struct (id will be set)
+
     User reg(const std::string& username  = "alice",
              const std::string& password  = "Secret123!") {
         User u = buildUser(username);
@@ -69,10 +66,6 @@ protected:
         return u;
     }
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Registration
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(UserRepositoryTest, RegisterUser_AssignsPositiveID) {
     User u = buildUser("alice");
@@ -132,9 +125,6 @@ TEST_F(UserRepositoryTest, RegisterUser_WithOptionalProfile_PersistsFields) {
     EXPECT_EQ(found->birthdate,  "1995-03-15");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Authorization
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(UserRepositoryTest, Authorize_CorrectPassword_ReturnsTrue) {
     reg("alice", "Correct!");
@@ -157,12 +147,9 @@ TEST_F(UserRepositoryTest, Authorize_EmptyPassword_ReturnsFalse) {
 
 TEST_F(UserRepositoryTest, Authorize_CaseSensitiveUsername) {
     reg("Alice", "pass");
-    // Lookup with different casing should fail (SQLite LIKE is case-insensitive for ASCII
-    // but findByUsername typically uses exact match — verify behaviour)
+
     EXPECT_TRUE(m_repo->authorize("Alice", "pass"));
-    // "alice" != "Alice" at the DB level (depends on BINARY collation)
-    // We don't assert the negative here since collation is implementation-defined,
-    // but the positive must always hold.
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,9 +211,6 @@ TEST_F(UserRepositoryTest, FindAll_PaginationOffsetBeyondEnd_ReturnsEmpty) {
     EXPECT_TRUE(page.empty());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Password change
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(UserRepositoryTest, ChangePassword_LoginWithNewPasswordSucceeds) {
     User u = reg("alice", "OldPass!");
@@ -253,9 +237,6 @@ TEST_F(UserRepositoryTest, ChangePassword_HashStoredNotPlaintext) {
     EXPECT_NE(found->password_hash, "NewPass!");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Profile update
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(UserRepositoryTest, UpdateProfile_SetsAllFields) {
     User u = reg("alice");
@@ -285,7 +266,6 @@ TEST_F(UserRepositoryTest, UpdateProfile_PartialUpdate_OnlyChangesSpecifiedField
     User u = reg("carol");
     m_repo->updateProfile(*u.id, "Carol", "Jones", "2000-12-31");
 
-    // Change only first_name
     ASSERT_TRUE(m_repo->updateProfile(*u.id, "Caroline", std::nullopt, std::nullopt));
 
     auto found = m_repo->findByID(*u.id);
@@ -306,9 +286,6 @@ TEST_F(UserRepositoryTest, Update_UsernameChange_ReflectedInFind) {
     EXPECT_EQ(found->id, u.id);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Avatar
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(UserRepositoryTest, UpdateAvatar_ThenGetAvatar_ReturnsData) {
     User u = reg("alice");
@@ -339,9 +316,6 @@ TEST_F(UserRepositoryTest, GetAvatar_NonExistentUser_ReturnsNullopt) {
     EXPECT_FALSE(m_repo->getAvatar(999999).has_value());
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hard delete
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST_F(UserRepositoryTest, HardDelete_RemovesUserFromDB) {
     User u = reg("alice");

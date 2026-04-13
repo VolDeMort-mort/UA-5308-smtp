@@ -15,7 +15,7 @@ QVariantList ToVariantList(const std::vector<std::string>& values)
 
 	return out;
 }
-} // namespace
+} 
 
 MuaBridge::MuaBridge(QObject* parent)
     : QObject(parent)

@@ -24,7 +24,7 @@ std::string imapTestDbPath() {
 std::string imapTestEmlPath(const std::string& subject) {
     return "/tmp/test_msg_" + std::to_string(getpid()) + "_" + subject + ".eml";
 }
-} // namespace
+}
 
 class MockLogger : public ILogger
 {

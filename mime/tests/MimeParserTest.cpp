@@ -13,9 +13,6 @@ static Logger MakeLogger()
 	return Logger(std::make_unique<MockStrategy>());
 }
 
-
-// Helpers
-
 static const std::string kSimpleRaw =
 	"MIME-Version: 1.0\r\n"
 	"Date: Mon, 01 Mar 2025 10:00:00 +0200\r\n"
@@ -27,8 +24,6 @@ static const std::string kSimpleRaw =
 	"\r\n"
 	"Body text here.";
 
-
-// Basic
 
 TEST(MimeParserTest, ParseEmail_EmptyInput_ReturnsFalse)
 {
@@ -50,9 +45,6 @@ TEST(MimeParserTest, ParseEmail_SimpleTextEmail)
 	EXPECT_EQ(email.message_id, "<test.001@example.com>");
 	EXPECT_NE(email.plain_text.find("Body text here."), std::string::npos);
 }
-
-
-// Threading headers
 
 TEST(MimeParserTest, ParseEmail_ParsesThreadingHeaders)
 {
@@ -76,9 +68,6 @@ TEST(MimeParserTest, ParseEmail_ParsesThreadingHeaders)
 	EXPECT_EQ(email.references,  "<original.001@example.com>");
 }
 
-
-// Case-insensitive headers
-
 TEST(MimeParserTest, ParseEmail_CaseInsensitiveHeaders)
 {
 	auto        logger = MakeLogger();
@@ -100,8 +89,6 @@ TEST(MimeParserTest, ParseEmail_CaseInsensitiveHeaders)
 }
 
 
-// Folded headers
-
 TEST(MimeParserTest, ParseEmail_FoldedSubject)
 {
 	auto logger = MakeLogger();
@@ -121,8 +108,6 @@ TEST(MimeParserTest, ParseEmail_FoldedSubject)
 	EXPECT_NE(email.subject.find("Part2"), std::string::npos);
 }
 
-
-// Body encoding (simple email)
 
 TEST(MimeParserTest, ParseEmail_QuotedPrintableBody)
 {
@@ -159,8 +144,6 @@ TEST(MimeParserTest, ParseEmail_Base64Body)
 }
 
 
-// Multipart/alternative
-
 TEST(MimeParserTest, ParseEmail_MultipartAlternative)
 {
 	auto logger = MakeLogger();
@@ -186,8 +169,6 @@ TEST(MimeParserTest, ParseEmail_MultipartAlternative)
 	EXPECT_NE(email.html_text.find("<p>HTML body</p>"), std::string::npos);
 }
 
-
-// Attachments
 
 TEST(MimeParserTest, ParseEmail_AttachmentDetectedViaDisposition)
 {
@@ -242,8 +223,6 @@ TEST(MimeParserTest, ParseEmail_AttachmentDetectedViaName)
 	EXPECT_EQ(email.attachments[0].file_name, "notes.txt");
 }
 
-
-// Round-trip integrity (MimeBuilder -> MimeParser)
 
 TEST(MimeParserTest, RoundTrip_PlainText)
 {
@@ -344,9 +323,6 @@ TEST(MimeParserTest, RoundTrip_ThreadingHeaders)
 	EXPECT_EQ(parsed.references,  "<prev.001@test.com>");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ParseEmail: error/edge paths
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(MimeParserTest, ParseEmail_MultipartNoBoundaryReturnsFalse)
 {
@@ -389,7 +365,6 @@ TEST(MimeParserTest, ParseEmail_TopLevelBase64InvalidDataFallback)
 		"!!!NOT_VALID_BASE64!!!\r\n";
 
 	Email out;
-	// Should not throw; parser falls back to raw body on decode error
 	EXPECT_NO_THROW(MimeParser::ParseEmail(raw, out, logger));
 }
 
@@ -408,9 +383,6 @@ TEST(MimeParserTest, ParseEmail_7bitBodyNoEncoding)
 	EXPECT_EQ(out.plain_text_encoding, "7bit");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ParseStructure
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(MimeParserTest, ParseStructure_EmptyInputReturnsFalse)
 {

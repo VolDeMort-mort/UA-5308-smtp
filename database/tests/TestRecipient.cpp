@@ -2,10 +2,6 @@
 
 #include "Entity/Recipient.h"
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Recipient::typeToString
-// ─────────────────────────────────────────────────────────────────────────────
-
 TEST(RecipientTypeTest, TypeToStringTo) {
     EXPECT_EQ(Recipient::typeToString(RecipientType::To), "to");
 }
@@ -21,10 +17,6 @@ TEST(RecipientTypeTest, TypeToStringBcc) {
 TEST(RecipientTypeTest, TypeToStringReplyTo) {
     EXPECT_EQ(Recipient::typeToString(RecipientType::ReplyTo), "reply-to");
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Recipient::typeFromString
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(RecipientTypeTest, TypeFromStringTo) {
     EXPECT_EQ(Recipient::typeFromString("to"), RecipientType::To);
@@ -48,10 +40,6 @@ TEST(RecipientTypeTest, TypeFromStringUnknownDefaultsToTo) {
     EXPECT_EQ(Recipient::typeFromString("TO"), RecipientType::To);
     EXPECT_EQ(Recipient::typeFromString("CC"), RecipientType::To);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Round-trip
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(RecipientTypeTest, RoundTrip) {
     for (auto t : {RecipientType::To, RecipientType::Cc, RecipientType::Bcc, RecipientType::ReplyTo}) {

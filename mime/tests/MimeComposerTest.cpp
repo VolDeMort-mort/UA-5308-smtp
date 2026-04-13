@@ -12,9 +12,6 @@ static Logger MakeLogger()
 	return Logger(std::make_unique<MockStrategy>());
 }
 
-
-// Helpers
-
 static Email MakeOriginal()
 {
 	Email e;
@@ -26,9 +23,6 @@ static Email MakeOriginal()
 	e.plain_text = "Can you explain how this works?";
 	return e;
 }
-
-
-// CreateNew
 
 TEST(MimeComposerTest, CreateNew_SetsBasicFields)
 {
@@ -60,9 +54,6 @@ TEST(MimeComposerTest, CreateNew_DefaultEmptyThreading)
 	EXPECT_TRUE(e.in_reply_to.empty());
 	EXPECT_TRUE(e.references.empty());
 }
-
-
-// CreateReply
 
 TEST(MimeComposerTest, CreateReply_RecipientIsOriginalSender)
 {
@@ -147,9 +138,6 @@ TEST(MimeComposerTest, CreateReply_DoesNotCopyAttachments)
 	Email reply = MimeComposer::CreateReply(original, "alice@example.com", "Body");
 	EXPECT_FALSE(reply.HasAttachments());
 }
-
-
-// CreateForward
 
 TEST(MimeComposerTest, CreateForward_RecipientSetCorrectly)
 {
@@ -237,8 +225,6 @@ TEST(MimeComposerTest, CreateForward_AttachmentsCopied)
 	EXPECT_EQ(fwd.attachments[0].file_name, "file.txt");
 }
 
-
-// Integration: CreateReply/Forward → MimeBuilder
 
 TEST(MimeComposerTest, Integration_ReplyBuildsSuccessfully)
 {

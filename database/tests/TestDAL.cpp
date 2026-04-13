@@ -27,11 +27,7 @@ void removeDb(const std::string& path) {
         std::filesystem::remove(path + suffix);
 }
 
-} // namespace
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Base fixture: opens DB + provides write conn and pool
-// ─────────────────────────────────────────────────────────────────────────────
+} 
 
 class DALFixture : public ::testing::Test {
 protected:
@@ -52,7 +48,7 @@ protected:
     sqlite3*        db()   { return m_mgr->getDB(); }
     ConnectionPool& pool() { return m_mgr->pool(); }
 
-    // Insert a minimal user row, return its id
+
     int64_t insertUser(const std::string& username) {
         UserDAL dal(db(), pool());
         User u;
@@ -62,7 +58,7 @@ protected:
         return u.id.value();
     }
 
-    // Insert a minimal folder row, return its id
+
     int64_t insertFolder(int64_t user_id, const std::string& name) {
         FolderDAL dal(db(), pool());
         Folder f;
@@ -72,7 +68,7 @@ protected:
         return f.id.value();
     }
 
-    // Insert a minimal message row, return its id
+
     int64_t insertMessage(int64_t user_id, int64_t folder_id) {
         MessageDAL dal(db(), pool());
         Message m;
@@ -88,9 +84,6 @@ protected:
     }
 };
 
-// ═════════════════════════════════════════════════════════════════════════════
-// RecipientDAL tests
-// ═════════════════════════════════════════════════════════════════════════════
 
 class RecipientDALTest : public DALFixture {
 protected:
@@ -200,10 +193,6 @@ TEST_F(RecipientDALTest, AllRecipientTypes) {
         EXPECT_EQ(found->type, type);
     }
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// UserDAL tests
-// ═════════════════════════════════════════════════════════════════════════════
 
 class UserDALTest : public DALFixture {};
 
@@ -338,10 +327,6 @@ TEST_F(UserDALTest, UpdateProfileWithValues) {
     EXPECT_EQ(found->last_name, "Doe");
     EXPECT_EQ(found->birthdate, "1990-01-01");
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// MessageDAL tests
-// ═════════════════════════════════════════════════════════════════════════════
 
 class MessageDALTest : public DALFixture {
 protected:

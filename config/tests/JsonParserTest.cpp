@@ -130,13 +130,9 @@ TEST(JsonParserTest, ParseMultipleSections)
 	EXPECT_EQ(result.at("logging.max_file_size_mb"), "10");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ParseLiteral: unknown token, partial/edge inputs
-// ─────────────────────────────────────────────────────────────────────────────
 
 TEST(JsonParserTest, ParseLiteralUnknownToken)
 {
-	// An unknown token (not true/false/null) should be captured up to delimiter
 	auto result = JsonParser::Parse(R"({"x": unknown})");
 	EXPECT_EQ(result.at("x"), "unknown");
 }

@@ -5,7 +5,6 @@
 
 using namespace SmtpClient;
 
-// NeedsEncoding
 TEST(MimeEncoderTest, NeedsEncoding_AsciiReturnsFalse)
 {
 	EXPECT_FALSE(MimeEncoder::NeedsEncoding("Hello World"));
@@ -54,7 +53,6 @@ TEST(MimeEncoderTest, EncodeHeader_SingleBlockForShortText)
 
 TEST(MimeEncoderTest, EncodeHeader_MultipleBlocksForLongText)
 {
-	// 46+ bytes of Cyrillic text forces >=2 chunks (45-byte chunk size)
 	std::string cyrillic;
 	for (int i = 0; i < 24; ++i) cyrillic += "\xD0\x90"; // "А" x 24 = 48 bytes
 	std::string encoded = MimeEncoder::EncodeHeader(cyrillic);
@@ -79,7 +77,6 @@ TEST(MimeEncoderTest, EncodeHeader_CustomSeparator)
 
 TEST(MimeEncoderTest, EncodeHeader_NoRawCrLfInOutput)
 {
-	// The separator should appear BETWEEN encoded-words; the words themselves must not have raw CRLF
 	std::string cyrillic;
 	for (int i = 0; i < 24; ++i) cyrillic += "\xD0\x90";
 
@@ -87,7 +84,6 @@ TEST(MimeEncoderTest, EncodeHeader_NoRawCrLfInOutput)
 	EXPECT_EQ(encoded.find("\r\n"), std::string::npos);
 }
 
-// Round-trip: EncodeHeader → DecodeEncodedWord
 TEST(MimeEncoderTest, RoundTrip_Cyrillic)
 {
 	std::string original = "\xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD1\x96\xD1\x82"; // Привіт

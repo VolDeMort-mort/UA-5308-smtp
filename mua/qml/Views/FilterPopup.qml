@@ -91,7 +91,7 @@ Popup {
             Layout.topMargin: 5; Layout.bottomMargin: 5
         }
 
-        // Auto dates checkboxes (Згруповані, щоб вибиралася лише одна)
+        // Auto dates checkboxes 
         ButtonGroup { id: dateGroup }
 
         StyledCheckBox {

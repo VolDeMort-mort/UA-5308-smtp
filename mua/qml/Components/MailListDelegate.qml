@@ -18,14 +18,12 @@ Rectangle {
         onClicked: delegController.handleBodyClick()
     }
 
-    // Main layout
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 20
         anchors.rightMargin: 20
         spacing: 10
 
-        // Selected icon
         Item {
             width: 20; height: 20
             SvgIcon {
@@ -40,7 +38,6 @@ Rectangle {
             }
         }
 
-        // Opened icon
         Item {
             width: 20; height: 20
             SvgIcon {
@@ -53,7 +50,6 @@ Rectangle {
             }
         }
 
-        // Saved icon
         Item {
             width: 20;
             height: 20
@@ -71,7 +67,6 @@ Rectangle {
             }
         }
 
-        // Starred icon
         Item {
             width: 20; height: 20
             SvgIcon {
@@ -134,7 +129,6 @@ Rectangle {
             }            }
     }
 
-    // Borders
     Rectangle {
         width: parent.width - parent.radius * 1.4
         height: 2.5
@@ -143,8 +137,6 @@ Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-
-    // Click handling
     QtObject {
         id: delegController
 

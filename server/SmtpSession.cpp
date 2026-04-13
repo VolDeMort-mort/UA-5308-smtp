@@ -69,7 +69,7 @@ namespace
         ofs.write(body.data(), static_cast<std::streamsize>(body.size()));
         return ofs ? path : std::string{};
     }
-} // anonymous namespace
+} 
 
 bool SmtpSession::SaveMessage()
 {
@@ -412,9 +412,7 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 	std::string mechanism = command.argument.substr(0, sp);
 	std::string initial_response = (sp == std::string::npos) ? "" : command.argument.substr(sp + 1);
 
-	// AUTH LOGIN
-	// Two separate messeges: server asks for username, then password.
-	// Nothing is sent upfront
+
 	if (mechanism == "LOGIN")
 	{
 		m_state = SmtpState::AUTH_WAIT_USER;
@@ -423,16 +421,11 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 		return SmtpResponse::AuthChallenge(Base64Encoder::EncodeBase64(bytes));
 	}
 
-	// AUTH PLAIN
-	// One messege that send login and password together
-	// The client may send credentials inline with the AUTH command,
-	// or wait for an empty answer and send them on the next line.
 	if (mechanism == "PLAIN")
 	{
 		if (initial_response.empty())
 		{
-			// Client chose send empty chalange and send credatials afterwards
-            // enter AUTH_WAIT_PASS and wait
+
 			m_state = SmtpState::AUTH_WAIT_PASS;
 			return SmtpResponse::AuthChallenge("");
 		}
@@ -449,8 +442,7 @@ std::string SmtpSession::HandleAuth(const SmtpCommand& command)
 
 		if (decoded.empty()) return SmtpResponse::AuthFailed();
 
-		// The credentials must be sent in format "\0user\0password"
-        // So, we are finding '\0' and parsing login and pass
+
 		std::string blob(reinterpret_cast<char*>(decoded.data()), decoded.size());
 
 		auto first_nul = blob.find('\0');
@@ -491,7 +483,6 @@ std::string SmtpSession::HandleAuthLine(const std::string& line)
 		return SmtpResponse::AuthFailed();
 	}
 
-	// AUTH LOGIN step 1: username
 	if (m_state == SmtpState::AUTH_WAIT_USER)
 	{
 		std::string name(reinterpret_cast<char*>(decoded.data()), decoded.size());
@@ -504,12 +495,10 @@ std::string SmtpSession::HandleAuthLine(const std::string& line)
 		return SmtpResponse::AuthChallenge(Base64Encoder::EncodeBase64(bytes));
 	}
 
-	// AUTH LOGIN step 2: password or AUTH PLAIN: username and password
 	if (m_state == SmtpState::AUTH_WAIT_PASS)
 	{
 		std::string value(reinterpret_cast<char*>(decoded.data()), decoded.size());
 
-		// If m_auth_username is empty we arrived here from AUTH PLAIN, if not - AUTH LOGIN
 		if (m_auth_username.empty())
 		{
 			auto first_nul = value.find('\0');
@@ -530,7 +519,7 @@ std::string SmtpSession::HandleAuthLine(const std::string& line)
 		}
 		else
 		{
-			// AUTH LOGIN password
+
 			std::string username = std::move(m_auth_username);
 			m_auth_username.clear();
 			m_state = SmtpState::WAIT_MAIL;
