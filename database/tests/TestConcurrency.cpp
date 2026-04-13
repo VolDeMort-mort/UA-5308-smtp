@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unistd.h>
 
 #include "DataBaseManager.h"
 #include "Repository/MessageRepository.h"
@@ -24,7 +25,7 @@ std::atomic<int> g_db_counter{0};
 
 std::string uniqueDbPath() {
     auto tmp = std::filesystem::temp_directory_path();
-    return (tmp / ("concur_" + std::to_string(++g_db_counter) + ".db")).string();
+    return (tmp / ("concur_" + std::to_string(getpid()) + "_" + std::to_string(++g_db_counter) + ".db")).string();
 }
 
 void removeDb(const std::string& path) {

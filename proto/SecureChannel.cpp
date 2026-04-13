@@ -91,6 +91,11 @@ bool SecureChannel::enableSecure()
 
 bool SecureChannel::Send(const std::string& data)
 {
+	if (data.empty())
+	{
+		return false;
+	}
+
 	if (data.size() > MAX_MESSAGE_SIZE)
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "SECURECHANNEL_SEND: message too large");
