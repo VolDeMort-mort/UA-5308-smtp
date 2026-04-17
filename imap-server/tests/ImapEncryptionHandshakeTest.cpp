@@ -15,7 +15,7 @@
 #include "SocketConnection.hpp"
 #include "SocketConnector.hpp"
 #include "ThreadPool.h"
-#include "UserDAL.h"
+#include "DAL/UserDAL.h"
 
 struct ImapStartTlsFixture : public ::testing::Test
 {

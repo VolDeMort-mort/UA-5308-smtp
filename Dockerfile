@@ -25,6 +25,8 @@ RUN microdnf install -y sqlite-libs && microdnf clean all
 COPY --from=builder /build/*.rpm /tmp/
 RUN rpm -ivh /tmp/*.rpm && rm -f /tmp/*.rpm
 COPY --from=builder /build/mua/mua_seed_users /usr/bin/mua_seed_users
+COPY --from=builder /build/mua/mua_seed_stress_users /usr/bin/mua_seed_stress_users
+COPY --from=builder /build/mua/mua_delete_stress_users /usr/bin/mua_delete_stress_users
 
 RUN mkdir -p /srv/smtp/data/mailboxes /srv/smtp/imap-server
 COPY default_config.json /srv/smtp/default_config.json
