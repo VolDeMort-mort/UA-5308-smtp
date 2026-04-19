@@ -22,7 +22,8 @@ std::string SecureChannel:: Encrypt(const std::string& raw_data)
 
 	int encrypt = crypto_aead_chacha20poly1305_ietf_encrypt(
 		reinterpret_cast<unsigned char*>(&encrypted_text[0]), &encrypted_text_len,
-		reinterpret_cast<const unsigned char*>(raw_data.data()), raw_data.size(), nullptr, 0, nullptr, nonce, m_txKey);
+		reinterpret_cast<const unsigned char*>(raw_data.data()), raw_data.size(),
+		reinterpret_cast<const unsigned char*>(&m_txSeq), sizeof(m_txSeq), nullptr, nonce, m_txKey);
 
 	if (encrypt != 0)
 	{
@@ -40,7 +41,7 @@ std::string SecureChannel:: Encrypt(const std::string& raw_data)
 	return pair;
 }
 
-std::string SecureChannel::Decrypt(const std::string& raw_data)
+std::optional<std::string> SecureChannel::Decrypt(const std::string& raw_data)
 {
 	const std::size_t nonce_size = crypto_aead_chacha20poly1305_ietf_NPUBBYTES;
 	const std::size_t tag_size = crypto_aead_chacha20poly1305_ietf_ABYTES;
@@ -48,7 +49,7 @@ std::string SecureChannel::Decrypt(const std::string& raw_data)
 	if (raw_data.size() < nonce_size + tag_size)
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "Encrypted text too short");
-		return {};
+		return std::nullopt;
 	}
 
 	unsigned char nonce[crypto_aead_chacha20poly1305_ietf_NPUBBYTES] = {};
@@ -59,26 +60,20 @@ std::string SecureChannel::Decrypt(const std::string& raw_data)
 
 	std::string decrypted_text;
 
-	if (encrypted_text_len < tag_size)
-	{
-		if (m_logger) m_logger->Log(LogLevel::PROD, "Encrypted data too short for tag");
-		return {};
-	}
-
 	decrypted_text.resize(encrypted_text_len - tag_size);
 	unsigned long long decrypted_text_len = 0;
 
-	int decrypt = crypto_aead_chacha20poly1305_ietf_decrypt(reinterpret_cast<unsigned char*>(&decrypted_text[0]),
-															&decrypted_text_len, nullptr, encrypted_text,
-															encrypted_text_len, nullptr, 0, nonce, m_rxKey);
+	int decrypt = crypto_aead_chacha20poly1305_ietf_decrypt(reinterpret_cast<unsigned char*>(&decrypted_text[0]), &decrypted_text_len, nullptr, encrypted_text, 
+		encrypted_text_len, reinterpret_cast<const unsigned char*>(&m_rxSeq), sizeof(m_rxSeq), nonce, m_rxKey);
 
 	if (decrypt != 0)
 	{
 		if (m_logger) m_logger->Log(LogLevel::PROD, "Decryption failed");
-		return {};
+		return std::nullopt;
 	}
 
 	decrypted_text.resize(decrypted_text_len);
+	++m_rxSeq;
 
 	return decrypted_text;
 }
@@ -126,6 +121,8 @@ bool SecureChannel::Send(const std::string& data)
 		return false;
 	}
 
+	++m_txSeq;
+
 	if (m_logger) m_logger->Log(LogLevel::TRACE, "SECURECHANNEL_SEND: sent " + std::to_string(data.size()) + " bytes");
 	return true;
 }
@@ -160,14 +157,15 @@ bool SecureChannel::Receive(std::string& data)
 		return false;
 	}
 
-	data = Decrypt(encrypted_text);
+	auto decrypted = Decrypt(encrypted_text);
 
-	if (data.empty() &&
-		encrypted_text.size() > (crypto_aead_chacha20poly1305_ietf_NPUBBYTES + crypto_aead_chacha20poly1305_ietf_ABYTES))
+	if (!decrypted.has_value())
 	{
 		if (m_logger) m_logger->Log(LogLevel::TRACE, "DECRYPT: failed");
 		return false;
 	}
+
+	data = std::move(*decrypted);
 
 	if (m_logger) m_logger->Log(LogLevel::TRACE, "DECRYPT: message decrypted successfully");
 

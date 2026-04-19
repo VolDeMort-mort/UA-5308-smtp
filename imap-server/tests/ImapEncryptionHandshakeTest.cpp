@@ -1,24 +1,39 @@
 #include <boost/asio.hpp>
+#include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
 #include <thread>
 
 #include "ClientSecureChannel.hpp"
-#include "ConsoleStrategy.h"
-#include "DAL/UserDAL.h"
 #include "DataBaseManager.h"
+#include "ILoggerStrategy.h"
+#include "ImapConfig.hpp"
 #include "ImapServer.hpp"
 #include "Logger.h"
 #include "ServerSecureChannel.hpp"
-#include "SocketAcceptor.hpp"
 #include "SocketConnection.hpp"
 #include "SocketConnector.hpp"
 #include "ThreadPool.h"
+#include "schema.h"
+
+class NullStrategy : public ILoggerStrategy
+{
+public:
+	virtual std::string SpecificLog(LogLevel lvl, const std::string& msg) { return {}; }
+	virtual bool IsValid() { return true; }
+	virtual bool Write(const std::string& message) { return true; }
+	virtual void Flush() {};
+};
+
+static std::string tempDbPath()
+{
+	return (std::filesystem::temp_directory_path() / "test_imap_tls.db").string();
+}
 
 struct ImapStartTlsFixture : public ::testing::Test
 {
-	static Logger logger;
+	static Logger logger; 
 	static boost::asio::io_context serverIo;
 	static boost::asio::io_context clientIo;
 	static std::unique_ptr<DataBaseManager> db;
@@ -36,23 +51,29 @@ struct ImapStartTlsFixture : public ::testing::Test
 		config.timeout_mins = 5;
 		config.worker_threads = 2;
 
-		db = std::make_unique<DataBaseManager>(":memory:", "./database/scheme/001_init_scheme.sql",
-											   std::shared_ptr<ILogger>(&logger, [](ILogger*) {}));
+		std::string m_dbPath = tempDbPath();
+		db = std::make_unique<DataBaseManager>(m_dbPath, initSchema());
 
 		pool = std::make_unique<ThreadPool>();
 		pool->initialize(config.worker_threads);
 		pool->set_logger(&logger);
 
 		imapServer = std::make_unique<ImapServer>(serverIo, logger, *db, *pool, config);
-		imapServer->Start();
-
-		serverThread = std::thread([]() { serverIo.run(); });
+		serverThread = std::thread([]() { imapServer->Start(); });
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	}
 
 	static void TearDownTestSuite()
 	{
 		serverIo.stop();
-		if (serverThread.joinable()) serverThread.join();
+		if (serverThread.joinable())
+		{
+			serverThread.join();
+		}
+		pool->terminate();
+		db.reset();
+
+		std::filesystem::remove(tempDbPath()); 
 	}
 
 	void SetUp() override
@@ -69,10 +90,16 @@ struct ImapStartTlsFixture : public ::testing::Test
 	void TearDown() override
 	{
 		tlsClient.reset();
-		if (clientConn) clientConn->Close();
+		if (clientConn && clientConn->IsOpen())
+		{
+			clientConn->Close();
+		}
 	}
 
-	void sendPlain(const std::string& line) { clientConn->Send(line + "\r\n"); }
+	void sendPlain(const std::string& line) 
+	{ 
+		clientConn->Send(line + "\r\n"); 
+	}
 
 	std::string recvPlain()
 	{
@@ -85,7 +112,10 @@ struct ImapStartTlsFixture : public ::testing::Test
 	{
 		sendPlain(tag + " STARTTLS");
 		std::string resp = recvPlain();
-		if (resp.find(tag + " OK") == std::string::npos) return false;
+		if (resp.find(tag + " OK") == std::string::npos)
+		{
+			return false;
+		}
 
 		tlsClient = std::make_unique<ClientSecureChannel>(*clientConn);
 		tlsClient->setLogger(&logger);
@@ -94,7 +124,7 @@ struct ImapStartTlsFixture : public ::testing::Test
 	}
 };
 
-Logger ImapStartTlsFixture::logger(std::make_unique<ConsoleStrategy>());
+Logger ImapStartTlsFixture::logger(std::make_unique<NullStrategy>());
 boost::asio::io_context ImapStartTlsFixture::serverIo;
 boost::asio::io_context ImapStartTlsFixture::clientIo;
 std::unique_ptr<DataBaseManager> ImapStartTlsFixture::db;
@@ -103,10 +133,59 @@ ImapConfig ImapStartTlsFixture::config;
 std::unique_ptr<ImapServer> ImapStartTlsFixture::imapServer;
 std::thread ImapStartTlsFixture::serverThread;
 
+TEST_F(ImapStartTlsFixture, ClientDisconnectBeforeTlsIsHandledGracefully)
+{
+	clientConn->Close();
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	SocketConnector connector;
+	connector.Initialize(clientIo);
+	std::unique_ptr<SocketConnection> newConn;
+	EXPECT_NO_THROW(connector.Connect("localhost", config.PORT, newConn));
+}
+
+TEST_F(ImapStartTlsFixture, UnknownCommandBeforeTlsReturnsBad)
+{
+	sendPlain("X001 GIBBERISH");
+	std::string resp = recvPlain();
+	EXPECT_NE(resp.find("BAD"), std::string::npos) << "Got: " << resp;
+}
+
 TEST_F(ImapStartTlsFixture, TlsHandshakeSucceeds)
 {
 	EXPECT_TRUE(upgradeToTls("H001")) << "TLS handshake should succeed after STARTTLS OK";
 	EXPECT_TRUE(tlsClient->isSecure());
+}
+
+TEST_F(ImapStartTlsFixture, UnknownCommandAfterTlsReturnsBad)
+{
+	ASSERT_TRUE(upgradeToTls());
+
+	std::string resp;
+	tlsClient->Send("U001 NONSENSE\r\n");
+	EXPECT_TRUE(tlsClient->Receive(resp));
+	EXPECT_NE(resp.find("BAD"), std::string::npos) << "Got: " << resp;
+}
+
+TEST_F(ImapStartTlsFixture, StartTlsWithArgumentsReturnsBad)
+{
+	sendPlain("S001 STARTTLS unexpected-arg");
+	std::string resp = recvPlain();
+	EXPECT_NE(resp.find("BAD"), std::string::npos) << "Got: " << resp;
+}
+
+TEST_F(ImapStartTlsFixture, EmptyCommandDoesNotCrash)
+{
+	sendPlain("");
+	std::string resp = recvPlain();
+	EXPECT_NE(resp.find("BAD"), std::string::npos);
+}
+
+TEST_F(ImapStartTlsFixture, OversizedCommandIsRejected)
+{
+	std::string huge = "A001 " + std::string(100000, 'X');
+	sendPlain(huge);
+	std::string resp = recvPlain();
+	EXPECT_NE(resp.find("BAD"), std::string::npos) << "Got: " << resp;
 }
 
 TEST_F(ImapStartTlsFixture, SecondStartTlsRejectedWithBad)
@@ -114,9 +193,8 @@ TEST_F(ImapStartTlsFixture, SecondStartTlsRejectedWithBad)
 	ASSERT_TRUE(upgradeToTls("T001"));
 
 	std::string received;
-	std::thread t([&]() { tlsClient->Send("T002 STARTTLS\r\n"); });
+	tlsClient->Send("T002 STARTTLS\r\n");
 	EXPECT_TRUE(tlsClient->Receive(received));
-	t.join();
 
 	EXPECT_NE(received.find("BAD"), std::string::npos) << "Second STARTTLS must return BAD, got: " << received;
 }
@@ -126,9 +204,8 @@ TEST_F(ImapStartTlsFixture, NoopOverTlsReturnsOk)
 	ASSERT_TRUE(upgradeToTls());
 
 	std::string received;
-	std::thread t([&]() { tlsClient->Send("N001 NOOP\r\n"); });
+	tlsClient->Send("N001 NOOP\r\n");
 	EXPECT_TRUE(tlsClient->Receive(received));
-	t.join();
 
 	EXPECT_NE(received.find("N001 OK"), std::string::npos) << "NOOP over TLS should return OK, got: " << received;
 }
@@ -140,12 +217,10 @@ TEST_F(ImapStartTlsFixture, MessageIntegrityOverTls)
 	for (int i = 1; i <= 5; ++i)
 	{
 		std::string tag = "M00" + std::to_string(i);
-		std::string send = tag + " NOOP\r\n";
 		std::string recv;
 
-		std::thread t([&]() { tlsClient->Send(send); });
+		tlsClient->Send(tag + " NOOP\r\n");
 		EXPECT_TRUE(tlsClient->Receive(recv));
-		t.join();
 
 		EXPECT_NE(recv.find(tag + " OK"), std::string::npos) << "NOOP #" << i << " did not return OK, got: " << recv;
 	}
