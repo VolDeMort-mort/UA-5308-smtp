@@ -5,11 +5,11 @@
 #include "ImapParser.hpp"
 #include "ImapResponse.hpp"
 
-ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db,
-						 ThreadPool& pool, ImapConfig& config)
+ImapSession::ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, ThreadPool& pool,
+						 ImapConfig& config)
 	: m_config(config), m_socket(std::move(socket)), m_logger(logger), m_mess_repo(db), m_user_repo(db),
-	  m_conn(m_socket), m_secure_channel(std::make_unique<ServerSecureChannel>(m_conn)), 
-	  m_thread_pool(pool), m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(m_socket.get_executor())
+	  m_conn(m_socket), m_secure_channel(std::make_unique<ServerSecureChannel>(m_conn)), m_thread_pool(pool),
+	  m_strand(boost::asio::make_strand(m_socket.get_executor())), m_timer(m_socket.get_executor())
 {
 	m_logger.Log(PROD, "New ImapSession created");
 	m_logger.Log(TRACE, "ImapSession::ImapSession - socket accepted");
@@ -40,7 +40,7 @@ void ImapSession::ReadCommand()
 
 	auto self = shared_from_this();
 
-	m_timer.expires_after(std::chrono::minutes(m_config.TIMEOUT_MINS));
+	m_timer.expires_after(std::chrono::minutes(m_config.timeout_mins));
 	m_timer.async_wait(
 		boost::asio::bind_executor(m_strand,
 								   [this, self](boost::system::error_code ec)
@@ -107,7 +107,6 @@ void ImapSession::ReadCommand()
 											   m_logger.Log(PROD, "ImapSession::ReadCommand - Error: " + ec.message());
 											   m_socket.close();
 										   }
-										   
 									   }));
 	}
 
@@ -232,7 +231,7 @@ void ImapSession::Write()
 		{
 			m_is_writing = false;
 
-			if (m_closing) 
+			if (m_closing)
 			{
 				m_socket.close();
 				return;
@@ -301,14 +300,14 @@ void ImapSession::UpgradeToTLS()
 {
 	m_timer.cancel();
 
-	m_timer.expires_after(std::chrono::seconds(m_config.HANDSHAKE_TIMEOUT_SECS));
+	m_timer.expires_after(std::chrono::seconds(m_config.handshake_timeout_secs));
 	m_timer.async_wait(boost::asio::bind_executor(m_strand,
 												  [this, self = shared_from_this()](boost::system::error_code ec)
 												  {
 													  if (!ec)
 													  {
 														  m_logger.Log(PROD, "IMAP: TLS handshake timeout");
-														  m_socket.close(); 
+														  m_socket.close();
 													  }
 												  }));
 

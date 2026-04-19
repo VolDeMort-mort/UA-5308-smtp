@@ -8,11 +8,6 @@ add_executable(
     ImapSessionTest.cpp
     ImapCommandHandlersTest.cpp
     ImapEncryptionHandshakeTest.cpp
-    ../src/ImapParser.cpp
-    ../src/ImapUtils.cpp
-    ../src/ImapCommandDispatcher.cpp
-    ../src/ImapServer.cpp
-    ../src/ImapSession.cpp
 )
 
 target_link_libraries(test_imap PRIVATE imap_lib GTest::gtest_main GTest::gmock)

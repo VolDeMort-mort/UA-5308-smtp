@@ -1,4 +1,5 @@
 #include <boost/asio.hpp>
+#include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
@@ -46,15 +47,15 @@ struct ImapStartTlsFixture : public ::testing::Test
 
 	static void SetUpTestSuite()
 	{
-		config.PORT = 30002;
-		config.TIMEOUT_MINS = 5;
-		config.WORKER_THREADS = 2;
+		config.port = 30002;
+		config.timeout_mins = 5;
+		config.worker_threads = 2;
 
 		std::string m_dbPath = tempDbPath();
 		db = std::make_unique<DataBaseManager>(m_dbPath, initSchema());
 
 		pool = std::make_unique<ThreadPool>();
-		pool->initialize(config.WORKER_THREADS);
+		pool->initialize(config.worker_threads);
 		pool->set_logger(&logger);
 
 		imapServer = std::make_unique<ImapServer>(serverIo, logger, *db, *pool, config);
@@ -79,7 +80,7 @@ struct ImapStartTlsFixture : public ::testing::Test
 	{
 		SocketConnector connector;
 		connector.Initialize(clientIo);
-		connector.Connect("localhost", config.PORT, clientConn);
+		connector.Connect("localhost", config.port, clientConn);
 
 		std::string banner;
 		ASSERT_TRUE(clientConn->Receive(banner));
