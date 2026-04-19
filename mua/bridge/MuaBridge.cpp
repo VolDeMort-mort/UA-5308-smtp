@@ -438,7 +438,7 @@ void MuaBridge::onResult(MailResult result)
 
 			if (reconnectingFlagChanged)
 			{
-				emit reconnectingFlagChanged();
+				emit reconnectingChanged();
 			}
 			if (attemptChanged)
 			{
