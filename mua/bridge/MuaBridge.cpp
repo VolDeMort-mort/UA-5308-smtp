@@ -415,7 +415,7 @@ void MuaBridge::onResult(MailResult result)
 		else if constexpr (std::is_same_v<T, ReconnectStateResult>)
 		{
 			setBusy(r.reconnecting);
-			const bool hasreconnectingChanged = (m_isReconnecting != r.reconnecting);
+			const bool reconnectingFlagChanged = (m_isReconnecting != r.reconnecting);
 			const int newAttempt = static_cast<int>(r.attempt);
 			const bool attemptChanged = (m_reconnectAttempt != newAttempt);
 			const QString newMessage = QString::fromStdString(r.message);
@@ -436,7 +436,7 @@ void MuaBridge::onResult(MailResult result)
 				emit connectionStateChanged();
 			}
 
-			if (hasreconnectingChanged)
+			if (reconnectingFlagChanged)
 			{
 				emit reconnectingChanged();
 			}
