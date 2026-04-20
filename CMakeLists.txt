@@ -3,9 +3,10 @@ project(smtp LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-find_package(Boost REQUIRED)
+find_package(Boost REQUIRED COMPONENTS system thread json)
 find_package(Threads REQUIRED)
 find_package(Sodium REQUIRED)
 
@@ -13,6 +14,7 @@ option(BUILD_SERVER "Build the SMTP server" ON)
 option(BUILD_IMAP "Build the IMAP server" ON)
 option(BUILD_MUA "Build the Mail User Agent" ON)
 option(BUILD_DATABASE "Build the Database" ON)
+option(BUILD_API "Build the API server" ON)
 option(SMTP_TESTING "Build all tests" OFF)
 
 if(SMTP_TESTING)
@@ -28,8 +30,12 @@ add_subdirectory(base64)
 add_subdirectory(logger)
 add_subdirectory(mime)
 
-if(BUILD_SERVER OR BUILD_IMAP OR BUILD_MUA)
+if(BUILD_SERVER OR BUILD_IMAP OR BUILD_MUA OR BUILD_API)
     add_subdirectory(proto)
+endif()
+
+if(BUILD_API)
+    add_subdirectory(api-server)
 endif()
 
 if(BUILD_SERVER)
