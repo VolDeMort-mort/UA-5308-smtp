@@ -22,3 +22,5 @@ data/*
 !data/mailboxes/
 data/mailboxes/*
 !data/mailboxes/README.md
+stress_tests/test_attachment.bin
+stress_tests/.tmp
