@@ -733,10 +733,31 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 	}
 	else
 	{
+		if (cmd.m_args[0].empty())
+		{
+			response = ImapResponse::No(cmd.m_tag, "Create failed: invalid mailbox name");
+			m_logger.Log(PROD, "HandleCreate failed: invalid mailbox name");
+			m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCreate - Out: " + response);
+			m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCreate - End");
+			return response;
+		}
+
 		auto folder_names = IMAP_UTILS::Split(cmd.m_args[0], '/');
+		for (const auto& part : folder_names)
+		{
+			if (part.empty())
+			{
+				response = ImapResponse::No(cmd.m_tag, "Create failed: invalid mailbox name");
+				m_logger.Log(PROD, "HandleCreate failed: invalid mailbox name");
+				m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCreate - Out: " + response);
+				m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCreate - End");
+				return response;
+			}
+		}
 		if (folder_names.size() != 1)
 		{
 			Folder prev;
+			bool parent_chain_valid = true;
 			for (int i = 0; i < folder_names.size() - 1; i++)
 			{
 				auto fold_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), folder_names[i]);
@@ -748,19 +769,30 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 				{
 					response = ImapResponse::Bad(cmd.m_tag, "Parent folder doesn`t exist: " + folder_names[i]);
 					m_logger.Log(PROD, "HandleCreate failed: Parent folder doesn`t exist: " + folder_names[i]);
+					parent_chain_valid = false;
 					break;
 				}
 			}
 
-			Folder f{std::nullopt, m_authenticatedUserID.value(), prev.id.value(), cmd.m_args[0]};
-			if (m_messRepo.createFolder(f))
+			if (!parent_chain_valid || !prev.id.has_value())
 			{
-				response = ImapResponse::Ok(cmd.m_tag, "Create completed");
+				if (response.empty())
+				{
+					response = ImapResponse::Bad(cmd.m_tag, "Parent folder doesn`t exist");
+				}
 			}
 			else
 			{
-				m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
-				response = ImapResponse::No(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+				Folder f{std::nullopt, m_authenticatedUserID.value(), prev.id.value(), cmd.m_args[0]};
+				if (m_messRepo.createFolder(f))
+				{
+					response = ImapResponse::Ok(cmd.m_tag, "Create completed");
+				}
+				else
+				{
+					m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
+					response = ImapResponse::No(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+				}
 			}
 		}
 		else
