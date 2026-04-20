@@ -8,6 +8,8 @@
 enum LogLevel
 {
 	NONE,
+	INFO,
+	ERROR,
 	PROD,
 	DEBUG,
 	TRACE
@@ -21,7 +23,9 @@ enum LogLevel
 class ILoggerStrategy
 {
 public:
-	virtual ~ILoggerStrategy() = default; // default virtual dtor
+	ILoggerStrategy(LogLevel lvl) : m_default_log_level(lvl) {};
+
+	virtual ~ILoggerStrategy() = default;
 
 	/**
 	 * @brief Formats a log message for certain strategy
@@ -31,7 +35,15 @@ public:
 	 */
 	virtual std::string SpecificLog(LogLevel lvl, const std::string& msg) = 0;
 
-	virtual bool IsValid() = 0;	// checks if the output storage is ready
-	virtual bool Write(const std::string& message) = 0; // writes to storage
-	virtual void Flush() = 0; // flushes log to a storage
+	virtual bool IsValid() = 0;
+	virtual bool Write(const std::string& message) = 0;
+	virtual void Flush() = 0;
+	virtual std::string get_name() const = 0;
+	virtual std::string get_last_error() const { return m_last_error; }
+	LogLevel get_current_level() const { return m_default_log_level; }
+	void set_log_level(LogLevel lvl) { m_default_log_level = lvl; };
+
+protected:
+	LogLevel m_default_log_level;
+	std::string m_last_error;
 };

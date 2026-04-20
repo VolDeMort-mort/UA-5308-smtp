@@ -19,10 +19,13 @@
 class NullStrategy : public ILoggerStrategy
 {
 public:
+	NullStrategy(LogLevel lvl = PROD) : ILoggerStrategy(lvl) {}
+
 	virtual std::string SpecificLog(LogLevel lvl, const std::string& msg) { return {}; }
 	virtual bool IsValid() { return true; }
 	virtual bool Write(const std::string& message) { return true; }
 	virtual void Flush() {};
+	virtual std::string get_name() const { return "Null"; }
 };
 
 static std::string tempDbPath()

@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 #include <sqlite3.h>
-#include "Logger.h"
+#include "ILogger.h"
 #include "ConnectionPool.h"
 
 class DataBaseManager
