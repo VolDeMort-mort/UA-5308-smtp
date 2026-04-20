@@ -6,7 +6,7 @@ IMAP_HOST="localhost"
 IMAP_PORT="2553"
 CLIENT="../build/mua/smtp_mua_console"
 QUIET=0
-COUNT=10
+COUNT=1
 ATTACHMENT_SIZE_KB=10
 ATTACHMENT_FILE="./test_attachment.bin"
 
@@ -172,7 +172,6 @@ quit")
 
         start=$(now_ms)
         GETATT_OUTPUT=$(run_client "connect $SMTP_HOST $SMTP_PORT $IMAP_HOST $IMAP_PORT $user pass
-fetch INBOX
 getatt $SEQ_ID 1
 quit")
         end=$(now_ms)

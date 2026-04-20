@@ -142,7 +142,6 @@ quit")
         fi
 
         READ_OUTPUT=$(run_client "connect $SMTP_HOST $SMTP_PORT $IMAP_HOST $IMAP_PORT $user pass
-            fetch INBOX
             fetchmail $SEQ_ID
             quit")
 

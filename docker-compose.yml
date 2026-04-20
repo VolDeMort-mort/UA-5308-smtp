@@ -27,7 +27,7 @@ services:
 
   seed-stress-users:
     build: .
-    command: ["/usr/bin/mua_seed_stress_users", "/srv/smtp/", "20"]
+    command: ["/usr/bin/mua_seed_stress_users", "/srv/smtp/", "40"]
     volumes:
       - maildata:/srv/smtp/data
     restart: "no"
