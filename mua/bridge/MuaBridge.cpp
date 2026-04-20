@@ -319,7 +319,7 @@ void MuaBridge::onResult(MailResult result)
 					item.insert("isSeen", mail.isSeen);
 					item.insert("isFlagged", mail.isFlagged);
 					item.insert("subject", QString::fromStdString(mail.subject));
-					item.insert("preview", QString::fromStdString(mail.preview));
+					//item.insert("preview", QString::fromStdString(mail.preview));
 					item.insert("date", QString::fromStdString(mail.date));
 					items.push_back(item);
 				}
@@ -415,7 +415,7 @@ void MuaBridge::onResult(MailResult result)
 		else if constexpr (std::is_same_v<T, ReconnectStateResult>)
 		{
 			setBusy(r.reconnecting);
-			const bool reconnectingChanged = (m_isReconnecting != r.reconnecting);
+			const bool reconnectingFlagChanged = (m_isReconnecting != r.reconnecting);
 			const int newAttempt = static_cast<int>(r.attempt);
 			const bool attemptChanged = (m_reconnectAttempt != newAttempt);
 			const QString newMessage = QString::fromStdString(r.message);
@@ -436,7 +436,7 @@ void MuaBridge::onResult(MailResult result)
 				emit connectionStateChanged();
 			}
 
-			if (reconnectingChanged)
+			if (reconnectingFlagChanged)
 			{
 				emit reconnectingChanged();
 			}

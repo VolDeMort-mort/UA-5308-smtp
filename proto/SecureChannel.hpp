@@ -6,6 +6,7 @@
 
 #include <sodium.h>
 #include <cstdint>
+#include <optional>
 
 class SecureChannel
 {
@@ -41,6 +42,9 @@ protected:
 private:
 	static constexpr std::uint32_t MAX_MESSAGE_SIZE = 10 * 1024 * 1024; // plan to use config value
 
+	std::uint64_t m_txSeq = 0;
+	std::uint64_t m_rxSeq = 0;
+
 	std::string Encrypt(const std::string& raw_data);
-	std::string Decrypt(const std::string& data);
+	std::optional<std::string> Decrypt(const std::string& data);
 };
