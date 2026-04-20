@@ -1507,6 +1507,14 @@ std::string ImapCommandDispatcher::HandleStartTLS(const ImapCommand& cmd)
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - Start");
 
 	std::string response = cmd.m_tag + " OK Begin TLS negotiation now\r\n";
+	if (!cmd.m_args.empty())
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "STARTTLS takes no arguments");
+	}
+	else
+	{
+		response = cmd.m_tag + " OK Begin TLS negotiation now\r\n";
+	}
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - End");
