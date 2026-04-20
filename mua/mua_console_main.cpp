@@ -281,13 +281,11 @@ bool printResult(const MailResult& result)
             for (std::size_t i = 0; i < r.mails.size(); ++i)
             {
                 const auto& m = r.mails[i];
-                std::cout << "  [" << (i + 1) << "]"
-                          << " id=" << m.mailId
-                          << " seen=" << (m.isSeen ? "Y" : "N")
-                          << " flagged=" << (m.isFlagged ? "Y" : "N")
-                          << " date=\"" << m.date << "\""
-                          << " subject=\"" << m.subject << "\""
-                          << " preview=\"" << m.preview << "\"\n";
+				std::cout << "  [" << (i + 1) << "]"
+						  << " id=" << m.mailId << " seen=" << (m.isSeen ? "Y" : "N")
+						  << " flagged=" << (m.isFlagged ? "Y" : "N") << " date=\"" << m.date << "\""
+						  << " subject=\"" << m.subject << "\""
+				        /* << " preview=\"" << m.preview */ << "\n";  
             }
             std::cout << "  Note: mail IDs here are IMAP sequence numbers (1-based).\n";
         }

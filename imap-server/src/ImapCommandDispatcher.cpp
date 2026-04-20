@@ -437,8 +437,20 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				const auto& msg = selected_messages[i];
 				size_t seq_num = lists_ids[i];
 
-				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
-				auto mime_part_otp = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
+				std::optional<SmtpClient::Email> email_opt;
+				std::optional<SmtpClient::MimePart> mime_part_opt;
+
+				auto get_email = [&]() -> auto&
+				{
+					if (!email_opt) email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+					return email_opt;
+				};
+
+				auto get_mime = [&]() -> auto&
+				{
+					if (!mime_part_opt) mime_part_opt = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
+					return mime_part_opt;
+				};
 
 				std::string fetch_response = "(";
 				for (const auto& item : expanded_items)
@@ -465,7 +477,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "ENVELOPE")
 					{
-						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, email_opt, m_messRepo) + " ";
+						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, get_email(), m_messRepo) + " ";
 					}
 					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
@@ -475,26 +487,27 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					else if (item == "RFC822.HEADER")
 					{
 						std::string header;
-						if (email_opt)
+						auto& email = get_email();
+						if (email)
 						{
 							std::string to_rec;
-							for (const auto& rec : email_opt->to)
+							for (const auto& rec : email->to)
 							{
 								if (!to_rec.empty()) to_rec += ", ";
 								to_rec += rec;
 							}
 
 							std::string cc_rec;
-							for (const auto& rec : email_opt->cc)
+							for (const auto& rec : email->cc)
 							{
 								if (!cc_rec.empty()) cc_rec += ", ";
 								cc_rec += rec;
 							}
 
-							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
-									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) +
-									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
-									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
+							header = "From: " + email->sender + "\r\n" + "To: " + to_rec + "\r\n" +
+									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) + "Subject: " + email->subject +
+									 "\r\n" + "Date: " + email->date + "\r\n" + "Message-ID: " + email->message_id +
+									 "\r\n" + "\r\n";
 						}
 						else
 						{
@@ -529,11 +542,11 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					else if (item == "BODYSTRUCTURE")
 					{
 						fetch_response +=
-							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY")
 					{
-						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
 					{
@@ -1014,9 +1027,6 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 
 				const auto& msg = msg_opt.value();
 
-				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
-				auto mime_part_otp = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
-
 				size_t seq_num = 0;
 				for (size_t i = 0; i < all_messages.size(); ++i)
 				{
@@ -1026,6 +1036,21 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 						break;
 					}
 				}
+
+				std::optional<SmtpClient::Email> email_opt;
+				std::optional<SmtpClient::MimePart> mime_part_opt;
+
+				auto get_email = [&]() -> auto&
+				{
+					if (!email_opt) email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+					return email_opt;
+				};
+
+				auto get_mime = [&]() -> auto&
+				{
+					if (!mime_part_opt) mime_part_opt = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
+					return mime_part_opt;
+				};
 
 				std::string fetch_response = "(UID " + std::to_string(msg.uid) + " ";
 				for (const auto& item : expanded_items)
@@ -1052,7 +1077,7 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					}
 					else if (item == "ENVELOPE")
 					{
-						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, email_opt, m_messRepo) + " ";
+						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, get_email(), m_messRepo) + " ";
 					}
 					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
@@ -1062,26 +1087,27 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					else if (item == "RFC822.HEADER")
 					{
 						std::string header;
-						if (email_opt)
+						auto& email = get_email();
+						if (email)
 						{
 							std::string to_rec;
-							for (const auto& rec : email_opt->to)
+							for (const auto& rec : email->to)
 							{
 								if (!to_rec.empty()) to_rec += ", ";
 								to_rec += rec;
 							}
 
 							std::string cc_rec;
-							for (const auto& rec : email_opt->cc)
+							for (const auto& rec : email->cc)
 							{
 								if (!cc_rec.empty()) cc_rec += ", ";
 								cc_rec += rec;
 							}
 
-							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
-									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) +
-									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
-									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
+							header = "From: " + email->sender + "\r\n" + "To: " + to_rec + "\r\n" +
+									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) + "Subject: " + email->subject +
+									 "\r\n" + "Date: " + email->date + "\r\n" + "Message-ID: " + email->message_id +
+									 "\r\n" + "\r\n";
 						}
 						else
 						{
@@ -1116,11 +1142,11 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					else if (item == "BODYSTRUCTURE")
 					{
 						fetch_response +=
-							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY")
 					{
-						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
 					{
