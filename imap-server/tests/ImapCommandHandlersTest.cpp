@@ -31,6 +31,8 @@ class MockLogger : public ILogger
 {
 public:
 	MOCK_METHOD(void, Log, (LogLevel level, const std::string&), (override));
+	MOCK_METHOD(void, set_strategy, (std::shared_ptr<ILoggerStrategy> strategy), (override));
+	MOCK_METHOD(void, set_level, (LogLevel level), (override));
 };
 
 class CmdHandlerTests : public ::testing::Test

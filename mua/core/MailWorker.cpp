@@ -435,6 +435,13 @@ public:
     void Log(LogLevel, const std::string&) override
     {
     }
+    void set_strategy(std::shared_ptr<ILoggerStrategy> strategy) override
+    {
+    }
+    void set_level(LogLevel level) override
+    {
+
+    }
 };
 
 std::vector<std::string> CollectRecipients(const SendMailCommand& cmd)
@@ -1474,7 +1481,7 @@ void MailWorker::handleFetchMails(const FetchMailsCommand& cmd)
     const unsigned int to = cmd.offset + std::max(1u, cmd.limit);
 
     const std::string range = std::to_string(from) + ":" + std::to_string(to);
-    auto [ok, lines] = imapExchange("FETCH " + range + " (FLAGS RFC822)");
+	auto [ok, lines] = imapExchange("FETCH " + range + " (FLAGS INTERNALDATE RFC822.SIZE ENVELOPE)");
 
     if (!ok)
     {
@@ -1516,30 +1523,28 @@ void MailWorker::handleFetchMails(const FetchMailsCommand& cmd)
             continue; 
         }
 
-        std::string rawEmail = ExtractRfc822Payload(block);
-		if (rawEmail.empty())
+        MailSummary summary;
+		summary.mailId = seqId;
+		ExtractFlags(block, summary.isSeen, summary.isFlagged);
+
+		std::string blockStr;
+		for (const auto& line : block)
+			blockStr += line + "\r\n";
+
+		auto envPos = blockStr.find("ENVELOPE (");
+		if (envPos != std::string::npos)
 		{
-			continue;
+			std::string env = blockStr.substr(envPos + 10);
+			auto d1 = env.find('"');
+			auto d2 = env.find('"', d1 + 1);
+			if (d1 != std::string::npos && d2 != std::string::npos) summary.date = env.substr(d1 + 1, d2 - d1 - 1);
+
+			auto s1 = env.find('"', d2 + 1);
+			auto s2 = env.find('"', s1 + 1);
+			if (s1 != std::string::npos && s2 != std::string::npos) summary.subject = env.substr(s1 + 1, s2 - s1 - 1);
 		}
 
-        MailSummary summary;
-        summary.mailId = seqId;
-        ExtractFlags(block, summary.isSeen, summary.isFlagged);
-
-        SilentLogger mimeLogger;
-        SmtpClient::Email parsed;
-        if (SmtpClient::MimeParser::ParseEmail(rawEmail, parsed, mimeLogger))
-        {
-            summary.subject = parsed.subject;
-            summary.date = parsed.date;
-            summary.preview = BuildPreview(parsed.plain_text, parsed.html_text, 10);
-        }
-        else
-        {
-            summary.preview = BuildPreview(rawEmail, {}, 10);
-        }
-
-        mails.push_back(std::move(summary));
+		mails.push_back(std::move(summary));
     }
 
     m_onResult(FetchMailsResult{true, {}, mails});

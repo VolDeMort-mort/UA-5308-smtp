@@ -25,5 +25,21 @@ services:
     restart: "no"
     profiles: ["tools"]
 
+  seed-stress-users:
+    build: .
+    command: ["/usr/bin/mua_seed_stress_users", "/srv/smtp/", "40"]
+    volumes:
+      - maildata:/srv/smtp/data
+    restart: "no"
+    profiles: ["tools"]
+
+  delete-stress-users:
+    build: .
+    command: ["/usr/bin/mua_delete_stress_users", "/srv/smtp/"]
+    volumes:
+      - maildata:/srv/smtp/data
+    restart: "no"
+    profiles: ["tools"]
+
 volumes:
   maildata:

@@ -37,7 +37,7 @@ struct MailSummary
 	bool isSeen = false;
 	bool isFlagged = false;
 	std::string subject;
-	std::string preview;
+	//std::string preview;
 	std::string date;
 };
 

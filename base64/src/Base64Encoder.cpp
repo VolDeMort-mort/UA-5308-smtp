@@ -5,6 +5,10 @@ void Base64Encoder::ChunkBytes(const std::vector<uint8_t>& data, std::string& ou
 	std::size_t data_size = data.size();
 	std::size_t line_length = 0;
 
+	std::size_t estimated = ((data_size + 2) / 3) * 4;
+	estimated += (estimated / 76) * 2;
+	output.reserve(output.size() + estimated);
+
 	for (std::size_t i = 0; i < data_size; i += 3)
 	{
 		uint8_t byte0 = data[i];

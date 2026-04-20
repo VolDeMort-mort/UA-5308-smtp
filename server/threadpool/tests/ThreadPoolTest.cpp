@@ -34,7 +34,7 @@ struct Captured {
 class TestStrategy : public ILoggerStrategy {
 public:
     std::shared_ptr<Captured> m_data;
-    explicit TestStrategy(std::shared_ptr<Captured> d) : m_data(std::move(d)) {}
+    explicit TestStrategy(std::shared_ptr<Captured> d) : ILoggerStrategy(PROD), m_data(std::move(d)) {}
 
     std::string SpecificLog(LogLevel, const std::string& msg) override { return msg + "\n"; }
     bool IsValid() override { return true; }
@@ -44,6 +44,7 @@ public:
         return true;
     }
     void Flush() override {}
+    std::string get_name() const override { return "Test"; }
 };
 
 TEST(ThreadPool, GivenInitializedPool_WhenTaskAdded_FutureResolvesCorrectly) {

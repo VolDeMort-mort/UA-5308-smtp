@@ -61,7 +61,7 @@ struct ChannelFixture : public ::testing::Test
 	}
 };
 
-Logger ChannelFixture::logger(std::make_unique<ConsoleStrategy>());
+Logger ChannelFixture::logger(std::make_unique<ConsoleStrategy>(PROD));
 boost::asio::io_context ChannelFixture::serverIo;
 boost::asio::io_context ChannelFixture::clientIo;
 std::unique_ptr<SocketConnection> ChannelFixture::serverConn;

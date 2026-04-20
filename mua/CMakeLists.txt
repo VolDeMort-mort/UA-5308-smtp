@@ -34,6 +34,23 @@ target_include_directories(mua_seed_users PRIVATE
     ${PROJECT_SOURCE_DIR}/database
 )
 
+#stress users
+add_executable(mua_seed_stress_users
+    tools/seed_stress_users.cpp
+)
+target_link_libraries(mua_seed_stress_users PRIVATE db_lib config_lib)
+target_include_directories(mua_seed_stress_users PRIVATE
+    ${PROJECT_SOURCE_DIR}/database
+)
+
+add_executable(mua_delete_stress_users
+    tools/delete_stress_users.cpp
+)
+target_link_libraries(mua_delete_stress_users PRIVATE db_lib config_lib)
+target_include_directories(mua_delete_stress_users PRIVATE
+    ${PROJECT_SOURCE_DIR}/database
+)
+
 if (TARGET Qt6::Quick)
     qt_add_executable(smtp_mua
         main.cpp

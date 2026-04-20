@@ -1,7 +1,7 @@
 #pragma once
 
 #include "IConnection.hpp"
-#include "Logger.h"
+#include "ILogger.h"
 #include "SocketConnection.hpp"
 
 #include <sodium.h>

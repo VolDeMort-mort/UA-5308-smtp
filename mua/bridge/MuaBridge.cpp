@@ -319,7 +319,7 @@ void MuaBridge::onResult(MailResult result)
 					item.insert("isSeen", mail.isSeen);
 					item.insert("isFlagged", mail.isFlagged);
 					item.insert("subject", QString::fromStdString(mail.subject));
-					item.insert("preview", QString::fromStdString(mail.preview));
+					//item.insert("preview", QString::fromStdString(mail.preview));
 					item.insert("date", QString::fromStdString(mail.date));
 					items.push_back(item);
 				}
