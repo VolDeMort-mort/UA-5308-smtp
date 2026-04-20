@@ -61,7 +61,7 @@ public:
 	std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n) override;
 	void Rotate(); // rotate file to new one, when current_size > MAX_FILE_SIZE
 
-	std::string get_name() const;
+	std::string get_name() const override;
 private:
 	int m_current_file_size;
 	std::ofstream m_file;

@@ -35,7 +35,7 @@ public:
 	 */
 	void Flush() override;
 
-	std::string get_name() const;
+	std::string get_name() const override;
 private:
 	LogLevel m_current_level; // level for color output
 };
