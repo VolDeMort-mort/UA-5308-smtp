@@ -10,7 +10,9 @@
         "port": 2553,
         "db_path": "prod.db",
         "migration_path": "../../database/scheme/001_init_scheme.sql",
-        "timeout_mins": 30
+        "timeout_mins": 30,
+        "worker_threads": 4,
+        "handshake_timeout_secs": 10
     },
     "logging": {
         "log_level": "PROD",
@@ -33,7 +35,7 @@
         "default_domain": "localhost"
     },
     "base64": {
-        "max_file_size_mb": 15,
+        "max_file_size_mb": 8,
         "chunk_size_bytes": 3072,
         "line_length": 76
     }

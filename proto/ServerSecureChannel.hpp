@@ -7,7 +7,7 @@
 class ServerSecureChannel : public SecureChannel
 {
 public:
-	ServerSecureChannel(SocketConnection& conn) : SecureChannel(conn) {};
+	ServerSecureChannel(IConnection& conn) : SecureChannel(conn) {};
 
 	bool StartTLS() override;
 	bool DeriveKeys(const unsigned char* otherKey, const unsigned char* public_key,

@@ -73,6 +73,8 @@ bool Config::Load(const std::string& path)
 	m_config.imap.db_path = ToString(map, "imap.db_path", m_config.imap.db_path);
 	m_config.imap.migration_path = ToString(map, "imap.migration_path", m_config.imap.migration_path);
 	m_config.imap.timeout_mins = ToInt (map, "imap.timeout_mins", m_config.imap.timeout_mins);
+    m_config.imap.worker_threads = ToInt(map, "imap.worker_threads", m_config.imap.worker_threads);
+    m_config.imap.handshake_timeout_secs = ToInt(map, "imap.handshake_timeout_secs", m_config.imap.handshake_timeout_secs);
 
 	// logging
 	m_config.logging.log_level = ToString(map, "logging.log_level", m_config.logging.log_level);

@@ -26,5 +26,5 @@ public:
 	 * @return vector of strings from storage(only for file)
 	 */
 	virtual std::vector<std::string> Search(LogLevel lvl, size_t limit, int read_n) = 0;
-	virtual ~IReadable() = default; // default virtual dtor
+	virtual ~IReadable() = default;
 };

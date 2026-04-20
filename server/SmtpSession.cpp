@@ -12,7 +12,7 @@
 #include <filesystem>
 #include <random>
 
-SmtpSession::SmtpSession(std::string domain, MessageRepository* message_repo, UserRepository* user_repo, Logger* logger)
+SmtpSession::SmtpSession(std::string domain, MessageRepository* message_repo, UserRepository* user_repo, ILogger* logger)
     : m_domain(std::move(domain)),
       m_message_repo(message_repo),
       m_user_repo(user_repo),

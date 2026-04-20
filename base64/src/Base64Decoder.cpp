@@ -3,7 +3,7 @@
 std::vector<uint8_t> Base64Decoder::DecodeBase64(const std::string& encoded_data)
 {
 	std::string clean_str;
-	std::vector<uint8_t> decoded_data;
+	clean_str.reserve(encoded_data.size());
 
 	for (char c : encoded_data)
 	{
@@ -22,6 +22,9 @@ std::vector<uint8_t> Base64Decoder::DecodeBase64(const std::string& encoded_data
 			throw std::runtime_error(std::string("Invalid Base64 symbol: ") + c);
 		}
 	}
+
+	std::vector<uint8_t> decoded_data;
+	decoded_data.reserve((clean_str.size() / 4) * 3);
 
 	if (!(clean_str.length() % 4 == 0))
 	{

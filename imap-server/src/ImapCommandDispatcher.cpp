@@ -14,30 +14,29 @@
 ImapCommandDispatcher::ImapCommandDispatcher(ILogger& logger, UserRepository& userRepo, MessageRepository& messRepo)
 	: m_logger(logger), m_userRepo(userRepo), m_messRepo(messRepo)
 {
-	m_handlers = {
-		{ImapCommandType::Login, [this](const ImapCommand& cmd) { return HandleLogin(cmd); }},
-		{ImapCommandType::Logout, [this](const ImapCommand& cmd) { return HandleLogout(cmd); }},
-		{ImapCommandType::Capability, [this](const ImapCommand& cmd) { return HandleCapability(cmd); }},
-		{ImapCommandType::Noop, [this](const ImapCommand& cmd) { return HandleNoop(cmd); }},
-		{ImapCommandType::Select, [this](const ImapCommand& cmd) { return HandleSelect(cmd); }},
-		{ImapCommandType::List, [this](const ImapCommand& cmd) { return HandleList(cmd); }},
-		{ImapCommandType::Lsub, [this](const ImapCommand& cmd) { return HandleLsub(cmd); }},
-		{ImapCommandType::Status, [this](const ImapCommand& cmd) { return HandleStatus(cmd); }},
-		{ImapCommandType::Fetch, [this](const ImapCommand& cmd) { return HandleFetch(cmd); }},
-		{ImapCommandType::Store, [this](const ImapCommand& cmd) { return HandleStore(cmd); }},
-		{ImapCommandType::Create, [this](const ImapCommand& cmd) { return HandleCreate(cmd); }},
-		{ImapCommandType::Delete, [this](const ImapCommand& cmd) { return HandleDelete(cmd); }},
-		{ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
-		{ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
-		{ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
-		{ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
-		{ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
-		{ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
-		{ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
-		{ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
-		{ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
-		{ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
-	};
+	m_handlers = {{ImapCommandType::Login, [this](const ImapCommand& cmd) { return HandleLogin(cmd); }},
+				  {ImapCommandType::Logout, [this](const ImapCommand& cmd) { return HandleLogout(cmd); }},
+				  {ImapCommandType::Capability, [this](const ImapCommand& cmd) { return HandleCapability(cmd); }},
+				  {ImapCommandType::Noop, [this](const ImapCommand& cmd) { return HandleNoop(cmd); }},
+				  {ImapCommandType::Select, [this](const ImapCommand& cmd) { return HandleSelect(cmd); }},
+				  {ImapCommandType::List, [this](const ImapCommand& cmd) { return HandleList(cmd); }},
+				  {ImapCommandType::Lsub, [this](const ImapCommand& cmd) { return HandleLsub(cmd); }},
+				  {ImapCommandType::Status, [this](const ImapCommand& cmd) { return HandleStatus(cmd); }},
+				  {ImapCommandType::Fetch, [this](const ImapCommand& cmd) { return HandleFetch(cmd); }},
+				  {ImapCommandType::Store, [this](const ImapCommand& cmd) { return HandleStore(cmd); }},
+				  {ImapCommandType::Create, [this](const ImapCommand& cmd) { return HandleCreate(cmd); }},
+				  {ImapCommandType::Delete, [this](const ImapCommand& cmd) { return HandleDelete(cmd); }},
+				  {ImapCommandType::Rename, [this](const ImapCommand& cmd) { return HandleRename(cmd); }},
+				  {ImapCommandType::Copy, [this](const ImapCommand& cmd) { return HandleCopy(cmd); }},
+				  {ImapCommandType::Expunge, [this](const ImapCommand& cmd) { return HandleExpunge(cmd); }},
+				  {ImapCommandType::UidFetch, [this](const ImapCommand& cmd) { return HandleUidFetch(cmd); }},
+				  {ImapCommandType::UidStore, [this](const ImapCommand& cmd) { return HandleUidStore(cmd); }},
+				  {ImapCommandType::UidCopy, [this](const ImapCommand& cmd) { return HandleUidCopy(cmd); }},
+				  {ImapCommandType::Subscribe, [this](const ImapCommand& cmd) { return HandleSubscribe(cmd); }},
+				  {ImapCommandType::Unsubscribe, [this](const ImapCommand& cmd) { return HandleUnsubscribe(cmd); }},
+				  {ImapCommandType::Close, [this](const ImapCommand& cmd) { return HandleClose(cmd); }},
+				  {ImapCommandType::Check, [this](const ImapCommand& cmd) { return HandleCheck(cmd); }},
+				  {ImapCommandType::StartTLS, [this](const ImapCommand& cmd) { return HandleStartTLS(cmd); }}};
 }
 
 std::string ImapCommandDispatcher::Dispatch(const ImapCommand& cmd)
@@ -62,6 +61,7 @@ bool ImapCommandDispatcher::RequiresAuth(ImapCommandType type) const
 	case ImapCommandType::Logout:
 	case ImapCommandType::Capability:
 	case ImapCommandType::Noop:
+	case ImapCommandType::StartTLS:
 		result = false;
 		break;
 	default:
@@ -176,9 +176,9 @@ std::string ImapCommandDispatcher::HandleSelect(const ImapCommand& cmd)
 			m_currentMailbox.m_name = folder_opt->name;
 			auto all_messages = m_messRepo.findByFolder(folder_opt->id.value());
 			m_currentMailbox.m_exists = all_messages.size();
-			// TODO: Call m_messRepo.clearRecentByFolder(folder_opt->id.value()) before fetching messages
 			m_currentMailbox.m_recent = std::count_if(all_messages.begin(), all_messages.end(),
 													  [](const Message& msg) { return msg.is_recent; });
+			m_messRepo.clearRecentByFolder(folder_opt->id.value());
 			m_currentMailbox.m_id = folder_opt->id;
 
 			size_t unseen_count = std::count_if(all_messages.begin(), all_messages.end(),
@@ -435,8 +435,20 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 				const auto& msg = selected_messages[i];
 				size_t seq_num = lists_ids[i];
 
-				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
-				auto mime_part_otp = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
+				std::optional<SmtpClient::Email> email_opt;
+				std::optional<SmtpClient::MimePart> mime_part_opt;
+
+				auto get_email = [&]() -> auto&
+				{
+					if (!email_opt) email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+					return email_opt;
+				};
+
+				auto get_mime = [&]() -> auto&
+				{
+					if (!mime_part_opt) mime_part_opt = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
+					return mime_part_opt;
+				};
 
 				std::string fetch_response = "(";
 				for (const auto& item : expanded_items)
@@ -463,7 +475,7 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					}
 					else if (item == "ENVELOPE")
 					{
-						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, email_opt, m_messRepo) + " ";
+						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, get_email(), m_messRepo) + " ";
 					}
 					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
@@ -473,26 +485,27 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					else if (item == "RFC822.HEADER")
 					{
 						std::string header;
-						if (email_opt)
+						auto& email = get_email();
+						if (email)
 						{
 							std::string to_rec;
-							for (const auto& rec : email_opt->to)
+							for (const auto& rec : email->to)
 							{
 								if (!to_rec.empty()) to_rec += ", ";
 								to_rec += rec;
 							}
 
 							std::string cc_rec;
-							for (const auto& rec : email_opt->cc)
+							for (const auto& rec : email->cc)
 							{
 								if (!cc_rec.empty()) cc_rec += ", ";
 								cc_rec += rec;
 							}
 
-							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
-									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) +
-									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
-									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
+							header = "From: " + email->sender + "\r\n" + "To: " + to_rec + "\r\n" +
+									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) + "Subject: " + email->subject +
+									 "\r\n" + "Date: " + email->date + "\r\n" + "Message-ID: " + email->message_id +
+									 "\r\n" + "\r\n";
 						}
 						else
 						{
@@ -527,11 +540,11 @@ std::string ImapCommandDispatcher::HandleFetch(const ImapCommand& cmd)
 					else if (item == "BODYSTRUCTURE")
 					{
 						fetch_response +=
-							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY")
 					{
-						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
 					{
@@ -733,18 +746,80 @@ std::string ImapCommandDispatcher::HandleCreate(const ImapCommand& cmd)
 	}
 	else
 	{
-		// with name like parent/child doesn`t handle well, because we don`t support hierarchy in schema,
-		// so we just create folder with such name without parent-child relation
-
-		Folder f{std::nullopt, m_authenticatedUserID.value(), std::nullopt, cmd.m_args[0]};
-		if (m_messRepo.createFolder(f))
+		if (cmd.m_args[0].empty())
 		{
-			response = ImapResponse::Ok(cmd.m_tag, "Create completed");
+			response = ImapResponse::No(cmd.m_tag, "Create failed: invalid mailbox name");
+			m_logger.Log(PROD, "HandleCreate failed: invalid mailbox name");
+			m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCreate - Out: " + response);
+			m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCreate - End");
+			return response;
+		}
+
+		auto folder_names = IMAP_UTILS::Split(cmd.m_args[0], '/');
+		for (const auto& part : folder_names)
+		{
+			if (part.empty())
+			{
+				response = ImapResponse::No(cmd.m_tag, "Create failed: invalid mailbox name");
+				m_logger.Log(PROD, "HandleCreate failed: invalid mailbox name");
+				m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCreate - Out: " + response);
+				m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCreate - End");
+				return response;
+			}
+		}
+		if (folder_names.size() != 1)
+		{
+			Folder prev;
+			bool parent_chain_valid = true;
+			for (int i = 0; i < folder_names.size() - 1; i++)
+			{
+				auto fold_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), folder_names[i]);
+				if (fold_opt.has_value() && (i == 0 || fold_opt.value() == prev))
+				{
+					prev = fold_opt.value();
+				}
+				else
+				{
+					response = ImapResponse::Bad(cmd.m_tag, "Parent folder doesn`t exist: " + folder_names[i]);
+					m_logger.Log(PROD, "HandleCreate failed: Parent folder doesn`t exist: " + folder_names[i]);
+					parent_chain_valid = false;
+					break;
+				}
+			}
+
+			if (!parent_chain_valid || !prev.id.has_value())
+			{
+				if (response.empty())
+				{
+					response = ImapResponse::Bad(cmd.m_tag, "Parent folder doesn`t exist");
+				}
+			}
+			else
+			{
+				Folder f{std::nullopt, m_authenticatedUserID.value(), prev.id.value(), cmd.m_args[0]};
+				if (m_messRepo.createFolder(f))
+				{
+					response = ImapResponse::Ok(cmd.m_tag, "Create completed");
+				}
+				else
+				{
+					m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
+					response = ImapResponse::No(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+				}
+			}
 		}
 		else
 		{
-			m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
-			response = ImapResponse::No(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+			Folder f{std::nullopt, m_authenticatedUserID.value(), std::nullopt, cmd.m_args[0]};
+			if (m_messRepo.createFolder(f))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "Create completed");
+			}
+			else
+			{
+				m_logger.Log(PROD, "HandleCreate failed: " + m_messRepo.getLastError());
+				response = ImapResponse::No(cmd.m_tag, "Create failed: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
@@ -1012,9 +1087,6 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 
 				const auto& msg = msg_opt.value();
 
-				auto email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
-				auto mime_part_otp = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
-
 				size_t seq_num = 0;
 				for (size_t i = 0; i < all_messages.size(); ++i)
 				{
@@ -1024,6 +1096,21 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 						break;
 					}
 				}
+
+				std::optional<SmtpClient::Email> email_opt;
+				std::optional<SmtpClient::MimePart> mime_part_opt;
+
+				auto get_email = [&]() -> auto&
+				{
+					if (!email_opt) email_opt = IMAP_UTILS::GetParsedEmail(msg, m_logger);
+					return email_opt;
+				};
+
+				auto get_mime = [&]() -> auto&
+				{
+					if (!mime_part_opt) mime_part_opt = IMAP_UTILS::GetParsedMimePart(msg, m_logger);
+					return mime_part_opt;
+				};
 
 				std::string fetch_response = "(UID " + std::to_string(msg.uid) + " ";
 				for (const auto& item : expanded_items)
@@ -1050,7 +1137,7 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					}
 					else if (item == "ENVELOPE")
 					{
-						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, email_opt, m_messRepo) + " ";
+						fetch_response += "ENVELOPE " + IMAP_UTILS::BuildEnvelope(msg, get_email(), m_messRepo) + " ";
 					}
 					else if (item == "BODY[]" || item == "RFC822" || item == "RFC822.TEXT")
 					{
@@ -1060,26 +1147,27 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					else if (item == "RFC822.HEADER")
 					{
 						std::string header;
-						if (email_opt)
+						auto& email = get_email();
+						if (email)
 						{
 							std::string to_rec;
-							for (const auto& rec : email_opt->to)
+							for (const auto& rec : email->to)
 							{
 								if (!to_rec.empty()) to_rec += ", ";
 								to_rec += rec;
 							}
 
 							std::string cc_rec;
-							for (const auto& rec : email_opt->cc)
+							for (const auto& rec : email->cc)
 							{
 								if (!cc_rec.empty()) cc_rec += ", ";
 								cc_rec += rec;
 							}
 
-							header = "From: " + email_opt->sender + "\r\n" + "To: " + to_rec + "\r\n" +
-									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) +
-									 "Subject: " + email_opt->subject + "\r\n" + "Date: " + email_opt->date + "\r\n" +
-									 "Message-ID: " + email_opt->message_id + "\r\n" + "\r\n";
+							header = "From: " + email->sender + "\r\n" + "To: " + to_rec + "\r\n" +
+									 (cc_rec == "" ? "" : ("Cc: " + cc_rec + "\r\n")) + "Subject: " + email->subject +
+									 "\r\n" + "Date: " + email->date + "\r\n" + "Message-ID: " + email->message_id +
+									 "\r\n" + "\r\n";
 						}
 						else
 						{
@@ -1114,11 +1202,11 @@ std::string ImapCommandDispatcher::HandleUidFetch(const ImapCommand& cmd)
 					else if (item == "BODYSTRUCTURE")
 					{
 						fetch_response +=
-							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+							"BODYSTRUCTURE " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY")
 					{
-						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, email_opt, mime_part_otp) + " ";
+						fetch_response += "BODY " + IMAP_UTILS::BuildBodystructure(msg, get_email(), get_mime()) + " ";
 					}
 					else if (item == "BODY[HEADER.FIELDS]" || item == "BODY.PEEK[HEADER.FIELDS]")
 					{
@@ -1363,7 +1451,6 @@ std::string ImapCommandDispatcher::HandleUidCopy(const ImapCommand& cmd)
 	return response;
 }
 
-// currently does nothing
 std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 {
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleSubscribe - In: tag=" + cmd.m_tag + ", args=[" +
@@ -1378,13 +1465,21 @@ std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 	else
 	{
 		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
-		if (!folder_opt.has_value())
+		if (!folder_opt.has_value() || !folder_opt->id.has_value())
 		{
 			response = ImapResponse::Bad(cmd.m_tag, "Mailbox does not exist");
 		}
 		else
 		{
-			// repo doesn`t support this yet
+			if (m_messRepo.setSubscribed(folder_opt->id.value(), true))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "SUBSCRIBE completed");
+			}
+			else
+			{
+				response = ImapResponse::No(cmd.m_tag, m_messRepo.getLastError());
+				m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleSubscribe - Error: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
@@ -1393,7 +1488,6 @@ std::string ImapCommandDispatcher::HandleSubscribe(const ImapCommand& cmd)
 	return response;
 }
 
-// currently does nothing
 std::string ImapCommandDispatcher::HandleUnsubscribe(const ImapCommand& cmd)
 {
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleUnsubscribe - In: tag=" + cmd.m_tag + ", args=[" +
@@ -1408,13 +1502,21 @@ std::string ImapCommandDispatcher::HandleUnsubscribe(const ImapCommand& cmd)
 	else
 	{
 		auto folder_opt = m_messRepo.findFolderByName(m_authenticatedUserID.value(), cmd.m_args[0]);
-		if (!folder_opt.has_value())
+		if (!folder_opt.has_value() || !folder_opt->id.has_value())
 		{
 			response = ImapResponse::Bad(cmd.m_tag, "Mailbox does not exist");
 		}
 		else
 		{
-			// repo doesn`t support this yet
+			if (m_messRepo.setSubscribed(folder_opt->id.value(), false))
+			{
+				response = ImapResponse::Ok(cmd.m_tag, "UNSUBSCRIBE completed");
+			}
+			else
+			{
+				response = ImapResponse::No(cmd.m_tag, m_messRepo.getLastError());
+				m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleSubscribe - Error: " + m_messRepo.getLastError());
+			}
 		}
 	}
 
@@ -1470,5 +1572,25 @@ std::string ImapCommandDispatcher::HandleCheck(const ImapCommand& cmd)
 
 	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleCheck - Out: " + response);
 	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleCheck - End");
+	return response;
+}
+
+std::string ImapCommandDispatcher::HandleStartTLS(const ImapCommand& cmd)
+{
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - In: tag=" + cmd.m_tag);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - Start");
+
+	std::string response = cmd.m_tag + " OK Begin TLS negotiation now\r\n";
+	if (!cmd.m_args.empty())
+	{
+		response = ImapResponse::Bad(cmd.m_tag, "STARTTLS takes no arguments");
+	}
+	else
+	{
+		response = cmd.m_tag + " OK Begin TLS negotiation now\r\n";
+	}
+
+	m_logger.Log(TRACE, "ImapCommandDispatcher::HandleStartTLS - Out: " + response);
+	m_logger.Log(DEBUG, "ImapCommandDispatcher::HandleStartTLS - End");
 	return response;
 }

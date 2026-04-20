@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -16,10 +17,22 @@
 #include "Repository/UserRepository.h"
 #include "schema.h"
 
+static std::string tempDbPath()
+{
+	return (std::filesystem::temp_directory_path() / "test_cmd_handler.db").string();
+}
+
+static std::string tempMsgPath(const std::string& subject)
+{
+	return (std::filesystem::temp_directory_path() / ("test_msg_" + subject + ".eml")).string();
+}
+
 class MockLogger : public ILogger
 {
 public:
 	MOCK_METHOD(void, Log, (LogLevel level, const std::string&), (override));
+	MOCK_METHOD(void, set_strategy, (std::shared_ptr<ILoggerStrategy> strategy), (override));
+	MOCK_METHOD(void, set_level, (LogLevel level), (override));
 };
 
 class CmdHandlerTests : public ::testing::Test
@@ -31,9 +44,11 @@ protected:
 			FAIL() << "Failed to initialize libsodium";
 		}
 
-		db = std::make_unique<DataBaseManager>("/tmp/test_imap.db", initSchema());
+		m_dbPath = tempDbPath();
+		db = std::make_unique<DataBaseManager>(m_dbPath, initSchema());
+		ASSERT_TRUE(db->isConnected()) << "Failed to open database at " << m_dbPath;
 		userDal = std::make_unique<UserDAL>(db->getDB(), db->pool());
-		userRepo = std::make_unique<UserRepository>(*db);;
+		userRepo = std::make_unique<UserRepository>(*db);
 		messRepo = std::make_unique<MessageRepository>(*db);
 		dispatcher = std::make_unique<ImapCommandDispatcher>(mockLogger, *userRepo, *messRepo);
 		SeedDB();
@@ -54,9 +69,11 @@ protected:
 		}
 		dispatcher.reset();
 		db.reset();
-		std::remove("/tmp/test_imap.db");
+		for (const char* suffix : {"", "-wal", "-shm"})
+			std::filesystem::remove(m_dbPath + suffix);
 	}
 
+	std::string m_dbPath;
 	::testing::NiceMock<MockLogger> mockLogger;
 	std::unique_ptr<DataBaseManager> db;
 	std::unique_ptr<UserDAL> userDal;
@@ -129,7 +146,7 @@ protected:
 		auto addMsg = [&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject,
 						  bool flagged, bool answered)
 		{
-			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::string filepath = tempMsgPath(subject);
 			std::ofstream file(filepath);
 			file << "From: " << from << "\r\n";
 			file << "To: recipient@test.com\r\n";
@@ -163,7 +180,7 @@ protected:
 		auto addMultipartMsg =
 			[&](int64_t userId, int64_t folderId, const std::string& from, const std::string& subject)
 		{
-			std::string filepath = "/tmp/test_msg_" + subject + ".eml";
+			std::string filepath = tempMsgPath(subject);
 			std::ofstream file(filepath);
 			file << "From: " << from << "\r\n";
 			file << "To: recipient@test.com\r\n";
@@ -516,7 +533,7 @@ TEST_F(CmdHandlerTests, HandleFetch_Success_All_SingleMessage)
 
 	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH ("));
 
-	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Recent)"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS ()"));
 
 	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE 21"));
 
@@ -651,7 +668,7 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Seen)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 3 FETCH (FLAGS (\\Seen \\Recent))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 3 FETCH (FLAGS (\\Seen))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -666,7 +683,7 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Multiple)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged \\Recent))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -681,7 +698,7 @@ TEST_F(CmdHandlerTests, HandleStore_RemoveFlags)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS (\\Recent))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS ())\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 

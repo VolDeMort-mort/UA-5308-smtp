@@ -4,7 +4,7 @@
 #include "ServerSecureChannel.hpp"
 #include "ClientSecureChannel.hpp"
 #include "Logger.h"
-#include "FileStrategy.h"
+#include "ConsoleStrategy.h"
 
 #include <gtest/gtest.h>
 
@@ -61,7 +61,7 @@ struct ChannelFixture : public ::testing::Test
 	}
 };
 
-Logger ChannelFixture::logger(std::make_unique<FileStrategy>(LogLevel::TRACE));
+Logger ChannelFixture::logger(std::make_unique<ConsoleStrategy>(PROD));
 boost::asio::io_context ChannelFixture::serverIo;
 boost::asio::io_context ChannelFixture::clientIo;
 std::unique_ptr<SocketConnection> ChannelFixture::serverConn;
