@@ -2,7 +2,8 @@
 #include <cstdint>
 #include <string>
 
-namespace SmtpClient {
+namespace SmtpClient
+{
 
 struct ServerConfig
 {
@@ -19,6 +20,8 @@ struct ImapConfig
 	std::string db_path = "prod.db";
 	std::string migration_path = "../../database/scheme/001_init_scheme.sql";
 	int timeout_mins = 30;
+	int worker_threads = 4;
+	int handshake_timeout_secs = 10;
 };
 
 struct LoggingConfig
@@ -46,7 +49,7 @@ struct DatabaseConfig
 struct MimeConfig
 {
 	int header_chunk_size = 45;
-	std::string default_domain  = "localhost";
+	std::string default_domain = "localhost";
 };
 
 struct Base64Config

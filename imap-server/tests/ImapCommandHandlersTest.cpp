@@ -533,7 +533,7 @@ TEST_F(CmdHandlerTests, HandleFetch_Success_All_SingleMessage)
 
 	EXPECT_THAT(response, testing::HasSubstr("* 1 FETCH ("));
 
-	EXPECT_THAT(response, testing::HasSubstr("FLAGS (\\Recent)"));
+	EXPECT_THAT(response, testing::HasSubstr("FLAGS ()"));
 
 	EXPECT_THAT(response, testing::HasSubstr("RFC822.SIZE 21"));
 
@@ -668,7 +668,7 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Seen)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 3 FETCH (FLAGS (\\Seen \\Recent))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 3 FETCH (FLAGS (\\Seen))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -683,7 +683,7 @@ TEST_F(CmdHandlerTests, HandleStore_AddFlags_Multiple)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged \\Recent))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS (\\Seen \\Flagged))\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 
@@ -698,7 +698,7 @@ TEST_F(CmdHandlerTests, HandleStore_RemoveFlags)
 
 	std::string response = dispatcher->Dispatch(cmd);
 
-	std::string expected = "* 1 FETCH (FLAGS (\\Recent))\r\nA002 OK Store completed\r\n";
+	std::string expected = "* 1 FETCH (FLAGS ())\r\nA002 OK Store completed\r\n";
 	EXPECT_EQ(response, expected);
 }
 

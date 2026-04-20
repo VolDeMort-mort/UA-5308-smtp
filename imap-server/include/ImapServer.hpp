@@ -2,15 +2,17 @@
 
 #include <boost/asio.hpp>
 
+#include "AppConfig.h"
 #include "DataBaseManager.h"
 #include "ILogger.h"
-#include "ImapConfig.hpp"
 #include "ThreadPool.h"
+
+using namespace SmtpClient;
 
 class ImapServer
 {
 public:
-	ImapServer(boost::asio::io_context& context, ILogger& m_logger, DataBaseManager& db, ThreadPool& pool,
+	ImapServer(boost::asio::io_context& context, ILogger& logger, DataBaseManager& db, ThreadPool& pool,
 			   ImapConfig& config);
 	ImapServer(const ImapServer&) = delete;
 	void Start();

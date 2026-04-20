@@ -11,10 +11,10 @@
 #include <string>
 #include <vector>
 
+#include "AppConfig.h"
 #include "DataBaseManager.h"
 #include "ImapCommand.hpp"
 #include "ImapCommandDispatcher.hpp"
-#include "ImapConfig.hpp"
 #include "ImapSessionTypes.hpp"
 #include "ILogger.h"
 #include "Repository/MessageRepository.h"
@@ -23,11 +23,13 @@
 #include "ImapConnection.hpp"
 #include "ServerSecureChannel.hpp"
 
+using namespace SmtpClient;
+
 class ImapSession : public std::enable_shared_from_this<ImapSession>
 {
 public:
-	ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db,
-				ThreadPool& pool, ImapConfig& config);
+	ImapSession(boost::asio::ip::tcp::socket socket, ILogger& logger, DataBaseManager& db, ThreadPool& pool,
+				ImapConfig& config);
 	void Start();
 
 private:

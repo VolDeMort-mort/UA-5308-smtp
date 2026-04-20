@@ -30,4 +30,3 @@ COPY --from=builder /build/mua/mua_delete_stress_users /usr/bin/mua_delete_stres
 
 RUN mkdir -p /srv/smtp/data/mailboxes /srv/smtp/imap-server
 COPY default_config.json /srv/smtp/default_config.json
-COPY imap-server/imap.config /srv/smtp/imap-server/imap.config

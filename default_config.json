@@ -3,16 +3,17 @@
         "port": 25000,
         "domain": "localhost",
         "worker_threads": 4,
-        "db_path": "mail.db"
+        "db_path": "mail.db",
+        "migration_path": "../../database/scheme/001_init_scheme.sql"
     },
-
-  "imap": {
-    "port": 2553,
-    "db_path": "prod.db",
-    "timeout_mins": 30,
-    "handshake_timeout_secs": 10
-  },
-
+    "imap": {
+        "port": 2553,
+        "db_path": "prod.db",
+        "migration_path": "../../database/scheme/001_init_scheme.sql",
+        "timeout_mins": 30,
+        "worker_threads": 4,
+        "handshake_timeout_secs": 10
+    },
     "logging": {
         "log_level": "PROD",
         "file_path": "log.txt",
