@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "Logger.h"
+#include "ILogger.h"
 
 namespace SmtpClient {
 

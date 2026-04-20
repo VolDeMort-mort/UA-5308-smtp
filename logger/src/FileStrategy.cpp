@@ -1,32 +1,44 @@
-#include "FileStrategy.h"
-#include <algorithm>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
-#include <memory>
-#include <sstream>
 #include <string>
+#include <memory>
+#include <iostream>
+#include <cstring>
+#include <sstream>
+#include <algorithm>
 #include <thread>
 
+#include "FileStrategy.h"
+#include "LoggerConfig.h"
+
 FileStrategy::FileStrategy(LogLevel defaultLevel)
-	: m_current_path(FILE_PATH), m_old_path(OLD_FILE_PATH), m_default_log_level(defaultLevel)
+	: m_current_path(ISXLoggerConfig::FilePath), m_old_path(ISXLoggerConfig::OldFilePath),
+	ILoggerStrategy(defaultLevel)
 {
 	if (std::filesystem::exists(m_current_path))
 		m_current_file_size = std::filesystem::file_size(m_current_path);
 	else
 		m_current_file_size = 0;
-	if (!OpenFile()) std::cerr << "Can`t open log file: " << m_current_path << "\n";
+	if (!OpenFile())
+		m_last_error = "Can`t open log file: " + m_current_path;
 }
 
 bool FileStrategy::Write(const std::string& message)
 {
-	if (!IsValid()) return false;
+	if (!IsValid())
+	{
+		m_last_error = "Current file is not open or failed";
+		return false;
+	}
 
 	if (!CanWrite(message.size()))
 	{
 		Rotate();
-		if (!IsValid()) return false;
+		if (!IsValid())
+		{
+			m_last_error = "Rotation failed. Couldn`t create or open new log file";
+			return false;
+		}
 	}
 
 	m_file << message;
@@ -34,21 +46,34 @@ bool FileStrategy::Write(const std::string& message)
 	m_current_file_size += message.size();
 	return true;
 }
+std::string FileStrategy::get_name() const
+{
+	return "File";
+}
 void FileStrategy::Rotate()
 {
 	if (m_file.is_open()) m_file.close();
 	if (std::filesystem::exists(m_old_path)) // when both files are filled,delete older one
 		std::filesystem::remove(m_old_path);
+	std::error_code ec;
+	bool renamed = false;
 
 	if (std::filesystem::exists(m_current_path)) // switching the files when one is filled
-		std::filesystem::rename(m_current_path, m_old_path);
+		std::filesystem::rename(m_current_path, m_old_path,ec);
+	if (!ec)
+		renamed = true;
 
-	if (!OpenFile()) std::cerr << "Can`t open log file: " << m_current_path << "\n";
-	m_current_file_size = 0;
+	 if (!renamed)
+		m_last_error = "Renamed failed";
+	else
+		m_current_file_size = 0;
+
+	if (!OpenFile())
+		m_last_error = "Can`t open log file: " + m_current_path;
 }
 bool FileStrategy::CanWrite(int message_size)
 {
-	return (m_current_file_size + message_size) <= MAX_FILE_SIZE;
+	return (m_current_file_size + message_size) <= ISXLoggerConfig::MaxFileSize;
 }
 bool FileStrategy::OpenFile()
 {
@@ -87,6 +112,12 @@ std::string FileStrategy::SpecificLog(LogLevel lvl, const std::string& msg)
 	{
 	case LogLevel::NONE:
 		levelStr = "NONE";
+		break;
+	case LogLevel::INFO:
+		levelStr = "INFO";
+		break;
+	case LogLevel::ERROR:
+		levelStr = "ERROR";
 		break;
 	case LogLevel::PROD:
 		levelStr = "PROD";
@@ -171,6 +202,12 @@ std::vector<std::string> FileStrategy::Search(LogLevel lvl, size_t limit, int re
 	{
 	case LogLevel::NONE:
 		levelStr = "[NONE]";
+		break;
+	case LogLevel::INFO:
+		levelStr = "[INFO]";
+		break;
+	case LogLevel::ERROR:
+		levelStr = "[ERROR]";
 		break;
 	case LogLevel::PROD:
 		levelStr = "[PROD]";

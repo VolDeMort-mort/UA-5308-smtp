@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "Logger.h"
+#include "ILogger.h"
 #include "Email.h"
 #include "MimePart.h"
 
