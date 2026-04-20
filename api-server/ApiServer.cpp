@@ -18,16 +18,29 @@ ApiServer::ApiServer(ThreadPool& pool, UserRepository& user_repo, ILogger& logge
 void ApiServer::start()
 {
     m_logger.Log(PROD, "ApiServer::start - Starting on port " + std::to_string(m_port));
+    m_running = true;
     m_thread = std::thread(&ApiServer::run, this);
 }
  
 void ApiServer::stop()
 {
     m_logger.Log(PROD, "ApiServer::stop - Stopping");
+
+    m_running = false;
+
+    if (m_acceptor)
+    {
+        boost::system::error_code ec;
+        m_acceptor->close(ec);
+    }
+
     m_io_context.stop();
-    if (m_thread.joinable()){
+
+    if (m_thread.joinable())
+    {
         m_thread.join();
     }
+
     m_pool.terminate();
 }
  
@@ -65,21 +78,35 @@ void ApiServer::run()
 {
     try
     {
-        ssl::context ssl_ctx(ssl::context::tls);
-        ssl_ctx.use_certificate_chain_file(m_cert_file);
-        ssl_ctx.use_private_key_file(m_key_file, ssl::context::pem);
- 
-        tcp::acceptor acceptor{m_io_context, {tcp::v4(), m_port}};
- 
+        m_ssl_ctx = std::make_unique<ssl::context>(ssl::context::tls);
+        m_ssl_ctx->use_certificate_chain_file(m_cert_file);
+        m_ssl_ctx->use_private_key_file(m_key_file, ssl::context::pem);
+
+        m_acceptor = std::make_unique<tcp::acceptor>(
+            m_io_context,
+            tcp::endpoint(tcp::v4(), m_port)
+        );
+
         m_logger.Log(PROD, "ApiServer::run - Listening on port " + std::to_string(m_port));
- 
-        while (true)
+
+        while (m_running)
         {
-            ssl::stream<tcp::socket> ssl_socket{m_io_context, ssl_ctx};
-            acceptor.accept(ssl_socket.next_layer());
- 
+            ssl::stream<tcp::socket> ssl_socket{m_io_context, *m_ssl_ctx};
+            boost::system::error_code ec;
+
+            m_acceptor->accept(ssl_socket.next_layer(), ec);
+
+            if (ec)
+            {
+                if (!m_running)
+                    break;
+
+                m_logger.Log(PROD, "ApiServer::run - Accept error: " + ec.message());
+                continue;
+            }
+
             m_logger.Log(DEBUG, "ApiServer::run - Accepted new connection");
- 
+
             m_pool.add_task([this, socket = std::move(ssl_socket)]() mutable
             {
                 handleConnection(std::move(socket));
@@ -88,7 +115,8 @@ void ApiServer::run()
     }
     catch (const std::exception& e)
     {
-        if (!m_io_context.stopped()){
+        if (m_running)
+        {
             m_logger.Log(PROD, "ApiServer::run - Error: " + std::string(e.what()));
         }
     }

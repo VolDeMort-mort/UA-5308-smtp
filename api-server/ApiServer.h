@@ -21,6 +21,9 @@ namespace ssl = boost::asio::ssl;
 class ApiServer
 {
 private:
+    std::atomic<bool> m_running{false};
+    std::unique_ptr<tcp::acceptor> m_acceptor;
+    std::unique_ptr<ssl::context> m_ssl_ctx;
     ThreadPool& m_pool;
     UserRepository& m_user_repo;
     ILogger& m_logger;
